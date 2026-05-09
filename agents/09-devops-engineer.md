@@ -59,3 +59,4 @@ Own the build pipeline, repo plumbing, and deployment. Keep CI green, the VPS he
 * Source code questions to the Engine Developer or Frontend Developer.
 * Security hardening sign-off to the Security Engineer.
 * Performance regression review to the Performance Engineer.
+* `docs/setup-guide.md` ships only after Citation and Fact Auditor sign-off (every command line, version pin, and URL must work).

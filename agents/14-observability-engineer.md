@@ -53,3 +53,4 @@ Make the live deploy debuggable without sacrificing the latency budget. Logging 
 * Hot-path discipline pairs with the Performance Engineer (they will catch any regression).
 * Frontend logging review pairs with the Frontend Developer.
 * Hosting integration goes to the DevOps Engineer.
+* `docs/observability/runbook.md` ships only after Citation and Fact Auditor sign-off (the diagnostic flows must reference real commands, real metric names, and real systemd unit paths that exist).

@@ -66,3 +66,4 @@ Threat-model the live demo, harden the WebSocket server and the C++ binary, and 
 * Engine code reviews continue with this agent for any C++ change touching networking or input.
 * Hosting hardening pairs with the DevOps Engineer.
 * Frontend CSP and connect-src reviews pair with the Frontend Developer.
+* `docs/security/threat-model.md`, `docs/security/checklist.md`, and `docs/security/secrets.md` ship only after Citation and Fact Auditor sign-off (every CVE reference, dependency advisory, and external standard citation must trace to a working source).
