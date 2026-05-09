@@ -1,0 +1,82 @@
+# Maintainer's private notes (per CLAUDE.md privacy policy)
+future-ideas.md
+
+# C++ build outputs
+build/
+build-*/
+out/
+cmake-build-*/
+*.o
+*.obj
+*.a
+*.so
+*.so.*
+*.dylib
+*.dll
+*.exe
+*.exp
+*.lib
+*.pdb
+*.ilk
+*.gch
+*.pch
+compile_commands.json
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+CTestTestfile.cmake
+Testing/
+_deps/
+Makefile
+
+# Profile-guided optimization
+*.profraw
+*.profdata
+*.gcda
+*.gcno
+*.gcov
+
+# Sanitizer outputs
+*.tsan.out
+*.asan.out
+*.ubsan.out
+
+# Bench artifacts
+bench/output/
+bench/*.csv
+bench/*.png
+
+# Frontend
+node_modules/
+dist/
+.vite/
+*.tsbuildinfo
+.eslintcache
+
+# IDE
+.vscode/
+.idea/
+.cursor/
+.zed/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
+logs/
+
+# Local env / secrets
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# Local config overrides
+meridian.local.toml

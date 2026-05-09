@@ -1,0 +1,637 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Meridian · Bourse</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;0,8..60,700;1,8..60,400&family=Source+Sans+3:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #FFF1E5;
+    --paper-2: #F8E5D2;
+    --ink: #33302E;
+    --ink-soft: #6E6963;
+    --ink-faint: #A39E97;
+    --rule: #D9C5B0;
+    --rule-strong: #847770;
+    --red: #990F3D;
+    --navy: #0D1F3F;
+    --bid: #2C7A4B;
+    --ask: #C8102E;
+    --bid-fill: rgba(44, 122, 75, 0.10);
+    --ask-fill: rgba(200, 16, 46, 0.08);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    font-family: 'Source Sans 3', system-ui, sans-serif;
+    background: var(--paper);
+    color: var(--ink);
+    font-size: 14px;
+    line-height: 1.5;
+    font-feature-settings: 'tnum';
+    -webkit-font-smoothing: antialiased;
+  }
+  .num { font-family: 'JetBrains Mono', monospace; font-variant-numeric: tabular-nums; }
+  .small-caps {
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    font-weight: 600;
+    color: var(--ink-soft);
+  }
+
+  /* Masthead */
+  .masthead {
+    border-bottom: 2px solid var(--ink);
+    padding: 22px 32px 18px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+  }
+  .masthead-left {
+    display: flex;
+    align-items: baseline;
+    gap: 24px;
+  }
+  .wordmark {
+    font-family: 'Source Serif 4', serif;
+    font-style: italic;
+    font-weight: 700;
+    font-size: 36px;
+    color: var(--ink);
+    letter-spacing: -0.01em;
+  }
+  .wordmark-sub {
+    font-family: 'Source Serif 4', serif;
+    font-style: italic;
+    color: var(--ink-soft);
+    font-size: 14px;
+    border-left: 1px solid var(--rule);
+    padding-left: 16px;
+  }
+  .masthead-right {
+    text-align: right;
+    font-size: 11px;
+    color: var(--ink-soft);
+  }
+  .masthead-right .num { color: var(--ink); font-weight: 500; }
+  .masthead-right div + div { margin-top: 2px; }
+
+  /* Subhead - dateline strip */
+  .dateline {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 32px;
+    border-bottom: 1px solid var(--rule);
+    background: var(--paper-2);
+    font-size: 11px;
+    color: var(--ink-soft);
+  }
+  .dateline strong { color: var(--ink); font-weight: 600; }
+
+  /* Hero strip - the security */
+  .hero {
+    padding: 28px 32px 24px;
+    border-bottom: 1px solid var(--rule);
+    display: grid;
+    grid-template-columns: 1.4fr 1fr 1fr 1fr 1fr;
+    gap: 32px;
+    align-items: end;
+  }
+  .sym {
+    font-family: 'Source Serif 4', serif;
+    font-weight: 700;
+    font-size: 32px;
+    line-height: 1;
+    color: var(--ink);
+  }
+  .sym-meta {
+    font-size: 11px;
+    color: var(--ink-soft);
+    margin-top: 6px;
+  }
+  .stat {
+    border-left: 1px solid var(--rule);
+    padding-left: 16px;
+  }
+  .stat-label {
+    font-size: 9px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    margin-bottom: 6px;
+  }
+  .stat-value {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 20px;
+    font-weight: 500;
+    color: var(--ink);
+  }
+  .stat-value.up { color: var(--bid); }
+  .stat-value.down { color: var(--ask); }
+  .stat-sub {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--ink-soft);
+    margin-top: 2px;
+  }
+
+  /* Main grid */
+  .main {
+    display: grid;
+    grid-template-columns: 360px 1fr 280px;
+    gap: 0;
+  }
+  .col {
+    padding: 24px 28px;
+  }
+  .col + .col {
+    border-left: 1px solid var(--rule);
+  }
+  .section-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    border-bottom: 1px solid var(--ink);
+    padding-bottom: 6px;
+    margin-bottom: 16px;
+  }
+  .section-title {
+    font-family: 'Source Serif 4', serif;
+    font-weight: 600;
+    font-size: 15px;
+    color: var(--ink);
+  }
+  .section-aux {
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+  }
+
+  /* Order book ladder */
+  .ladder {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: 'JetBrains Mono', monospace;
+    font-variant-numeric: tabular-nums;
+    font-size: 13px;
+  }
+  .ladder th {
+    text-align: left;
+    font-family: 'Source Sans 3', sans-serif;
+    font-size: 9px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    font-weight: 600;
+    padding: 4px 0;
+    border-bottom: 1px solid var(--rule);
+  }
+  .ladder th.right { text-align: right; }
+  .ladder td {
+    padding: 4px 0;
+    position: relative;
+  }
+  .ladder td.right { text-align: right; }
+  .ladder tr.ask td { color: var(--ask); }
+  .ladder tr.bid td { color: var(--bid); }
+  .ladder .price { font-weight: 600; color: var(--ink); }
+  .ladder tr.ask .price { color: var(--ask); }
+  .ladder tr.bid .price { color: var(--bid); }
+  .depth-bar {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    right: 0;
+    border-radius: 0;
+  }
+  .ladder tr.ask .depth-bar { background: var(--ask-fill); }
+  .ladder tr.bid .depth-bar { background: var(--bid-fill); }
+  .ladder td > span { position: relative; z-index: 1; }
+  .spread-row td {
+    background: var(--paper-2);
+    padding: 6px 8px;
+    font-family: 'Source Sans 3', sans-serif;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    text-align: center;
+    border-top: 0.5px solid var(--rule);
+    border-bottom: 0.5px solid var(--rule);
+  }
+  .spread-row strong {
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--ink);
+    font-weight: 600;
+    margin: 0 8px;
+    letter-spacing: 0;
+    text-transform: none;
+    font-size: 11px;
+  }
+
+  /* Depth chart */
+  .chart-wrap {
+    margin: 4px 0 28px;
+  }
+  .chart-frame {
+    border-bottom: 1px solid var(--rule);
+    padding-bottom: 6px;
+  }
+  .chart-axis {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 6px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--ink-faint);
+  }
+  .legend {
+    display: flex;
+    gap: 18px;
+    font-size: 11px;
+    color: var(--ink-soft);
+    margin-top: 8px;
+  }
+  .legend-dot {
+    display: inline-block;
+    width: 10px;
+    height: 2px;
+    margin-right: 6px;
+    vertical-align: middle;
+  }
+  .legend-dot.bid { background: var(--bid); }
+  .legend-dot.ask { background: var(--ask); }
+
+  /* Trades table */
+  .trades {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: 'JetBrains Mono', monospace;
+    font-variant-numeric: tabular-nums;
+    font-size: 12px;
+  }
+  .trades th {
+    text-align: left;
+    font-family: 'Source Sans 3', sans-serif;
+    font-size: 9px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    font-weight: 600;
+    padding: 4px 8px 4px 0;
+    border-bottom: 1px solid var(--rule);
+  }
+  .trades td { padding: 4px 8px 4px 0; border-bottom: 0.5px dotted var(--rule); }
+  .trades td.right { text-align: right; padding-right: 0; }
+  .trades .side-buy { color: var(--bid); font-weight: 600; }
+  .trades .side-sell { color: var(--ask); font-weight: 600; }
+  .trades .agg-tag {
+    font-family: 'Source Sans 3', sans-serif;
+    font-size: 9px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    background: var(--ink);
+    color: var(--paper);
+    padding: 1px 5px;
+    border-radius: 1px;
+  }
+
+  /* Performance column */
+  .perf-block {
+    margin-bottom: 22px;
+  }
+  .perf-headline {
+    font-family: 'Source Serif 4', serif;
+    font-size: 28px;
+    line-height: 1;
+    font-weight: 700;
+    color: var(--red);
+  }
+  .perf-headline .unit {
+    font-family: 'Source Sans 3', sans-serif;
+    font-size: 12px;
+    color: var(--ink-soft);
+    font-weight: 400;
+    margin-left: 4px;
+  }
+  .perf-label {
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    margin-bottom: 4px;
+  }
+  .perf-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px 18px;
+    margin-bottom: 8px;
+  }
+  .perf-cell .num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 16px;
+    font-weight: 500;
+    color: var(--ink);
+  }
+  .perf-cell .label {
+    font-size: 10px;
+    color: var(--ink-soft);
+    margin-bottom: 2px;
+  }
+
+  /* Histogram */
+  .histo {
+    display: flex;
+    align-items: flex-end;
+    gap: 1px;
+    height: 36px;
+    margin: 8px 0;
+  }
+  .histo .bar {
+    background: var(--ink);
+    flex: 1;
+    opacity: 0.85;
+  }
+
+  /* Footer */
+  .footer-bar {
+    border-top: 1px solid var(--ink);
+    padding: 10px 32px;
+    background: var(--paper-2);
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    color: var(--ink-soft);
+  }
+  .footer-bar strong { color: var(--ink); font-weight: 600; }
+  .footer-bar .pulse {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--red);
+    margin-right: 6px;
+    vertical-align: middle;
+    animation: pulse 1.6s infinite;
+  }
+  @keyframes pulse { 50% { opacity: 0.3; } }
+
+  /* Floating link to index */
+  .nav-back {
+    position: fixed;
+    top: 16px;
+    right: 18px;
+    font-size: 11px;
+    color: var(--ink-soft);
+    text-decoration: none;
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    padding: 6px 10px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    z-index: 100;
+  }
+  .nav-back:hover { border-color: var(--ink); color: var(--ink); }
+</style>
+</head>
+<body>
+
+<a class="nav-back" href="../index.html">← all 5</a>
+
+<div class="masthead">
+  <div class="masthead-left">
+    <div class="wordmark">Meridian</div>
+    <div class="wordmark-sub">a price-time priority limit order book</div>
+  </div>
+  <div class="masthead-right">
+    <div><span class="num">2026 · 05 · 09</span> · Saturday</div>
+    <div><span class="num">09:42:38.124</span> ET · NASDAQ ITCH 5.0 replay</div>
+  </div>
+</div>
+
+<div class="dateline">
+  <span><strong>SESSION</strong> · regular hours · book v0.1.0 · build dca34f1</span>
+  <span><strong>BUILD</strong> · clang 19.1 · -O3 -march=native · pgo enabled</span>
+  <span><strong>MACHINE</strong> · i7-13700K · 32 GB DDR5-6000 · pinned to core 4</span>
+</div>
+
+<div class="hero">
+  <div>
+    <div class="sym">AAPL</div>
+    <div class="sym-meta">Apple Inc · Common Stock · NASDAQ Global Select · NMS Tier 1</div>
+  </div>
+  <div class="stat">
+    <div class="stat-label">Last</div>
+    <div class="stat-value num">175.43</div>
+    <div class="stat-sub">175.42 × 175.43</div>
+  </div>
+  <div class="stat">
+    <div class="stat-label">Change</div>
+    <div class="stat-value num up">+1.27</div>
+    <div class="stat-sub up" style="color:var(--bid)">+0.73%</div>
+  </div>
+  <div class="stat">
+    <div class="stat-label">Volume</div>
+    <div class="stat-value num">24.31M</div>
+    <div class="stat-sub">vs 30d avg 18.7M</div>
+  </div>
+  <div class="stat">
+    <div class="stat-label">Spread</div>
+    <div class="stat-value num">0.01</div>
+    <div class="stat-sub">0.6 bp · tight</div>
+  </div>
+</div>
+
+<div class="main">
+
+  <!-- Order Book Ladder -->
+  <div class="col">
+    <div class="section-head">
+      <div class="section-title">The Order Book</div>
+      <div class="section-aux">L10 · 20 levels</div>
+    </div>
+    <table class="ladder">
+      <thead>
+        <tr>
+          <th>Price</th>
+          <th class="right">Size</th>
+          <th class="right">Orders</th>
+          <th class="right">Cum Qty</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="ask"><td class="price"><span>175.50</span></td><td class="right"><span class="depth-bar" style="width:40%"></span><span>300</span></td><td class="right"><span>4</span></td><td class="right"><span>2,205</span></td></tr>
+        <tr class="ask"><td class="price"><span>175.49</span></td><td class="right"><span class="depth-bar" style="width:60%"></span><span>450</span></td><td class="right"><span>7</span></td><td class="right"><span>1,905</span></td></tr>
+        <tr class="ask"><td class="price"><span>175.48</span></td><td class="right"><span class="depth-bar" style="width:16%"></span><span>120</span></td><td class="right"><span>3</span></td><td class="right"><span>1,455</span></td></tr>
+        <tr class="ask"><td class="price"><span>175.47</span></td><td class="right"><span class="depth-bar" style="width:37%"></span><span>280</span></td><td class="right"><span>5</span></td><td class="right"><span>1,335</span></td></tr>
+        <tr class="ask"><td class="price"><span>175.46</span></td><td class="right"><span class="depth-bar" style="width:80%"></span><span>600</span></td><td class="right"><span>9</span></td><td class="right"><span>1,055</span></td></tr>
+        <tr class="ask"><td class="price"><span>175.45</span></td><td class="right"><span class="depth-bar" style="width:16%"></span><span>120</span></td><td class="right"><span>3</span></td><td class="right"><span>455</span></td></tr>
+        <tr class="ask"><td class="price"><span>175.44</span></td><td class="right"><span class="depth-bar" style="width:10%"></span><span>75</span></td><td class="right"><span>2</span></td><td class="right"><span>335</span></td></tr>
+        <tr class="ask"><td class="price"><span>175.43</span></td><td class="right"><span class="depth-bar" style="width:7%"></span><span>50</span></td><td class="right"><span>1</span></td><td class="right"><span>260</span></td></tr>
+
+        <tr class="spread-row"><td colspan="4">spread <strong>0.01</strong> · mid <strong>175.425</strong> · 0.6 bp</td></tr>
+
+        <tr class="bid"><td class="price"><span>175.42</span></td><td class="right"><span class="depth-bar" style="width:13%"></span><span>100</span></td><td class="right"><span>3</span></td><td class="right"><span>100</span></td></tr>
+        <tr class="bid"><td class="price"><span>175.41</span></td><td class="right"><span class="depth-bar" style="width:11%"></span><span>80</span></td><td class="right"><span>2</span></td><td class="right"><span>180</span></td></tr>
+        <tr class="bid"><td class="price"><span>175.40</span></td><td class="right"><span class="depth-bar" style="width:27%"></span><span>200</span></td><td class="right"><span>5</span></td><td class="right"><span>380</span></td></tr>
+        <tr class="bid"><td class="price"><span>175.39</span></td><td class="right"><span class="depth-bar" style="width:20%"></span><span>150</span></td><td class="right"><span>4</span></td><td class="right"><span>530</span></td></tr>
+        <tr class="bid"><td class="price"><span>175.38</span></td><td class="right"><span class="depth-bar" style="width:8%"></span><span>60</span></td><td class="right"><span>2</span></td><td class="right"><span>590</span></td></tr>
+        <tr class="bid"><td class="price"><span>175.37</span></td><td class="right"><span class="depth-bar" style="width:33%"></span><span>250</span></td><td class="right"><span>6</span></td><td class="right"><span>840</span></td></tr>
+        <tr class="bid"><td class="price"><span>175.36</span></td><td class="right"><span class="depth-bar" style="width:53%"></span><span>400</span></td><td class="right"><span>8</span></td><td class="right"><span>1,240</span></td></tr>
+        <tr class="bid"><td class="price"><span>175.35</span></td><td class="right"><span class="depth-bar" style="width:24%"></span><span>180</span></td><td class="right"><span>4</span></td><td class="right"><span>1,420</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Center: Depth chart and trades -->
+  <div class="col">
+    <div class="section-head">
+      <div class="section-title">Cumulative Depth</div>
+      <div class="section-aux">10 levels each side · qty</div>
+    </div>
+    <div class="chart-wrap">
+      <div class="chart-frame">
+        <svg viewBox="0 0 600 220" width="100%" height="220" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <pattern id="bg-grid" width="60" height="44" patternUnits="userSpaceOnUse">
+              <path d="M 60 0 L 0 0 0 44" fill="none" stroke="#E2D2BD" stroke-width="0.5"/>
+            </pattern>
+          </defs>
+          <rect width="600" height="220" fill="url(#bg-grid)"/>
+          <!-- Horizontal axis tick lines -->
+          <line x1="0" y1="44" x2="600" y2="44" stroke="#E2D2BD" stroke-width="0.5"/>
+          <line x1="0" y1="88" x2="600" y2="88" stroke="#E2D2BD" stroke-width="0.5"/>
+          <line x1="0" y1="132" x2="600" y2="132" stroke="#E2D2BD" stroke-width="0.5"/>
+          <line x1="0" y1="176" x2="600" y2="176" stroke="#E2D2BD" stroke-width="0.5"/>
+
+          <!-- bid area (left of mid, climbing left) -->
+          <path d="M 0 220 L 0 60 L 30 60 L 30 80 L 75 80 L 75 105 L 120 105 L 120 130 L 165 130 L 165 162 L 210 162 L 210 174 L 255 174 L 255 188 L 300 188 L 300 220 Z"
+                fill="rgba(44, 122, 75, 0.15)" stroke="#2C7A4B" stroke-width="1.5"/>
+          <!-- ask area (right of mid, climbing right) -->
+          <path d="M 600 220 L 600 38 L 570 38 L 570 56 L 525 56 L 525 70 L 480 70 L 480 96 L 435 96 L 435 132 L 390 132 L 390 158 L 345 158 L 345 184 L 300 184 L 300 220 Z"
+                fill="rgba(200, 16, 46, 0.12)" stroke="#C8102E" stroke-width="1.5"/>
+
+          <!-- mid line -->
+          <line x1="300" y1="0" x2="300" y2="220" stroke="#33302E" stroke-width="0.75" stroke-dasharray="3 3"/>
+          <text x="304" y="14" font-family="JetBrains Mono" font-size="10" fill="#33302E">mid 175.425</text>
+        </svg>
+      </div>
+      <div class="chart-axis">
+        <span>175.35</span>
+        <span>175.40</span>
+        <span>mid</span>
+        <span>175.45</span>
+        <span>175.50</span>
+      </div>
+      <div class="legend">
+        <span><span class="legend-dot bid"></span>Bid · cum 1,420</span>
+        <span><span class="legend-dot ask"></span>Ask · cum 2,205</span>
+        <span style="margin-left:auto">Imbalance: <strong style="color:var(--ask);font-family:'JetBrains Mono'">−27.6%</strong> sell pressure</span>
+      </div>
+    </div>
+
+    <div class="section-head">
+      <div class="section-title">The Tape · Recent Trades</div>
+      <div class="section-aux">last 12 prints · agg = aggressor</div>
+    </div>
+    <table class="trades">
+      <thead>
+        <tr>
+          <th>Time</th>
+          <th>Side</th>
+          <th class="right">Price</th>
+          <th class="right">Size</th>
+          <th class="right">Agg</th>
+          <th class="right">Cond</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td class="num">09:42:38.123</td><td class="side-buy">B</td><td class="right num">175.43</td><td class="right num">100</td><td class="right"><span class="agg-tag">TAKER</span></td><td class="right num">@</td></tr>
+        <tr><td class="num">09:42:38.119</td><td class="side-buy">B</td><td class="right num">175.43</td><td class="right num">50</td><td class="right"><span class="agg-tag">TAKER</span></td><td class="right num">@</td></tr>
+        <tr><td class="num">09:42:38.115</td><td class="side-sell">S</td><td class="right num">175.42</td><td class="right num">75</td><td class="right"><span class="agg-tag">TAKER</span></td><td class="right num">@</td></tr>
+        <tr><td class="num">09:42:38.108</td><td class="side-buy">B</td><td class="right num">175.43</td><td class="right num">200</td><td class="right"><span class="agg-tag">TAKER</span></td><td class="right num">@</td></tr>
+        <tr><td class="num">09:42:38.102</td><td class="side-sell">S</td><td class="right num">175.42</td><td class="right num">120</td><td class="right"><span class="agg-tag">TAKER</span></td><td class="right num">@</td></tr>
+        <tr><td class="num">09:42:38.097</td><td class="side-sell">S</td><td class="right num">175.42</td><td class="right num">80</td><td class="right"><span class="agg-tag">TAKER</span></td><td class="right num">@</td></tr>
+        <tr><td class="num">09:42:38.091</td><td class="side-buy">B</td><td class="right num">175.43</td><td class="right num">300</td><td class="right"><span class="agg-tag">TAKER</span></td><td class="right num">@</td></tr>
+        <tr><td class="num">09:42:38.085</td><td class="side-sell">S</td><td class="right num">175.42</td><td class="right num">45</td><td class="right"><span class="agg-tag">TAKER</span></td><td class="right num">@</td></tr>
+        <tr><td class="num">09:42:38.078</td><td class="side-buy">B</td><td class="right num">175.43</td><td class="right num">125</td><td class="right"><span class="agg-tag">TAKER</span></td><td class="right num">@</td></tr>
+        <tr><td class="num">09:42:38.071</td><td class="side-buy">B</td><td class="right num">175.44</td><td class="right num">75</td><td class="right"><span class="agg-tag">TAKER</span></td><td class="right num">@</td></tr>
+        <tr><td class="num">09:42:38.065</td><td class="side-sell">S</td><td class="right num">175.42</td><td class="right num">200</td><td class="right"><span class="agg-tag">TAKER</span></td><td class="right num">@</td></tr>
+        <tr><td class="num">09:42:38.059</td><td class="side-buy">B</td><td class="right num">175.43</td><td class="right num">150</td><td class="right"><span class="agg-tag">TAKER</span></td><td class="right num">@</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Performance column -->
+  <div class="col">
+    <div class="section-head">
+      <div class="section-title">Engine Performance</div>
+      <div class="section-aux">single-thread match</div>
+    </div>
+
+    <div class="perf-block">
+      <div class="perf-label">Throughput</div>
+      <div class="perf-headline">6.2M<span class="unit">events / second</span></div>
+      <div class="histo">
+        <div class="bar" style="height:30%"></div><div class="bar" style="height:42%"></div><div class="bar" style="height:55%"></div>
+        <div class="bar" style="height:68%"></div><div class="bar" style="height:78%"></div><div class="bar" style="height:80%"></div>
+        <div class="bar" style="height:84%"></div><div class="bar" style="height:88%"></div><div class="bar" style="height:90%"></div>
+        <div class="bar" style="height:92%"></div><div class="bar" style="height:94%"></div><div class="bar" style="height:95%"></div>
+        <div class="bar" style="height:96%"></div><div class="bar" style="height:96%"></div><div class="bar" style="height:97%"></div>
+        <div class="bar" style="height:97%"></div><div class="bar" style="height:97%"></div><div class="bar" style="height:96%"></div>
+        <div class="bar" style="height:95%"></div><div class="bar" style="height:94%"></div><div class="bar" style="height:92%"></div>
+        <div class="bar" style="height:88%"></div><div class="bar" style="height:80%"></div><div class="bar" style="height:62%"></div>
+        <div class="bar" style="height:38%"></div><div class="bar" style="height:18%"></div><div class="bar" style="height:8%"></div>
+      </div>
+      <div class="stat-sub" style="font-family:'Source Sans 3'">latency distribution · log scale</div>
+    </div>
+
+    <div class="perf-block">
+      <div class="perf-label">Per-event latency</div>
+      <div class="perf-grid">
+        <div class="perf-cell"><div class="label">p50</div><div class="num">412 ns</div></div>
+        <div class="perf-cell"><div class="label">p99</div><div class="num">1.8 μs</div></div>
+        <div class="perf-cell"><div class="label">p99.9</div><div class="num">4.3 μs</div></div>
+        <div class="perf-cell"><div class="label">max</div><div class="num">9.7 μs</div></div>
+      </div>
+    </div>
+
+    <div class="perf-block">
+      <div class="perf-label">Book state</div>
+      <div class="perf-grid">
+        <div class="perf-cell"><div class="label">orders live</div><div class="num">12,847</div></div>
+        <div class="perf-cell"><div class="label">trades today</div><div class="num">89,231</div></div>
+        <div class="perf-cell"><div class="label">price levels</div><div class="num">412</div></div>
+        <div class="perf-cell"><div class="label">cancel ratio</div><div class="num">94.2%</div></div>
+      </div>
+    </div>
+
+    <div class="perf-block">
+      <div class="perf-label">Replay</div>
+      <div style="font-family:'JetBrains Mono';font-size:11px;color:var(--ink-soft);line-height:1.7">
+        tape · <strong style="color:var(--ink)">itch-2024-06-13</strong><br>
+        cursor · <strong style="color:var(--ink)">09:42:38.124</strong><br>
+        elapsed · <strong style="color:var(--ink)">38m 21s</strong><br>
+        progress · <strong style="color:var(--ink)">9.6%</strong> of session
+      </div>
+      <div style="height:6px;background:var(--rule);margin-top:10px;border-radius:1px;overflow:hidden">
+        <div style="background:var(--red);height:100%;width:9.6%"></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="footer-bar">
+  <span><span class="pulse"></span><strong>LIVE</strong> · matching loop on core 4 · publisher on core 5 · 30 Hz top-of-book sampler</span>
+  <span>seqlock readers · <strong>3</strong> connected · zero blocking on hot path</span>
+  <span>Meridian v0.1.0 · © 2026 Mustafa Nazeer</span>
+</div>
+
+</body>
+</html>

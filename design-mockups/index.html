@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Meridian · Visual Direction Mockups</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Source+Serif+4:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0E0F12;
+    --surface: #15171C;
+    --surface-2: #1B1E25;
+    --border: #2A2D36;
+    --ink: #E9E6DF;
+    --ink-dim: #8A8B92;
+    --ink-faint: #5A5D65;
+    --accent: #D4A24C;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Inter', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    min-height: 100vh;
+    padding: 64px 48px;
+    font-feature-settings: 'ss01', 'cv11';
+  }
+  .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 20px;
+    margin-bottom: 48px;
+  }
+  .brand {
+    font-family: 'Source Serif 4', serif;
+    font-style: italic;
+    font-weight: 400;
+    font-size: 34px;
+    letter-spacing: 0.01em;
+  }
+  .brand-meta {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--ink-dim);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .lede {
+    max-width: 720px;
+    margin-bottom: 56px;
+    color: var(--ink-dim);
+    line-height: 1.6;
+    font-size: 15px;
+  }
+  .lede strong { color: var(--ink); font-weight: 500; }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+    gap: 24px;
+  }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+    transition: border-color 0.15s ease, transform 0.15s ease;
+    text-decoration: none;
+    color: inherit;
+    display: flex;
+    flex-direction: column;
+  }
+  .card:hover {
+    border-color: var(--accent);
+    transform: translateY(-2px);
+  }
+  .card-preview {
+    height: 200px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: stretch;
+    justify-content: stretch;
+    overflow: hidden;
+  }
+  .card-body {
+    padding: 20px 22px 22px;
+  }
+  .card-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--accent);
+    letter-spacing: 0.08em;
+    margin-bottom: 8px;
+  }
+  .card-title {
+    font-family: 'Source Serif 4', serif;
+    font-size: 22px;
+    font-weight: 600;
+    margin-bottom: 6px;
+  }
+  .card-tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--ink-faint);
+    letter-spacing: 0.04em;
+    margin-bottom: 12px;
+  }
+  .card-desc {
+    font-size: 13px;
+    line-height: 1.55;
+    color: var(--ink-dim);
+  }
+  .footer {
+    margin-top: 80px;
+    padding-top: 24px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    color: var(--ink-faint);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  /* mini-preview swatches */
+  .pv {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    overflow: hidden;
+  }
+  .pv-bourse { background: #FFF1E5; color: #1B1E2E; }
+  .pv-twilight { background: #0E1126; color: #EFE9DC; }
+  .pv-terminal { background: #050505; color: #FFB000; }
+  .pv-eikon { background: #0F1419; color: #E2E8F0; }
+  .pv-onyx { background: #FFFFFF; color: #000000; }
+  .pv-row { display: flex; justify-content: space-between; padding: 4px 10px; }
+  .pv-bourse .pv-row { border-bottom: 0.5px solid #C8B7A6; }
+  .pv-twilight .pv-row { border-bottom: 1px solid #1F2440; }
+  .pv-terminal .pv-row { border-bottom: 1px solid #2A1E00; }
+  .pv-eikon .pv-row { border-bottom: 1px solid #1A2028; }
+  .pv-onyx .pv-row { border-bottom: 1px solid #000; }
+  .pv-ask { color: #C8102E; }
+  .pv-bid { color: #2C7A4B; }
+  .pv-twilight .pv-ask { color: #C5765B; }
+  .pv-twilight .pv-bid { color: #4FA89E; }
+  .pv-terminal .pv-ask, .pv-terminal .pv-bid { color: #FFB000; }
+  .pv-eikon .pv-ask { color: #EF4444; }
+  .pv-eikon .pv-bid { color: #10B981; }
+  .pv-onyx .pv-ask, .pv-onyx .pv-bid { color: #000; }
+  .pv-mid { background: rgba(0,0,0,0.04); padding: 5px 10px; font-weight: 700; }
+  .pv-twilight .pv-mid, .pv-terminal .pv-mid, .pv-eikon .pv-mid { background: rgba(255,255,255,0.04); }
+  .pv-onyx .pv-mid { background: #000; color: #fff; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="brand">Meridian<span style="font-style:normal"> · visual direction</span></div>
+  <div class="brand-meta">5 mockups · 2026-05-09</div>
+</div>
+
+<p class="lede">
+  Five candidate visual identities for the limit order book project. Each shows the same dashboard layout with the same realistic data (AAPL, NASDAQ, mid 175.43) so the comparison is purely about typography, color, density, and recruiter signal. Click any mockup to open the full-fidelity version. <strong>Priorities, in order: data visualization quality, resume appeal, recruiter impression.</strong>
+</p>
+
+<div class="grid">
+
+  <a class="card" href="themes/bourse.html">
+    <div class="card-preview"><div class="pv pv-bourse">
+      <div class="pv-row"><span>175.46</span><span class="pv-ask">600</span></div>
+      <div class="pv-row"><span>175.45</span><span class="pv-ask">120</span></div>
+      <div class="pv-row"><span>175.44</span><span class="pv-ask">75</span></div>
+      <div class="pv-row"><span>175.43</span><span class="pv-ask">50</span></div>
+      <div class="pv-mid">mid 175.425</div>
+      <div class="pv-row"><span>175.42</span><span class="pv-bid">100</span></div>
+      <div class="pv-row"><span>175.41</span><span class="pv-bid">80</span></div>
+      <div class="pv-row"><span>175.40</span><span class="pv-bid">200</span></div>
+      <div class="pv-row"><span>175.39</span><span class="pv-bid">150</span></div>
+    </div></div>
+    <div class="card-body">
+      <div class="card-num">01 / Bourse</div>
+      <div class="card-title">The Financial Times</div>
+      <div class="card-tag">Light · Serif · Print heritage</div>
+      <div class="card-desc">FT-style salmon paper with navy ink and a single red accent. Source Serif 4 display, Source Sans 3 body, JetBrains Mono numerics. Reads like a financial broadsheet. Strongest contrast to Vega.</div>
+    </div>
+  </a>
+
+  <a class="card" href="themes/twilight.html">
+    <div class="card-preview"><div class="pv pv-twilight">
+      <div class="pv-row"><span>175.46</span><span class="pv-ask">600</span></div>
+      <div class="pv-row"><span>175.45</span><span class="pv-ask">120</span></div>
+      <div class="pv-row"><span>175.44</span><span class="pv-ask">75</span></div>
+      <div class="pv-row"><span>175.43</span><span class="pv-ask">50</span></div>
+      <div class="pv-mid">mid 175.425</div>
+      <div class="pv-row"><span>175.42</span><span class="pv-bid">100</span></div>
+      <div class="pv-row"><span>175.41</span><span class="pv-bid">80</span></div>
+      <div class="pv-row"><span>175.40</span><span class="pv-bid">200</span></div>
+      <div class="pv-row"><span>175.39</span><span class="pv-bid">150</span></div>
+    </div></div>
+    <div class="card-body">
+      <div class="card-num">02 / Twilight</div>
+      <div class="card-title">Editorial Premium</div>
+      <div class="card-tag">Dark · Indigo &amp; gold · Editorial</div>
+      <div class="card-desc">Deep indigo background with a gold accent and muted teal/coral for bid/ask. Italic editorial display, oversized numerics, generous spacing. Premium publication aesthetic.</div>
+    </div>
+  </a>
+
+  <a class="card" href="themes/terminal.html">
+    <div class="card-preview"><div class="pv pv-terminal">
+      <div class="pv-row"><span>175.46</span><span class="pv-ask">600</span></div>
+      <div class="pv-row"><span>175.45</span><span class="pv-ask">120</span></div>
+      <div class="pv-row"><span>175.44</span><span class="pv-ask">75</span></div>
+      <div class="pv-row"><span>175.43</span><span class="pv-ask">50</span></div>
+      <div class="pv-mid">MID 175.425</div>
+      <div class="pv-row"><span>175.42</span><span class="pv-bid">100</span></div>
+      <div class="pv-row"><span>175.41</span><span class="pv-bid">80</span></div>
+      <div class="pv-row"><span>175.40</span><span class="pv-bid">200</span></div>
+      <div class="pv-row"><span>175.39</span><span class="pv-bid">150</span></div>
+    </div></div>
+    <div class="card-body">
+      <div class="card-num">03 / Terminal</div>
+      <div class="card-title">Bloomberg Amber</div>
+      <div class="card-tag">Dark · Monochrome amber · Dense</div>
+      <div class="card-desc">Amber on near-black, all IBM Plex Mono, function-key bar, frame borders, ALL CAPS. Maximalist density. The clearest signal of "I take market microstructure seriously."</div>
+    </div>
+  </a>
+
+  <a class="card" href="themes/eikon.html">
+    <div class="card-preview"><div class="pv pv-eikon">
+      <div class="pv-row"><span>175.46</span><span class="pv-ask">600</span></div>
+      <div class="pv-row"><span>175.45</span><span class="pv-ask">120</span></div>
+      <div class="pv-row"><span>175.44</span><span class="pv-ask">75</span></div>
+      <div class="pv-row"><span>175.43</span><span class="pv-ask">50</span></div>
+      <div class="pv-mid">175.425</div>
+      <div class="pv-row"><span>175.42</span><span class="pv-bid">100</span></div>
+      <div class="pv-row"><span>175.41</span><span class="pv-bid">80</span></div>
+      <div class="pv-row"><span>175.40</span><span class="pv-bid">200</span></div>
+      <div class="pv-row"><span>175.39</span><span class="pv-bid">150</span></div>
+    </div></div>
+    <div class="card-body">
+      <div class="card-num">04 / Eikon</div>
+      <div class="card-title">Modern Professional</div>
+      <div class="card-tag">Dark · Cyan accent · Sans-serif</div>
+      <div class="card-desc">Refinitiv Eikon-inspired modern dashboard. Inter UI, JetBrains Mono numerics, cyan accent, semantic green/red. Card panels, subtle borders, balanced density. Looks like a 2026 trading workstation.</div>
+    </div>
+  </a>
+
+  <a class="card" href="themes/onyx.html">
+    <div class="card-preview"><div class="pv pv-onyx">
+      <div class="pv-row"><span>175.46</span><span class="pv-ask">600</span></div>
+      <div class="pv-row"><span>175.45</span><span class="pv-ask">120</span></div>
+      <div class="pv-row"><span>175.44</span><span class="pv-ask">75</span></div>
+      <div class="pv-row"><span>175.43</span><span class="pv-ask">50</span></div>
+      <div class="pv-mid">MID</div>
+      <div class="pv-row"><span>175.42</span><span class="pv-bid">100</span></div>
+      <div class="pv-row"><span>175.41</span><span class="pv-bid">80</span></div>
+      <div class="pv-row"><span>175.40</span><span class="pv-bid">200</span></div>
+      <div class="pv-row"><span>175.39</span><span class="pv-bid">150</span></div>
+    </div></div>
+    <div class="card-body">
+      <div class="card-num">05 / Onyx</div>
+      <div class="card-title">Swiss Brutalist</div>
+      <div class="card-tag">Light · Pure B&amp;W · Hazard orange</div>
+      <div class="card-desc">Swiss design poster meets data terminal. Pure white, pure black, single hazard-orange accent. Oversized display numerics, hard 1px rules, asymmetric grid. Strong design taste, very memorable.</div>
+    </div>
+  </a>
+
+</div>
+
+<div class="footer">
+  <span>localhost · meridian/design-mockups</span>
+  <span>same data across all five</span>
+</div>
+
+</body>
+</html>

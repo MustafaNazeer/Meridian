@@ -1,0 +1,542 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Meridian · Terminal</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #050505;
+    --bg-2: #0A0A0A;
+    --frame: #2A1E00;
+    --frame-bright: #573D00;
+    --amber: #FFB000;
+    --amber-bright: #FFD580;
+    --amber-dim: #C58800;
+    --amber-deep: #8C5F00;
+    --amber-faint: #5C4000;
+    --orange: #FF6B00;
+    --green: #00E676;
+    --red: #FF3B30;
+    --line: #1A1100;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    font-family: 'IBM Plex Mono', 'Courier New', monospace;
+    background: var(--bg);
+    color: var(--amber);
+    font-size: 12px;
+    line-height: 1.4;
+    font-feature-settings: 'tnum';
+    -webkit-font-smoothing: none;
+    text-rendering: geometricPrecision;
+  }
+  .num { font-variant-numeric: tabular-nums; }
+
+  /* CRT-ish glow on key headlines */
+  .glow {
+    text-shadow: 0 0 4px rgba(255, 176, 0, 0.4), 0 0 12px rgba(255, 176, 0, 0.18);
+  }
+  .glow-orange {
+    color: var(--orange);
+    text-shadow: 0 0 4px rgba(255, 107, 0, 0.5), 0 0 14px rgba(255, 107, 0, 0.25);
+  }
+
+  /* Floating link to index */
+  .nav-back {
+    position: fixed;
+    top: 8px;
+    right: 12px;
+    font-size: 10px;
+    color: var(--amber-dim);
+    text-decoration: none;
+    background: var(--bg);
+    border: 1px solid var(--frame);
+    padding: 4px 8px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    z-index: 100;
+  }
+  .nav-back:hover { border-color: var(--amber); color: var(--amber); }
+
+  /* Function key bar */
+  .fkeys {
+    background: var(--bg-2);
+    border-bottom: 1px solid var(--frame-bright);
+    padding: 6px 16px;
+    display: flex;
+    gap: 18px;
+    font-size: 11px;
+    color: var(--amber-dim);
+    letter-spacing: 0.04em;
+  }
+  .fkey { white-space: nowrap; }
+  .fkey b { color: var(--amber); font-weight: 600; }
+  .fkey.active { color: var(--bg); background: var(--amber); padding: 2px 8px; margin: -2px -8px; }
+  .fkey.active b { color: var(--bg); }
+
+  /* Top bar */
+  .topbar {
+    display: flex;
+    justify-content: space-between;
+    padding: 6px 16px;
+    border-bottom: 1px solid var(--frame);
+    background: var(--bg);
+    font-size: 11px;
+    color: var(--amber-dim);
+    letter-spacing: 0.04em;
+  }
+  .topbar .seg { display: flex; gap: 16px; }
+  .topbar b { color: var(--amber); font-weight: 600; }
+  .topbar .live::before {
+    content: '●';
+    color: var(--green);
+    margin-right: 4px;
+    animation: blink 1.2s infinite;
+  }
+  @keyframes blink { 50% { opacity: 0.3; } }
+
+  /* Hero */
+  .hero {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--frame);
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr 1fr 1fr 1fr;
+    gap: 24px;
+    align-items: center;
+  }
+  .hero-sym {
+    font-size: 36px;
+    font-weight: 600;
+    line-height: 1;
+    letter-spacing: 0.02em;
+  }
+  .hero-sym .ex {
+    color: var(--amber-dim);
+    font-size: 16px;
+    font-weight: 400;
+    margin-left: 12px;
+    letter-spacing: 0.06em;
+  }
+  .hero-sub {
+    font-size: 10px;
+    color: var(--amber-dim);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    margin-top: 4px;
+  }
+  .hero-stat .lab {
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--amber-dim);
+    margin-bottom: 2px;
+  }
+  .hero-stat .val {
+    font-size: 22px;
+    font-weight: 500;
+    color: var(--amber);
+    line-height: 1;
+  }
+  .hero-stat .val.up { color: var(--green); }
+  .hero-stat .val.dn { color: var(--red); }
+  .hero-stat .val.bright { color: var(--amber-bright); }
+  .hero-stat .sub {
+    font-size: 10px;
+    color: var(--amber-dim);
+    margin-top: 3px;
+    letter-spacing: 0.04em;
+  }
+
+  /* Quad grid */
+  .grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr 1fr;
+    gap: 0;
+  }
+  .panel {
+    border-right: 1px solid var(--frame);
+    border-bottom: 1px solid var(--frame);
+    padding: 10px 16px 12px;
+    min-height: 0;
+    overflow: hidden;
+  }
+  .panel:nth-child(2n) { border-right: none; }
+
+  .panel-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px dashed var(--frame-bright);
+    padding-bottom: 4px;
+    margin-bottom: 8px;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+  .panel-head .ttl { color: var(--amber); font-weight: 600; letter-spacing: 0.14em; }
+  .panel-head .aux { color: var(--amber-dim); }
+
+  /* Tables */
+  table.term {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 11px;
+    color: var(--amber);
+  }
+  table.term th {
+    text-align: left;
+    color: var(--amber-dim);
+    font-weight: 400;
+    padding: 2px 6px 4px 0;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    font-size: 10px;
+    border-bottom: 1px solid var(--line);
+  }
+  table.term th.right { text-align: right; padding-right: 0; }
+  table.term td {
+    padding: 2px 6px 2px 0;
+    color: var(--amber);
+  }
+  table.term td.right { text-align: right; padding-right: 0; }
+  table.term tr.ask td:first-child { color: var(--amber-bright); }
+  table.term tr.bid td:first-child { color: var(--amber-deep); }
+  .ask-row td { color: var(--amber-bright); }
+  .bid-row td { color: var(--amber-deep); }
+  .spread-row td {
+    color: var(--orange);
+    text-align: center;
+    border-top: 1px dotted var(--frame-bright);
+    border-bottom: 1px dotted var(--frame-bright);
+    padding: 4px 0;
+    letter-spacing: 0.06em;
+  }
+  table.term td .bar {
+    display: inline-block;
+    height: 2px;
+    background: var(--amber-deep);
+    vertical-align: middle;
+    margin-right: 4px;
+  }
+  .ask-row td .bar { background: var(--amber-bright); opacity: 0.5; }
+  .bid-row td .bar { background: var(--amber-deep); opacity: 0.7; }
+
+  /* Stat block */
+  .stat-block {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr 1fr;
+    gap: 12px 18px;
+    margin-bottom: 12px;
+  }
+  .stat-cell .lab {
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--amber-dim);
+    margin-bottom: 2px;
+  }
+  .stat-cell .val {
+    font-size: 16px;
+    color: var(--amber);
+    font-weight: 500;
+  }
+  .stat-cell .val.bright { color: var(--amber-bright); }
+
+  .big-num {
+    font-size: 42px;
+    font-weight: 600;
+    line-height: 1;
+    color: var(--orange);
+    letter-spacing: -0.02em;
+  }
+  .big-num .unit {
+    font-size: 12px;
+    color: var(--amber-dim);
+    font-weight: 400;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-left: 8px;
+    vertical-align: middle;
+  }
+
+  /* Histogram */
+  .histo {
+    display: flex;
+    align-items: flex-end;
+    gap: 1px;
+    height: 50px;
+    margin: 8px 0 4px;
+  }
+  .histo .b { background: var(--amber); flex: 1; opacity: 0.85; }
+  .histo .b.alert { background: var(--orange); }
+
+  /* Status bar */
+  .status {
+    background: var(--amber);
+    color: var(--bg);
+    padding: 4px 16px;
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .status .seg { display: flex; gap: 18px; }
+  .status .blink { animation: blink 1.2s infinite; }
+
+  /* ASCII chart */
+  .ascii-chart {
+    color: var(--amber);
+    white-space: pre;
+    font-size: 10px;
+    line-height: 1.1;
+    letter-spacing: 0;
+  }
+
+  /* Tape */
+  .tape-row { display: grid; grid-template-columns: 90px 30px 70px 50px 60px 1fr; gap: 8px; padding: 1px 0; font-size: 11px; }
+  .tape-row.buy span:nth-child(2) { color: var(--green); }
+  .tape-row.sell span:nth-child(2) { color: var(--red); }
+  .tape-row.buy span:nth-child(3) { color: var(--green); }
+  .tape-row.sell span:nth-child(3) { color: var(--red); }
+  .tape-row .meta { color: var(--amber-dim); font-size: 10px; }
+
+  /* Latency log */
+  .log-line {
+    font-size: 10.5px;
+    padding: 1px 0;
+    color: var(--amber-dim);
+  }
+  .log-line .t { color: var(--amber-deep); }
+  .log-line .ev { color: var(--amber); }
+  .log-line .lat { color: var(--orange); }
+</style>
+</head>
+<body>
+
+<a class="nav-back" href="../index.html">← ALL 5</a>
+
+<div class="fkeys">
+  <span class="fkey active"><b>F1</b> BOOK</span>
+  <span class="fkey"><b>F2</b> TAPE</span>
+  <span class="fkey"><b>F3</b> DEPTH</span>
+  <span class="fkey"><b>F4</b> PERF</span>
+  <span class="fkey"><b>F5</b> REPLAY</span>
+  <span class="fkey"><b>F6</b> SYMS</span>
+  <span class="fkey"><b>F7</b> AUDIT</span>
+  <span class="fkey"><b>F8</b> ALERTS</span>
+  <span class="fkey"><b>F9</b> CONFIG</span>
+  <span class="fkey" style="margin-left:auto"><b>?</b> HELP</span>
+</div>
+
+<div class="topbar">
+  <div class="seg">
+    <span><b class="glow">MERIDIAN</b> v0.1.0</span>
+    <span>BOOK <b>AAPL</b></span>
+    <span>VENUE <b>NASDAQ</b></span>
+    <span>TAPE <b>ITCH-2024-06-13</b></span>
+  </div>
+  <div class="seg">
+    <span class="live">MATCH LIVE</span>
+    <span><b class="num">2026-05-09</b> · <b class="num">09:42:38.124</b> ET</span>
+    <span>CORE <b>4</b> · CLANG <b>19.1</b></span>
+  </div>
+</div>
+
+<div class="hero">
+  <div>
+    <div class="hero-sym glow">AAPL <span class="ex">US · NASDAQ · NMS-T1</span></div>
+    <div class="hero-sub">APPLE INC · COMMON STOCK · LOT 1 · TICK 0.01</div>
+  </div>
+  <div class="hero-stat">
+    <div class="lab">LAST</div>
+    <div class="val num bright">175.43</div>
+    <div class="sub">175.42 × 175.43</div>
+  </div>
+  <div class="hero-stat">
+    <div class="lab">CHG</div>
+    <div class="val num up">+1.27</div>
+    <div class="sub" style="color:var(--green)">+0.73%</div>
+  </div>
+  <div class="hero-stat">
+    <div class="lab">VOL</div>
+    <div class="val num">24.31M</div>
+    <div class="sub">AVG 18.7M</div>
+  </div>
+  <div class="hero-stat">
+    <div class="lab">SPRD</div>
+    <div class="val num">0.01</div>
+    <div class="sub">0.6 BP</div>
+  </div>
+  <div class="hero-stat">
+    <div class="lab">EVT/S</div>
+    <div class="val num glow-orange">6.24M</div>
+    <div class="sub">SINGLE THREAD</div>
+  </div>
+</div>
+
+<div class="grid">
+
+  <!-- Top-Left: Order Book -->
+  <div class="panel">
+    <div class="panel-head">
+      <span class="ttl">►► ORDER BOOK · L8</span>
+      <span class="aux">412 LEVELS · 12,847 ORDERS</span>
+    </div>
+    <table class="term">
+      <thead>
+        <tr>
+          <th>PX</th><th class="right">SIZE</th><th class="right">ORD</th><th class="right">CUM</th><th class="right">DEPTH</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="ask-row"><td class="num">175.50</td><td class="right num">300</td><td class="right num">4</td><td class="right num">2,205</td><td class="right"><span class="bar" style="width:30px"></span></td></tr>
+        <tr class="ask-row"><td class="num">175.49</td><td class="right num">450</td><td class="right num">7</td><td class="right num">1,905</td><td class="right"><span class="bar" style="width:45px"></span></td></tr>
+        <tr class="ask-row"><td class="num">175.48</td><td class="right num">120</td><td class="right num">3</td><td class="right num">1,455</td><td class="right"><span class="bar" style="width:12px"></span></td></tr>
+        <tr class="ask-row"><td class="num">175.47</td><td class="right num">280</td><td class="right num">5</td><td class="right num">1,335</td><td class="right"><span class="bar" style="width:28px"></span></td></tr>
+        <tr class="ask-row"><td class="num">175.46</td><td class="right num">600</td><td class="right num">9</td><td class="right num">1,055</td><td class="right"><span class="bar" style="width:60px"></span></td></tr>
+        <tr class="ask-row"><td class="num">175.45</td><td class="right num">120</td><td class="right num">3</td><td class="right num">455</td><td class="right"><span class="bar" style="width:12px"></span></td></tr>
+        <tr class="ask-row"><td class="num">175.44</td><td class="right num">75</td><td class="right num">2</td><td class="right num">335</td><td class="right"><span class="bar" style="width:8px"></span></td></tr>
+        <tr class="ask-row"><td class="num">175.43</td><td class="right num">50</td><td class="right num">1</td><td class="right num">260</td><td class="right"><span class="bar" style="width:5px"></span></td></tr>
+        <tr class="spread-row"><td colspan="5">— SPREAD 0.01 · MID 175.425 · 0.6 BP —</td></tr>
+        <tr class="bid-row"><td class="num">175.42</td><td class="right num">100</td><td class="right num">3</td><td class="right num">100</td><td class="right"><span class="bar" style="width:10px"></span></td></tr>
+        <tr class="bid-row"><td class="num">175.41</td><td class="right num">80</td><td class="right num">2</td><td class="right num">180</td><td class="right"><span class="bar" style="width:8px"></span></td></tr>
+        <tr class="bid-row"><td class="num">175.40</td><td class="right num">200</td><td class="right num">5</td><td class="right num">380</td><td class="right"><span class="bar" style="width:20px"></span></td></tr>
+        <tr class="bid-row"><td class="num">175.39</td><td class="right num">150</td><td class="right num">4</td><td class="right num">530</td><td class="right"><span class="bar" style="width:15px"></span></td></tr>
+        <tr class="bid-row"><td class="num">175.38</td><td class="right num">60</td><td class="right num">2</td><td class="right num">590</td><td class="right"><span class="bar" style="width:6px"></span></td></tr>
+        <tr class="bid-row"><td class="num">175.37</td><td class="right num">250</td><td class="right num">6</td><td class="right num">840</td><td class="right"><span class="bar" style="width:25px"></span></td></tr>
+        <tr class="bid-row"><td class="num">175.36</td><td class="right num">400</td><td class="right num">8</td><td class="right num">1,240</td><td class="right"><span class="bar" style="width:40px"></span></td></tr>
+        <tr class="bid-row"><td class="num">175.35</td><td class="right num">180</td><td class="right num">4</td><td class="right num">1,420</td><td class="right"><span class="bar" style="width:18px"></span></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Top-Right: Depth + ASCII chart -->
+  <div class="panel">
+    <div class="panel-head">
+      <span class="ttl">►► CUMULATIVE DEPTH</span>
+      <span class="aux">IMB −27.6% · SELL PRES.</span>
+    </div>
+    <pre class="ascii-chart">  QTY ┤
+2,500 ┤                                          ╭───
+2,000 ┤                                      ╭───╯
+1,500 ┤                                ╭─────╯
+1,200 ┤                          ╭─────╯
+  900 ┤  ╭─╮                  ╭──╯
+  600 ┤  │ ╰────╮         ╭───╯
+  400 ┤──╯     ╰────╮  ╭──╯
+  200 ┤             ╰──╯
+    0 ┴──┬──┬──┬──┬──┼──┬──┬──┬──┬──┬──
+     .35 .37 .39 .41 │ .44 .46 .48 .50
+                    MID
+        ◀ BID 1,420       ASK 2,205 ▶</pre>
+
+    <div class="panel-head" style="margin-top:14px">
+      <span class="ttl">►► IMBALANCE TRACKER</span>
+      <span class="aux">10S WINDOW</span>
+    </div>
+    <div class="histo">
+      <div class="b" style="height:38%"></div><div class="b" style="height:42%"></div><div class="b" style="height:48%"></div>
+      <div class="b" style="height:55%"></div><div class="b" style="height:60%"></div><div class="b" style="height:50%"></div>
+      <div class="b" style="height:42%"></div><div class="b" style="height:48%"></div><div class="b" style="height:58%"></div>
+      <div class="b" style="height:62%"></div><div class="b" style="height:58%"></div><div class="b" style="height:62%"></div>
+      <div class="b" style="height:68%"></div><div class="b" style="height:72%"></div><div class="b alert" style="height:75%"></div>
+      <div class="b alert" style="height:78%"></div><div class="b alert" style="height:82%"></div><div class="b alert" style="height:85%"></div>
+      <div class="b alert" style="height:88%"></div><div class="b alert" style="height:92%"></div>
+    </div>
+    <div style="display:flex;justify-content:space-between;color:var(--amber-dim);font-size:10px">
+      <span>−10S</span><span style="color:var(--orange)">▲ ASK PRESSURE BUILDING</span><span>NOW</span>
+    </div>
+  </div>
+
+  <!-- Bottom-Left: Tape -->
+  <div class="panel">
+    <div class="panel-head">
+      <span class="ttl">►► TAPE · LAST 14 PRINTS</span>
+      <span class="aux">89,231 TODAY</span>
+    </div>
+    <div class="tape-row" style="font-size:10px;color:var(--amber-dim);border-bottom:1px solid var(--line);padding-bottom:4px;margin-bottom:2px;letter-spacing:0.08em">
+      <span>TIME</span><span>S</span><span>PX</span><span style="text-align:right">SZ</span><span style="text-align:right">NOTL</span><span>COND</span>
+    </div>
+    <div class="tape-row buy"><span class="num">09:42:38.123</span><span>B</span><span class="num">175.43</span><span class="num" style="text-align:right">100</span><span class="num" style="text-align:right">17,543</span><span class="meta">@ R</span></div>
+    <div class="tape-row buy"><span class="num">09:42:38.119</span><span>B</span><span class="num">175.43</span><span class="num" style="text-align:right">50</span><span class="num" style="text-align:right">8,772</span><span class="meta">@ R</span></div>
+    <div class="tape-row sell"><span class="num">09:42:38.115</span><span>S</span><span class="num">175.42</span><span class="num" style="text-align:right">75</span><span class="num" style="text-align:right">13,157</span><span class="meta">@ R</span></div>
+    <div class="tape-row buy"><span class="num">09:42:38.108</span><span>B</span><span class="num">175.43</span><span class="num" style="text-align:right">200</span><span class="num" style="text-align:right">35,086</span><span class="meta">@ R</span></div>
+    <div class="tape-row sell"><span class="num">09:42:38.102</span><span>S</span><span class="num">175.42</span><span class="num" style="text-align:right">120</span><span class="num" style="text-align:right">21,050</span><span class="meta">@ R</span></div>
+    <div class="tape-row sell"><span class="num">09:42:38.097</span><span>S</span><span class="num">175.42</span><span class="num" style="text-align:right">80</span><span class="num" style="text-align:right">14,034</span><span class="meta">@ R</span></div>
+    <div class="tape-row buy"><span class="num">09:42:38.091</span><span>B</span><span class="num">175.43</span><span class="num" style="text-align:right">300</span><span class="num" style="text-align:right">52,629</span><span class="meta">@ R</span></div>
+    <div class="tape-row sell"><span class="num">09:42:38.085</span><span>S</span><span class="num">175.42</span><span class="num" style="text-align:right">45</span><span class="num" style="text-align:right">7,894</span><span class="meta">@ R</span></div>
+    <div class="tape-row buy"><span class="num">09:42:38.078</span><span>B</span><span class="num">175.43</span><span class="num" style="text-align:right">125</span><span class="num" style="text-align:right">21,929</span><span class="meta">@ R</span></div>
+    <div class="tape-row buy"><span class="num">09:42:38.071</span><span>B</span><span class="num">175.44</span><span class="num" style="text-align:right">75</span><span class="num" style="text-align:right">13,158</span><span class="meta">@ R</span></div>
+    <div class="tape-row sell"><span class="num">09:42:38.065</span><span>S</span><span class="num">175.42</span><span class="num" style="text-align:right">200</span><span class="num" style="text-align:right">35,084</span><span class="meta">@ R</span></div>
+    <div class="tape-row buy"><span class="num">09:42:38.059</span><span>B</span><span class="num">175.43</span><span class="num" style="text-align:right">150</span><span class="num" style="text-align:right">26,314</span><span class="meta">@ R</span></div>
+    <div class="tape-row sell"><span class="num">09:42:38.052</span><span>S</span><span class="num">175.42</span><span class="num" style="text-align:right">90</span><span class="num" style="text-align:right">15,788</span><span class="meta">@ R</span></div>
+    <div class="tape-row buy"><span class="num">09:42:38.046</span><span>B</span><span class="num">175.43</span><span class="num" style="text-align:right">175</span><span class="num" style="text-align:right">30,700</span><span class="meta">@ R</span></div>
+  </div>
+
+  <!-- Bottom-Right: Performance -->
+  <div class="panel">
+    <div class="panel-head">
+      <span class="ttl">►► ENGINE PERFORMANCE</span>
+      <span class="aux">SINGLE-THREAD MATCH</span>
+    </div>
+
+    <div class="big-num glow-orange">6,243,118<span class="unit">EVENTS / SEC</span></div>
+
+    <div style="font-size:10px;color:var(--amber-dim);margin-top:6px;letter-spacing:0.08em">LATENCY DISTRIBUTION · LOG SCALE · 60S WINDOW</div>
+    <div class="histo">
+      <div class="b" style="height:30%"></div><div class="b" style="height:42%"></div><div class="b" style="height:55%"></div>
+      <div class="b" style="height:68%"></div><div class="b" style="height:78%"></div><div class="b" style="height:80%"></div>
+      <div class="b" style="height:84%"></div><div class="b" style="height:88%"></div><div class="b" style="height:90%"></div>
+      <div class="b" style="height:92%"></div><div class="b" style="height:94%"></div><div class="b" style="height:95%"></div>
+      <div class="b" style="height:96%"></div><div class="b" style="height:96%"></div><div class="b" style="height:97%"></div>
+      <div class="b" style="height:97%"></div><div class="b" style="height:97%"></div><div class="b" style="height:96%"></div>
+      <div class="b" style="height:95%"></div><div class="b" style="height:94%"></div><div class="b" style="height:92%"></div>
+      <div class="b" style="height:88%"></div><div class="b" style="height:80%"></div><div class="b" style="height:62%"></div>
+      <div class="b" style="height:38%"></div><div class="b" style="height:18%"></div><div class="b" style="height:8%"></div>
+    </div>
+
+    <div class="stat-block" style="margin-top:8px">
+      <div class="stat-cell"><div class="lab">P50</div><div class="val num bright">412 ns</div></div>
+      <div class="stat-cell"><div class="lab">P99</div><div class="val num bright">1.8 μs</div></div>
+      <div class="stat-cell"><div class="lab">P99.9</div><div class="val num bright">4.3 μs</div></div>
+      <div class="stat-cell"><div class="lab">MAX</div><div class="val num">9.7 μs</div></div>
+    </div>
+
+    <div class="panel-head">
+      <span class="ttl">►► REPLAY</span>
+      <span class="aux">9.6% OF SESSION</span>
+    </div>
+    <div class="log-line"><span class="t">[+38m20.9s]</span> <span class="ev">ITCH</span> AddOrder #C2D8E1F4 BUY 175.42 @100 <span class="lat">412ns</span></div>
+    <div class="log-line"><span class="t">[+38m20.9s]</span> <span class="ev">MATCH</span> Trade T-89230 175.43 ×100 <span class="lat">389ns</span></div>
+    <div class="log-line"><span class="t">[+38m20.9s]</span> <span class="ev">ITCH</span> Cancel  #B7A1FF21 <span class="lat">238ns</span></div>
+    <div class="log-line"><span class="t">[+38m20.9s]</span> <span class="ev">ITCH</span> AddOrder #D5F00E18 SELL 175.46 @600 <span class="lat">441ns</span></div>
+    <div class="log-line"><span class="t">[+38m21.0s]</span> <span class="ev">PUB</span>  TopOfBook seq 8847291 <span class="lat">87ns</span></div>
+  </div>
+
+</div>
+
+<div class="status">
+  <div class="seg">
+    <span class="blink">● MATCH LIVE</span>
+    <span>CORE 4 · MATCHING</span>
+    <span>CORE 5 · PUBLISHER</span>
+    <span>RDR 3 ATTACHED</span>
+    <span>ZERO BLOCK · HOT PATH</span>
+  </div>
+  <div class="seg">
+    <span>SEQLOCK SYNC ✓</span>
+    <span>ALLOC 0 · HOT PATH</span>
+    <span>MERIDIAN v0.1.0</span>
+  </div>
+</div>
+
+</body>
+</html>

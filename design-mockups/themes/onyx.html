@@ -1,0 +1,797 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Meridian · Onyx</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #FFFFFF;
+    --ink: #000000;
+    --ink-2: #1A1A1A;
+    --gray-1: #E8E8E8;
+    --gray-2: #B8B8B8;
+    --gray-3: #888888;
+    --gray-4: #555555;
+    --orange: #FF3300;
+    --bid: #000000;
+    --ask: #000000;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    font-family: 'Inter', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    font-size: 13px;
+    line-height: 1.5;
+    font-feature-settings: 'tnum', 'cv11', 'ss01';
+    -webkit-font-smoothing: antialiased;
+  }
+  .num { font-family: 'JetBrains Mono', monospace; font-variant-numeric: tabular-nums; }
+  .display { font-family: 'Inter Tight', sans-serif; letter-spacing: -0.04em; font-weight: 700; }
+
+  .nav-back {
+    position: fixed;
+    top: 18px;
+    right: 22px;
+    font-size: 10px;
+    color: var(--ink);
+    text-decoration: none;
+    background: var(--bg);
+    border: 1.5px solid var(--ink);
+    padding: 6px 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    font-weight: 600;
+    z-index: 100;
+  }
+  .nav-back:hover { background: var(--ink); color: var(--bg); }
+
+  /* Grid system */
+  .container {
+    max-width: 1600px;
+    margin: 0 auto;
+    padding: 0 32px;
+  }
+
+  /* Header strip */
+  .header {
+    display: grid;
+    grid-template-columns: repeat(12, 1fr);
+    gap: 24px;
+    border-bottom: 2px solid var(--ink);
+    padding: 24px 0 18px;
+    align-items: end;
+  }
+  .header-mark {
+    grid-column: 1 / span 4;
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+  }
+  .wordmark {
+    font-family: 'Inter Tight', sans-serif;
+    font-weight: 800;
+    font-size: 40px;
+    line-height: 0.85;
+    letter-spacing: -0.05em;
+    color: var(--ink);
+  }
+  .wordmark-note {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    font-weight: 500;
+    color: var(--gray-3);
+    border-left: 1px solid var(--gray-2);
+    padding-left: 10px;
+  }
+  .header-section {
+    grid-column: 5 / span 4;
+    display: flex;
+    gap: 24px;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--gray-3);
+  }
+  .header-section .item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .header-section .item strong { color: var(--ink); font-weight: 600; letter-spacing: 0.06em; }
+  .header-section .num { color: var(--ink); font-weight: 500; }
+  .header-meta {
+    grid-column: 9 / span 4;
+    text-align: right;
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--gray-3);
+  }
+  .header-meta .live {
+    color: var(--orange);
+    font-weight: 700;
+  }
+  .header-meta .live::before {
+    content: '■';
+    margin-right: 6px;
+    animation: blink 1.4s infinite;
+  }
+  @keyframes blink { 50% { opacity: 0.3; } }
+
+  /* Hero */
+  .hero {
+    border-bottom: 2px solid var(--ink);
+    padding: 48px 0 56px;
+    display: grid;
+    grid-template-columns: repeat(12, 1fr);
+    gap: 24px;
+    position: relative;
+  }
+  .hero-num {
+    grid-column: 1 / span 1;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--gray-3);
+    letter-spacing: 0.1em;
+  }
+  .hero-sym {
+    grid-column: 2 / span 6;
+    font-family: 'Inter Tight', sans-serif;
+    font-weight: 800;
+    font-size: 200px;
+    line-height: 0.82;
+    letter-spacing: -0.06em;
+    color: var(--ink);
+  }
+  .hero-stats {
+    grid-column: 8 / span 5;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
+    border-top: 1px solid var(--ink);
+    border-bottom: 1px solid var(--ink);
+    border-left: 1px solid var(--ink);
+  }
+  .hero-stat {
+    border-right: 1px solid var(--ink);
+    border-bottom: 1px solid var(--ink);
+    padding: 16px 18px;
+  }
+  .hero-stat:nth-child(3), .hero-stat:nth-child(4) { border-bottom: none; }
+  .hero-stat-label {
+    font-size: 9px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--gray-3);
+    font-weight: 600;
+    margin-bottom: 8px;
+  }
+  .hero-stat-value {
+    font-family: 'Inter Tight', sans-serif;
+    font-weight: 700;
+    font-size: 38px;
+    line-height: 1;
+    letter-spacing: -0.03em;
+    color: var(--ink);
+  }
+  .hero-stat-value.orange { color: var(--orange); }
+  .hero-stat-sub {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--gray-3);
+    margin-top: 6px;
+  }
+  .hero-tagline {
+    grid-column: 2 / span 6;
+    margin-top: 24px;
+    font-family: 'Inter', sans-serif;
+    font-size: 14px;
+    color: var(--gray-4);
+    line-height: 1.5;
+    max-width: 520px;
+  }
+  .hero-tagline strong { color: var(--ink); font-weight: 600; }
+
+  /* Section divider with number */
+  .section-divider {
+    border-top: 1px solid var(--ink);
+    margin-top: 48px;
+    padding-top: 18px;
+    display: grid;
+    grid-template-columns: repeat(12, 1fr);
+    gap: 24px;
+    margin-bottom: 24px;
+  }
+  .section-num {
+    grid-column: 1 / span 1;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--gray-3);
+    letter-spacing: 0.1em;
+  }
+  .section-title {
+    grid-column: 2 / span 6;
+    font-family: 'Inter Tight', sans-serif;
+    font-weight: 700;
+    font-size: 32px;
+    line-height: 1;
+    letter-spacing: -0.03em;
+    color: var(--ink);
+  }
+  .section-aux {
+    grid-column: 9 / span 4;
+    text-align: right;
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--gray-3);
+    align-self: end;
+  }
+
+  /* Order book + chart row */
+  .row-book {
+    display: grid;
+    grid-template-columns: repeat(12, 1fr);
+    gap: 24px;
+    border-bottom: 1px solid var(--ink);
+    padding-bottom: 36px;
+  }
+  .col-book { grid-column: 1 / span 4; }
+  .col-chart { grid-column: 5 / span 8; }
+
+  /* Ladder */
+  .ladder {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: 'JetBrains Mono', monospace;
+    font-variant-numeric: tabular-nums;
+    font-size: 14px;
+  }
+  .ladder th {
+    text-align: left;
+    font-family: 'Inter', sans-serif;
+    font-size: 9px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--gray-3);
+    font-weight: 600;
+    padding: 6px 8px 8px 0;
+    border-bottom: 1px solid var(--ink);
+  }
+  .ladder th.right { text-align: right; padding-right: 0; }
+  .ladder td {
+    padding: 6px 8px 6px 0;
+    color: var(--ink);
+    position: relative;
+    border-bottom: 1px solid var(--gray-1);
+  }
+  .ladder td.right { text-align: right; padding-right: 0; }
+  .ladder tr.ask td:first-child::before {
+    content: '↑';
+    color: var(--ink);
+    font-family: 'Inter Tight';
+    font-weight: 700;
+    font-size: 12px;
+    margin-right: 8px;
+    display: inline-block;
+    width: 14px;
+  }
+  .ladder tr.bid td:first-child::before {
+    content: '↓';
+    color: var(--ink);
+    font-family: 'Inter Tight';
+    font-weight: 700;
+    font-size: 12px;
+    margin-right: 8px;
+    display: inline-block;
+    width: 14px;
+  }
+  .depth-bar {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    right: 0;
+    background: var(--gray-1);
+  }
+  .ladder td > span { position: relative; z-index: 1; }
+  .spread-row td {
+    padding: 12px 0;
+    text-align: center;
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    font-family: 'Inter', sans-serif;
+    color: var(--ink);
+    background: var(--orange);
+    color: white;
+    border-bottom: none;
+    font-weight: 700;
+  }
+  .spread-row strong {
+    font-family: 'JetBrains Mono', monospace;
+    color: white;
+    margin: 0 8px;
+    letter-spacing: 0.04em;
+    font-weight: 500;
+  }
+
+  /* Chart */
+  .chart-frame {
+    border: 1px solid var(--ink);
+    padding: 0;
+    background: var(--bg);
+  }
+  .chart-axis {
+    display: flex;
+    justify-content: space-between;
+    border-top: 1px solid var(--ink);
+    padding: 6px 12px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--gray-3);
+  }
+  .chart-axis .mid-label { color: var(--orange); font-weight: 700; }
+  .legend {
+    display: flex;
+    gap: 24px;
+    margin-top: 14px;
+    font-size: 11px;
+    color: var(--gray-3);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+  .legend-line {
+    display: inline-block;
+    width: 18px;
+    height: 1.5px;
+    margin-right: 8px;
+    vertical-align: middle;
+    background: var(--ink);
+  }
+  .legend-line.dashed {
+    background: repeating-linear-gradient(to right, var(--ink) 0 4px, transparent 4px 8px);
+    height: 1.5px;
+  }
+  .legend strong { color: var(--ink); font-weight: 700; font-family: 'JetBrains Mono'; }
+  .legend .imb {
+    margin-left: auto;
+    color: var(--orange);
+    font-weight: 700;
+  }
+
+  /* Performance row */
+  .row-perf {
+    display: grid;
+    grid-template-columns: repeat(12, 1fr);
+    gap: 24px;
+    padding: 36px 0;
+    border-bottom: 1px solid var(--ink);
+  }
+  .perf-headline {
+    grid-column: 1 / span 6;
+  }
+  .perf-headline-num {
+    font-family: 'Inter Tight', sans-serif;
+    font-weight: 800;
+    font-size: 168px;
+    line-height: 0.82;
+    letter-spacing: -0.06em;
+    color: var(--ink);
+  }
+  .perf-headline-num .accent { color: var(--orange); }
+  .perf-headline-label {
+    margin-top: 12px;
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--gray-3);
+    font-weight: 600;
+  }
+  .perf-side {
+    grid-column: 7 / span 6;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
+    align-self: stretch;
+  }
+  .perf-cell {
+    border-left: 1px solid var(--ink);
+    border-bottom: 1px solid var(--ink);
+    padding: 18px 22px;
+  }
+  .perf-cell.no-bottom { border-bottom: none; }
+  .perf-cell-label {
+    font-size: 9px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--gray-3);
+    font-weight: 600;
+    margin-bottom: 6px;
+  }
+  .perf-cell-value {
+    font-family: 'Inter Tight', sans-serif;
+    font-weight: 700;
+    font-size: 36px;
+    line-height: 1;
+    letter-spacing: -0.03em;
+  }
+  .perf-cell-sub {
+    margin-top: 4px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--gray-4);
+  }
+
+  /* Tape row */
+  .row-tape {
+    display: grid;
+    grid-template-columns: repeat(12, 1fr);
+    gap: 24px;
+    padding: 36px 0;
+    border-bottom: 2px solid var(--ink);
+  }
+  .col-tape { grid-column: 1 / span 8; }
+  .col-replay { grid-column: 9 / span 4; }
+  .trades {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: 'JetBrains Mono', monospace;
+    font-variant-numeric: tabular-nums;
+    font-size: 13px;
+  }
+  .trades th {
+    text-align: left;
+    font-family: 'Inter', sans-serif;
+    font-size: 9px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--gray-3);
+    font-weight: 600;
+    padding: 6px 12px 8px 0;
+    border-bottom: 1px solid var(--ink);
+  }
+  .trades th.right { text-align: right; padding-right: 0; }
+  .trades td {
+    padding: 7px 12px 7px 0;
+    color: var(--ink);
+    border-bottom: 1px solid var(--gray-1);
+  }
+  .trades td.right { text-align: right; padding-right: 0; }
+  .trades .side-buy {
+    display: inline-block;
+    width: 38px;
+    text-align: center;
+    border: 1px solid var(--ink);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    padding: 1px 0;
+    background: var(--bg);
+    font-family: 'Inter', sans-serif;
+  }
+  .trades .side-sell {
+    display: inline-block;
+    width: 38px;
+    text-align: center;
+    background: var(--ink);
+    color: var(--bg);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    padding: 1px 0;
+    font-family: 'Inter', sans-serif;
+  }
+
+  /* Replay block */
+  .replay-block {
+    border: 1px solid var(--ink);
+    padding: 24px;
+  }
+  .replay-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--gray-1);
+    font-size: 12px;
+    color: var(--gray-4);
+  }
+  .replay-row:last-of-type { border-bottom: none; }
+  .replay-row strong { color: var(--ink); font-family: 'JetBrains Mono'; font-weight: 500; }
+  .progress {
+    margin-top: 16px;
+    height: 12px;
+    border: 1px solid var(--ink);
+    position: relative;
+  }
+  .progress-bar {
+    background: var(--orange);
+    height: 100%;
+  }
+  .progress-label {
+    position: absolute;
+    top: -2px;
+    right: 4px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    color: var(--ink);
+    background: var(--bg);
+    padding: 0 4px;
+  }
+
+  /* Footer */
+  .footer {
+    display: grid;
+    grid-template-columns: repeat(12, 1fr);
+    gap: 24px;
+    padding: 24px 0 32px;
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--gray-3);
+  }
+  .footer-left { grid-column: 1 / span 8; }
+  .footer-right { grid-column: 9 / span 4; text-align: right; }
+  .footer strong { color: var(--ink); font-weight: 700; }
+</style>
+</head>
+<body>
+
+<a class="nav-back" href="../index.html">← All 5</a>
+
+<div class="container">
+
+  <div class="header">
+    <div class="header-mark">
+      <div class="wordmark">M.</div>
+      <div class="wordmark-note">Meridian<br>v0.1.0</div>
+    </div>
+    <div class="header-section">
+      <div class="item"><span>Tape</span><strong class="num">ITCH 2024-06-13</strong></div>
+      <div class="item"><span>Venue</span><strong>NASDAQ</strong></div>
+      <div class="item"><span>Build</span><strong>clang 19.1 PGO</strong></div>
+    </div>
+    <div class="header-meta">
+      <span class="live">Match Live</span><br>
+      <span class="num" style="color:var(--ink)">2026·05·09 / 09:42:38.124 ET</span>
+    </div>
+  </div>
+
+  <div class="hero">
+    <div class="hero-num">01</div>
+    <div class="hero-sym">AAPL</div>
+    <div class="hero-stats">
+      <div class="hero-stat">
+        <div class="hero-stat-label">Last</div>
+        <div class="hero-stat-value">175.43</div>
+        <div class="hero-stat-sub">175.42 × 175.43</div>
+      </div>
+      <div class="hero-stat">
+        <div class="hero-stat-label">Change</div>
+        <div class="hero-stat-value">+1.27</div>
+        <div class="hero-stat-sub">+0.73%</div>
+      </div>
+      <div class="hero-stat">
+        <div class="hero-stat-label">Spread</div>
+        <div class="hero-stat-value orange">0.01</div>
+        <div class="hero-stat-sub">0.6 bp · tight</div>
+      </div>
+      <div class="hero-stat">
+        <div class="hero-stat-label">Volume</div>
+        <div class="hero-stat-value">24.31<span style="font-size:0.4em;color:var(--gray-3)">M</span></div>
+        <div class="hero-stat-sub">avg 18.7M</div>
+      </div>
+    </div>
+    <div class="hero-tagline">
+      <strong>A price-time priority limit order book.</strong> Single-writer matching engine, lock-free top-of-book reads via sequence-locked snapshots, zero allocation on the hot path. Replaying NASDAQ ITCH 5.0 at <strong class="num">6.24M events / second</strong>.
+    </div>
+  </div>
+
+  <!-- Section 02: Book -->
+  <div class="section-divider">
+    <div class="section-num">02</div>
+    <div class="section-title">The Book</div>
+    <div class="section-aux">412 levels / 12,847 orders</div>
+  </div>
+
+  <div class="row-book">
+    <div class="col-book">
+      <table class="ladder">
+        <thead>
+          <tr>
+            <th>Price</th>
+            <th class="right">Size</th>
+            <th class="right">Cum</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="ask"><td><span class="num">175.50</span></td><td class="right"><span class="depth-bar" style="width:40%"></span><span class="num">300</span></td><td class="right"><span class="num">2,205</span></td></tr>
+          <tr class="ask"><td><span class="num">175.49</span></td><td class="right"><span class="depth-bar" style="width:60%"></span><span class="num">450</span></td><td class="right"><span class="num">1,905</span></td></tr>
+          <tr class="ask"><td><span class="num">175.48</span></td><td class="right"><span class="depth-bar" style="width:16%"></span><span class="num">120</span></td><td class="right"><span class="num">1,455</span></td></tr>
+          <tr class="ask"><td><span class="num">175.47</span></td><td class="right"><span class="depth-bar" style="width:37%"></span><span class="num">280</span></td><td class="right"><span class="num">1,335</span></td></tr>
+          <tr class="ask"><td><span class="num">175.46</span></td><td class="right"><span class="depth-bar" style="width:80%"></span><span class="num">600</span></td><td class="right"><span class="num">1,055</span></td></tr>
+          <tr class="ask"><td><span class="num">175.45</span></td><td class="right"><span class="depth-bar" style="width:16%"></span><span class="num">120</span></td><td class="right"><span class="num">455</span></td></tr>
+          <tr class="ask"><td><span class="num">175.44</span></td><td class="right"><span class="depth-bar" style="width:10%"></span><span class="num">75</span></td><td class="right"><span class="num">335</span></td></tr>
+          <tr class="ask"><td><span class="num">175.43</span></td><td class="right"><span class="depth-bar" style="width:7%"></span><span class="num">50</span></td><td class="right"><span class="num">260</span></td></tr>
+          <tr class="spread-row"><td colspan="3">Mid <strong>175.425</strong> / Spread <strong>0.01</strong></td></tr>
+          <tr class="bid"><td><span class="num">175.42</span></td><td class="right"><span class="depth-bar" style="width:13%"></span><span class="num">100</span></td><td class="right"><span class="num">100</span></td></tr>
+          <tr class="bid"><td><span class="num">175.41</span></td><td class="right"><span class="depth-bar" style="width:11%"></span><span class="num">80</span></td><td class="right"><span class="num">180</span></td></tr>
+          <tr class="bid"><td><span class="num">175.40</span></td><td class="right"><span class="depth-bar" style="width:27%"></span><span class="num">200</span></td><td class="right"><span class="num">380</span></td></tr>
+          <tr class="bid"><td><span class="num">175.39</span></td><td class="right"><span class="depth-bar" style="width:20%"></span><span class="num">150</span></td><td class="right"><span class="num">530</span></td></tr>
+          <tr class="bid"><td><span class="num">175.38</span></td><td class="right"><span class="depth-bar" style="width:8%"></span><span class="num">60</span></td><td class="right"><span class="num">590</span></td></tr>
+          <tr class="bid"><td><span class="num">175.37</span></td><td class="right"><span class="depth-bar" style="width:33%"></span><span class="num">250</span></td><td class="right"><span class="num">840</span></td></tr>
+          <tr class="bid"><td><span class="num">175.36</span></td><td class="right"><span class="depth-bar" style="width:53%"></span><span class="num">400</span></td><td class="right"><span class="num">1,240</span></td></tr>
+          <tr class="bid"><td><span class="num">175.35</span></td><td class="right"><span class="depth-bar" style="width:24%"></span><span class="num">180</span></td><td class="right"><span class="num">1,420</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="col-chart">
+      <div class="chart-frame">
+        <svg viewBox="0 0 800 320" width="100%" height="320" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <pattern id="onyx-bid" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+              <line x1="0" y1="0" x2="0" y2="6" stroke="#000" stroke-width="0.6"/>
+            </pattern>
+            <pattern id="onyx-ask" width="3" height="3" patternUnits="userSpaceOnUse">
+              <circle cx="1.5" cy="1.5" r="0.6" fill="#000"/>
+            </pattern>
+          </defs>
+
+          <!-- Hairline grid -->
+          <line x1="0" y1="64" x2="800" y2="64" stroke="#E8E8E8" stroke-width="0.5"/>
+          <line x1="0" y1="128" x2="800" y2="128" stroke="#E8E8E8" stroke-width="0.5"/>
+          <line x1="0" y1="192" x2="800" y2="192" stroke="#E8E8E8" stroke-width="0.5"/>
+          <line x1="0" y1="256" x2="800" y2="256" stroke="#E8E8E8" stroke-width="0.5"/>
+
+          <!-- Y-axis tick labels -->
+          <text x="6" y="18" font-family="JetBrains Mono" font-size="10" fill="#888">2,500</text>
+          <text x="6" y="68" font-family="JetBrains Mono" font-size="10" fill="#888">2,000</text>
+          <text x="6" y="132" font-family="JetBrains Mono" font-size="10" fill="#888">1,500</text>
+          <text x="6" y="196" font-family="JetBrains Mono" font-size="10" fill="#888">1,000</text>
+          <text x="6" y="260" font-family="JetBrains Mono" font-size="10" fill="#888">500</text>
+
+          <!-- bid (left) - patterned -->
+          <path d="M 0 320 L 0 80 L 40 80 L 40 108 L 100 108 L 100 144 L 160 144 L 160 180 L 220 180 L 220 224 L 280 224 L 280 248 L 340 248 L 340 268 L 400 268 L 400 320 Z"
+                fill="url(#onyx-bid)" stroke="#000" stroke-width="2"/>
+          <!-- ask (right) - patterned -->
+          <path d="M 800 320 L 800 52 L 760 52 L 760 76 L 700 76 L 700 96 L 640 96 L 640 132 L 580 132 L 580 180 L 520 180 L 520 216 L 460 216 L 460 252 L 400 252 L 400 320 Z"
+                fill="url(#onyx-ask)" stroke="#000" stroke-width="2"/>
+
+          <!-- mid line -->
+          <line x1="400" y1="0" x2="400" y2="320" stroke="#FF3300" stroke-width="2"/>
+          <text x="408" y="18" font-family="Inter Tight" font-weight="700" font-size="13" fill="#FF3300">MID 175.425</text>
+
+          <!-- side labels -->
+          <text x="20" y="312" font-family="Inter Tight" font-weight="800" font-size="20" fill="#000" letter-spacing="2">BID</text>
+          <text x="780" y="312" font-family="Inter Tight" font-weight="800" font-size="20" fill="#000" letter-spacing="2" text-anchor="end">ASK</text>
+        </svg>
+        <div class="chart-axis">
+          <span>175.35</span>
+          <span>175.37</span>
+          <span>175.39</span>
+          <span>175.41</span>
+          <span class="mid-label">MID</span>
+          <span>175.44</span>
+          <span>175.46</span>
+          <span>175.48</span>
+          <span>175.50</span>
+        </div>
+      </div>
+      <div class="legend">
+        <span><span class="legend-line"></span>BID · CUM <strong>1,420</strong></span>
+        <span><span class="legend-line dashed"></span>ASK · CUM <strong>2,205</strong></span>
+        <span class="imb">IMBALANCE −27.6% / SELL PRESSURE</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Section 03: Performance -->
+  <div class="section-divider" style="margin-top:0;border-top:none">
+    <div class="section-num">03</div>
+    <div class="section-title">Performance</div>
+    <div class="section-aux">Single Thread · Core 4 · 60s window</div>
+  </div>
+
+  <div class="row-perf">
+    <div class="perf-headline">
+      <div class="perf-headline-num">6.24<span class="accent">M</span></div>
+      <div class="perf-headline-label">Order Events / Second · Single-thread Match Loop</div>
+    </div>
+    <div class="perf-side">
+      <div class="perf-cell">
+        <div class="perf-cell-label">P50 Latency</div>
+        <div class="perf-cell-value">412<span style="font-size:0.5em;color:var(--gray-3)">ns</span></div>
+        <div class="perf-cell-sub">median per-event</div>
+      </div>
+      <div class="perf-cell">
+        <div class="perf-cell-label">P99 Latency</div>
+        <div class="perf-cell-value">1.8<span style="font-size:0.5em;color:var(--gray-3)">μs</span></div>
+        <div class="perf-cell-sub">tail · 99th</div>
+      </div>
+      <div class="perf-cell no-bottom">
+        <div class="perf-cell-label">P99.9 Latency</div>
+        <div class="perf-cell-value">4.3<span style="font-size:0.5em;color:var(--gray-3)">μs</span></div>
+        <div class="perf-cell-sub">deep tail · 99.9th</div>
+      </div>
+      <div class="perf-cell no-bottom">
+        <div class="perf-cell-label">Heap Allocations</div>
+        <div class="perf-cell-value" style="color:var(--orange)">0</div>
+        <div class="perf-cell-sub">on hot path</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Section 04: Tape + Replay -->
+  <div class="section-divider" style="margin-top:0;border-top:none">
+    <div class="section-num">04</div>
+    <div class="section-title">The Tape &amp; Replay</div>
+    <div class="section-aux">89,231 prints / 9.6% complete</div>
+  </div>
+
+  <div class="row-tape">
+    <div class="col-tape">
+      <table class="trades">
+        <thead>
+          <tr>
+            <th>Time</th>
+            <th>Side</th>
+            <th class="right">Price</th>
+            <th class="right">Size</th>
+            <th class="right">Notional</th>
+            <th class="right">Aggressor</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td class="num">09:42:38.123</td><td><span class="side-buy">BUY</span></td><td class="right num">175.43</td><td class="right num">100</td><td class="right num">17,543</td><td class="right" style="color:var(--gray-3);text-transform:uppercase;font-size:10px;letter-spacing:0.1em">Taker</td></tr>
+          <tr><td class="num">09:42:38.119</td><td><span class="side-buy">BUY</span></td><td class="right num">175.43</td><td class="right num">50</td><td class="right num">8,772</td><td class="right" style="color:var(--gray-3);text-transform:uppercase;font-size:10px;letter-spacing:0.1em">Taker</td></tr>
+          <tr><td class="num">09:42:38.115</td><td><span class="side-sell">SELL</span></td><td class="right num">175.42</td><td class="right num">75</td><td class="right num">13,157</td><td class="right" style="color:var(--gray-3);text-transform:uppercase;font-size:10px;letter-spacing:0.1em">Taker</td></tr>
+          <tr><td class="num">09:42:38.108</td><td><span class="side-buy">BUY</span></td><td class="right num">175.43</td><td class="right num">200</td><td class="right num">35,086</td><td class="right" style="color:var(--gray-3);text-transform:uppercase;font-size:10px;letter-spacing:0.1em">Taker</td></tr>
+          <tr><td class="num">09:42:38.102</td><td><span class="side-sell">SELL</span></td><td class="right num">175.42</td><td class="right num">120</td><td class="right num">21,050</td><td class="right" style="color:var(--gray-3);text-transform:uppercase;font-size:10px;letter-spacing:0.1em">Taker</td></tr>
+          <tr><td class="num">09:42:38.097</td><td><span class="side-sell">SELL</span></td><td class="right num">175.42</td><td class="right num">80</td><td class="right num">14,034</td><td class="right" style="color:var(--gray-3);text-transform:uppercase;font-size:10px;letter-spacing:0.1em">Taker</td></tr>
+          <tr><td class="num">09:42:38.091</td><td><span class="side-buy">BUY</span></td><td class="right num">175.43</td><td class="right num">300</td><td class="right num">52,629</td><td class="right" style="color:var(--gray-3);text-transform:uppercase;font-size:10px;letter-spacing:0.1em">Taker</td></tr>
+          <tr><td class="num">09:42:38.085</td><td><span class="side-sell">SELL</span></td><td class="right num">175.42</td><td class="right num">45</td><td class="right num">7,894</td><td class="right" style="color:var(--gray-3);text-transform:uppercase;font-size:10px;letter-spacing:0.1em">Taker</td></tr>
+          <tr><td class="num">09:42:38.078</td><td><span class="side-buy">BUY</span></td><td class="right num">175.43</td><td class="right num">125</td><td class="right num">21,929</td><td class="right" style="color:var(--gray-3);text-transform:uppercase;font-size:10px;letter-spacing:0.1em">Taker</td></tr>
+          <tr><td class="num">09:42:38.071</td><td><span class="side-buy">BUY</span></td><td class="right num">175.44</td><td class="right num">75</td><td class="right num">13,158</td><td class="right" style="color:var(--gray-3);text-transform:uppercase;font-size:10px;letter-spacing:0.1em">Taker</td></tr>
+          <tr><td class="num">09:42:38.065</td><td><span class="side-sell">SELL</span></td><td class="right num">175.42</td><td class="right num">200</td><td class="right num">35,084</td><td class="right" style="color:var(--gray-3);text-transform:uppercase;font-size:10px;letter-spacing:0.1em">Taker</td></tr>
+          <tr><td class="num">09:42:38.059</td><td><span class="side-buy">BUY</span></td><td class="right num">175.43</td><td class="right num">150</td><td class="right num">26,314</td><td class="right" style="color:var(--gray-3);text-transform:uppercase;font-size:10px;letter-spacing:0.1em">Taker</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="col-replay">
+      <div class="replay-block">
+        <div style="font-family:'Inter Tight';font-weight:700;font-size:18px;letter-spacing:-0.02em;margin-bottom:14px">ITCH 5.0 Replay</div>
+        <div class="replay-row"><span>Tape</span><strong>itch-2024-06-13</strong></div>
+        <div class="replay-row"><span>Cursor</span><strong>09:42:38.124</strong></div>
+        <div class="replay-row"><span>Elapsed</span><strong>38m 21s</strong></div>
+        <div class="replay-row"><span>Trades</span><strong>89,231</strong></div>
+        <div class="replay-row"><span>Live orders</span><strong>12,847</strong></div>
+        <div class="replay-row"><span>Cancel ratio</span><strong>94.2%</strong></div>
+        <div class="progress">
+          <div class="progress-bar" style="width:9.6%"></div>
+          <div class="progress-label">9.6%</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">
+    <div class="footer-left">
+      Core 4 Match · Core 5 Publish · <strong>3</strong> Seqlock Readers · 30 Hz Sampler · <strong>0</strong> Blocking Ops on Hot Path
+    </div>
+    <div class="footer-right">
+      Meridian v0.1.0 / © 2026 Mustafa Nazeer
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>

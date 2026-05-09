@@ -1,0 +1,661 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Meridian · Twilight</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400;1,6..72,500&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0E1126;
+    --bg-2: #0A0D1F;
+    --surface: #161A33;
+    --surface-2: #1B1F3D;
+    --rule: #232847;
+    --rule-strong: #2F365A;
+    --ink: #EFE9DC;
+    --ink-2: #BFB7A8;
+    --ink-soft: #8C879A;
+    --ink-faint: #56536A;
+    --gold: #D4A24C;
+    --gold-deep: #B97D2C;
+    --bid: #4FA89E;
+    --bid-soft: rgba(79, 168, 158, 0.16);
+    --ask: #C5765B;
+    --ask-soft: rgba(197, 118, 91, 0.16);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    font-family: 'Inter', system-ui, sans-serif;
+    background: radial-gradient(ellipse at top, #1A1E40 0%, var(--bg) 55%, var(--bg-2) 100%);
+    background-attachment: fixed;
+    color: var(--ink);
+    font-size: 14px;
+    line-height: 1.5;
+    font-feature-settings: 'tnum', 'cv11', 'ss01';
+    -webkit-font-smoothing: antialiased;
+  }
+  .num { font-family: 'JetBrains Mono', monospace; font-variant-numeric: tabular-nums; }
+  .editorial { font-family: 'Newsreader', serif; font-style: italic; font-weight: 400; }
+
+  /* Floating link to index */
+  .nav-back {
+    position: fixed;
+    top: 18px;
+    right: 22px;
+    font-size: 11px;
+    color: var(--ink-soft);
+    text-decoration: none;
+    background: rgba(22, 26, 51, 0.85);
+    border: 1px solid var(--rule);
+    padding: 6px 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    z-index: 100;
+    backdrop-filter: blur(8px);
+  }
+  .nav-back:hover { border-color: var(--gold); color: var(--gold); }
+
+  /* Header */
+  .header {
+    padding: 36px 48px 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    border-bottom: 1px solid var(--rule);
+  }
+  .brand {
+    display: flex;
+    align-items: baseline;
+    gap: 22px;
+  }
+  .brand-mark {
+    font-family: 'Newsreader', serif;
+    font-style: italic;
+    font-weight: 500;
+    font-size: 42px;
+    color: var(--ink);
+    letter-spacing: -0.015em;
+    line-height: 1;
+  }
+  .brand-mark .dot {
+    color: var(--gold);
+    font-style: normal;
+  }
+  .brand-tag {
+    font-family: 'Newsreader', serif;
+    font-style: italic;
+    font-size: 14px;
+    color: var(--ink-soft);
+    border-left: 1px solid var(--rule);
+    padding-left: 18px;
+    line-height: 1.4;
+  }
+  .header-meta {
+    text-align: right;
+    font-size: 11px;
+    color: var(--ink-soft);
+    letter-spacing: 0.04em;
+  }
+  .header-meta .num { color: var(--ink); }
+  .header-meta .live {
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--gold);
+    margin-right: 6px;
+    box-shadow: 0 0 10px var(--gold);
+    animation: pulse 1.6s infinite;
+  }
+  @keyframes pulse { 50% { opacity: 0.4; } }
+
+  /* Hero */
+  .hero {
+    padding: 56px 48px 44px;
+    border-bottom: 1px solid var(--rule);
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr 1fr;
+    gap: 48px;
+    align-items: end;
+  }
+  .hero-lede {
+    font-family: 'Newsreader', serif;
+    font-style: italic;
+    font-size: 13px;
+    color: var(--ink-soft);
+    margin-bottom: 12px;
+    letter-spacing: 0.02em;
+  }
+  .hero-sym {
+    font-family: 'Newsreader', serif;
+    font-weight: 500;
+    font-style: italic;
+    font-size: 72px;
+    line-height: 1;
+    color: var(--ink);
+    letter-spacing: -0.02em;
+  }
+  .hero-meta {
+    margin-top: 12px;
+    font-size: 12px;
+    color: var(--ink-soft);
+  }
+  .stat {
+    border-left: 1px solid var(--rule);
+    padding-left: 22px;
+  }
+  .stat-label {
+    font-family: 'Newsreader', serif;
+    font-style: italic;
+    font-size: 11px;
+    color: var(--ink-soft);
+    letter-spacing: 0.04em;
+    margin-bottom: 8px;
+  }
+  .stat-value {
+    font-family: 'JetBrains Mono', monospace;
+    font-variant-numeric: tabular-nums;
+    font-size: 32px;
+    font-weight: 300;
+    color: var(--ink);
+    line-height: 1;
+    letter-spacing: -0.02em;
+  }
+  .stat-sub {
+    margin-top: 6px;
+    font-size: 12px;
+    color: var(--ink-soft);
+  }
+  .stat-sub .up { color: var(--bid); }
+  .stat-sub .down { color: var(--ask); }
+  .stat-value.up { color: var(--bid); }
+  .stat-value.down { color: var(--ask); }
+  .stat-value.gold { color: var(--gold); }
+
+  /* Main grid */
+  .main {
+    display: grid;
+    grid-template-columns: 380px 1fr 320px;
+    gap: 1px;
+    background: var(--rule);
+  }
+  .col {
+    background: var(--bg);
+    padding: 36px 32px;
+  }
+  .section-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 22px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--rule);
+  }
+  .section-title {
+    font-family: 'Newsreader', serif;
+    font-style: italic;
+    font-weight: 500;
+    font-size: 22px;
+    color: var(--ink);
+    letter-spacing: -0.01em;
+  }
+  .section-aux {
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--gold);
+    font-weight: 500;
+  }
+
+  /* Ladder */
+  .ladder {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: 'JetBrains Mono', monospace;
+    font-variant-numeric: tabular-nums;
+    font-size: 13px;
+  }
+  .ladder th {
+    text-align: left;
+    font-family: 'Inter', sans-serif;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    font-weight: 500;
+    padding: 6px 0;
+  }
+  .ladder th.right { text-align: right; }
+  .ladder td {
+    padding: 6px 0;
+    position: relative;
+  }
+  .ladder td.right { text-align: right; }
+  .ladder tr.ask td.price { color: var(--ask); }
+  .ladder tr.bid td.price { color: var(--bid); }
+  .ladder tr.ask td { color: var(--ink-2); }
+  .ladder tr.bid td { color: var(--ink-2); }
+  .depth-bar {
+    position: absolute;
+    top: 2px;
+    bottom: 2px;
+    right: 0;
+    border-radius: 1px;
+  }
+  .ladder tr.ask .depth-bar { background: var(--ask-soft); }
+  .ladder tr.bid .depth-bar { background: var(--bid-soft); }
+  .ladder td > span { position: relative; z-index: 1; }
+  .spread-row td {
+    background: linear-gradient(to right, transparent, rgba(212, 162, 76, 0.12) 20%, rgba(212, 162, 76, 0.12) 80%, transparent);
+    padding: 14px 0;
+    text-align: center;
+    font-family: 'Newsreader', serif;
+    font-style: italic;
+    font-size: 13px;
+    color: var(--ink-soft);
+    border-top: 1px solid rgba(212, 162, 76, 0.3);
+    border-bottom: 1px solid rgba(212, 162, 76, 0.3);
+  }
+  .spread-row strong {
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--gold);
+    font-weight: 500;
+    font-style: normal;
+    margin: 0 8px;
+  }
+
+  /* Depth chart */
+  .chart-wrap { margin-bottom: 36px; }
+  .chart-axis {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 8px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--ink-faint);
+  }
+  .legend {
+    display: flex;
+    gap: 24px;
+    font-size: 12px;
+    color: var(--ink-soft);
+    margin-top: 14px;
+    align-items: center;
+  }
+  .legend-dot {
+    display: inline-block;
+    width: 12px;
+    height: 2px;
+    margin-right: 8px;
+    vertical-align: middle;
+  }
+  .legend-dot.bid { background: var(--bid); box-shadow: 0 0 8px var(--bid); }
+  .legend-dot.ask { background: var(--ask); box-shadow: 0 0 8px var(--ask); }
+  .imbalance {
+    margin-left: auto;
+    font-family: 'Newsreader', serif;
+    font-style: italic;
+    color: var(--ink-2);
+  }
+  .imbalance strong {
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--ask);
+    font-style: normal;
+    font-weight: 500;
+  }
+
+  /* Trades */
+  .trades {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: 'JetBrains Mono', monospace;
+    font-variant-numeric: tabular-nums;
+    font-size: 12px;
+  }
+  .trades th {
+    text-align: left;
+    font-family: 'Inter', sans-serif;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    font-weight: 500;
+    padding: 6px 12px 8px 0;
+    border-bottom: 1px solid var(--rule);
+  }
+  .trades th.right { text-align: right; padding-right: 0; }
+  .trades td { padding: 6px 12px 6px 0; border-bottom: 1px solid rgba(35, 40, 71, 0.5); color: var(--ink-2); }
+  .trades td.right { text-align: right; padding-right: 0; }
+  .trades .side-buy { color: var(--bid); font-weight: 500; }
+  .trades .side-sell { color: var(--ask); font-weight: 500; }
+  .trades .price-up { color: var(--bid); }
+  .trades .price-dn { color: var(--ask); }
+
+  /* Performance column */
+  .perf-block { margin-bottom: 32px; }
+  .perf-label {
+    font-family: 'Newsreader', serif;
+    font-style: italic;
+    font-size: 12px;
+    color: var(--gold);
+    letter-spacing: 0.04em;
+    margin-bottom: 10px;
+  }
+  .perf-headline {
+    font-family: 'JetBrains Mono', monospace;
+    font-variant-numeric: tabular-nums;
+    font-size: 38px;
+    line-height: 1;
+    font-weight: 300;
+    color: var(--ink);
+    letter-spacing: -0.02em;
+  }
+  .perf-headline .unit {
+    font-family: 'Newsreader', serif;
+    font-style: italic;
+    font-size: 13px;
+    color: var(--ink-soft);
+    font-weight: 400;
+    margin-left: 8px;
+    letter-spacing: 0;
+  }
+  .perf-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px 18px;
+    margin-top: 14px;
+  }
+  .perf-cell .num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 16px;
+    font-weight: 300;
+    color: var(--ink);
+  }
+  .perf-cell .label {
+    font-size: 10px;
+    color: var(--ink-soft);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 3px;
+  }
+
+  /* Histogram */
+  .histo {
+    display: flex;
+    align-items: flex-end;
+    gap: 1px;
+    height: 48px;
+    margin: 14px 0 6px;
+  }
+  .histo .bar {
+    background: linear-gradient(to top, var(--gold-deep), var(--gold));
+    flex: 1;
+    border-radius: 1px 1px 0 0;
+  }
+
+  /* Replay */
+  .replay {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--ink-soft);
+    line-height: 2;
+  }
+  .replay strong { color: var(--ink); font-weight: 500; }
+  .progress {
+    height: 2px;
+    background: var(--rule);
+    margin-top: 14px;
+    overflow: hidden;
+    position: relative;
+  }
+  .progress-bar {
+    background: linear-gradient(to right, var(--gold-deep), var(--gold));
+    height: 100%;
+    box-shadow: 0 0 10px var(--gold);
+  }
+
+  /* Footer */
+  .footer-bar {
+    border-top: 1px solid var(--rule);
+    padding: 14px 48px;
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    color: var(--ink-soft);
+    letter-spacing: 0.04em;
+    background: var(--bg-2);
+  }
+  .footer-bar strong { color: var(--ink); font-weight: 500; }
+  .footer-bar .dim { color: var(--ink-faint); }
+</style>
+</head>
+<body>
+
+<a class="nav-back" href="../index.html">← all 5</a>
+
+<div class="header">
+  <div class="brand">
+    <div class="brand-mark">meridian<span class="dot">.</span></div>
+    <div class="brand-tag">a price–time priority limit order book,<br>built for the line where bid meets ask</div>
+  </div>
+  <div class="header-meta">
+    <div><span class="live"></span><span class="num">09:42:38.124</span> ET · matching live</div>
+    <div style="margin-top:4px"><span class="num">2026 · 05 · 09</span> · NASDAQ ITCH 5.0 · core 4 pinned</div>
+  </div>
+</div>
+
+<div class="hero">
+  <div>
+    <div class="hero-lede">tracking · NMS Tier 1 · Apple Inc · common stock · NASDAQ Global Select</div>
+    <div class="hero-sym editorial">AAPL</div>
+    <div class="hero-meta">12,847 live orders · 412 active price levels · 89,231 prints since open</div>
+  </div>
+  <div class="stat">
+    <div class="stat-label">Last</div>
+    <div class="stat-value num">175.43</div>
+    <div class="stat-sub"><span class="up">+1.27</span> · <span class="up">+0.73%</span></div>
+  </div>
+  <div class="stat">
+    <div class="stat-label">Spread</div>
+    <div class="stat-value num gold">0.01</div>
+    <div class="stat-sub">0.6 bp · tight</div>
+  </div>
+  <div class="stat">
+    <div class="stat-label">Volume</div>
+    <div class="stat-value num">24.31<span style="font-size:0.6em;color:var(--ink-soft)">M</span></div>
+    <div class="stat-sub">vs 30d avg <span class="num">18.7M</span></div>
+  </div>
+</div>
+
+<div class="main">
+
+  <!-- Order Book -->
+  <div class="col">
+    <div class="section-head">
+      <div class="section-title">the book</div>
+      <div class="section-aux">L8 · 16 levels</div>
+    </div>
+    <table class="ladder">
+      <thead>
+        <tr>
+          <th>price</th>
+          <th class="right">size</th>
+          <th class="right">orders</th>
+          <th class="right">cum</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="ask"><td class="price"><span>175.50</span></td><td class="right"><span class="depth-bar" style="width:40%"></span><span>300</span></td><td class="right"><span>4</span></td><td class="right"><span>2,205</span></td></tr>
+        <tr class="ask"><td class="price"><span>175.49</span></td><td class="right"><span class="depth-bar" style="width:60%"></span><span>450</span></td><td class="right"><span>7</span></td><td class="right"><span>1,905</span></td></tr>
+        <tr class="ask"><td class="price"><span>175.48</span></td><td class="right"><span class="depth-bar" style="width:16%"></span><span>120</span></td><td class="right"><span>3</span></td><td class="right"><span>1,455</span></td></tr>
+        <tr class="ask"><td class="price"><span>175.47</span></td><td class="right"><span class="depth-bar" style="width:37%"></span><span>280</span></td><td class="right"><span>5</span></td><td class="right"><span>1,335</span></td></tr>
+        <tr class="ask"><td class="price"><span>175.46</span></td><td class="right"><span class="depth-bar" style="width:80%"></span><span>600</span></td><td class="right"><span>9</span></td><td class="right"><span>1,055</span></td></tr>
+        <tr class="ask"><td class="price"><span>175.45</span></td><td class="right"><span class="depth-bar" style="width:16%"></span><span>120</span></td><td class="right"><span>3</span></td><td class="right"><span>455</span></td></tr>
+        <tr class="ask"><td class="price"><span>175.44</span></td><td class="right"><span class="depth-bar" style="width:10%"></span><span>75</span></td><td class="right"><span>2</span></td><td class="right"><span>335</span></td></tr>
+        <tr class="ask"><td class="price"><span>175.43</span></td><td class="right"><span class="depth-bar" style="width:7%"></span><span>50</span></td><td class="right"><span>1</span></td><td class="right"><span>260</span></td></tr>
+
+        <tr class="spread-row"><td colspan="4">spread <strong>0.01</strong> at <strong>175.425</strong></td></tr>
+
+        <tr class="bid"><td class="price"><span>175.42</span></td><td class="right"><span class="depth-bar" style="width:13%"></span><span>100</span></td><td class="right"><span>3</span></td><td class="right"><span>100</span></td></tr>
+        <tr class="bid"><td class="price"><span>175.41</span></td><td class="right"><span class="depth-bar" style="width:11%"></span><span>80</span></td><td class="right"><span>2</span></td><td class="right"><span>180</span></td></tr>
+        <tr class="bid"><td class="price"><span>175.40</span></td><td class="right"><span class="depth-bar" style="width:27%"></span><span>200</span></td><td class="right"><span>5</span></td><td class="right"><span>380</span></td></tr>
+        <tr class="bid"><td class="price"><span>175.39</span></td><td class="right"><span class="depth-bar" style="width:20%"></span><span>150</span></td><td class="right"><span>4</span></td><td class="right"><span>530</span></td></tr>
+        <tr class="bid"><td class="price"><span>175.38</span></td><td class="right"><span class="depth-bar" style="width:8%"></span><span>60</span></td><td class="right"><span>2</span></td><td class="right"><span>590</span></td></tr>
+        <tr class="bid"><td class="price"><span>175.37</span></td><td class="right"><span class="depth-bar" style="width:33%"></span><span>250</span></td><td class="right"><span>6</span></td><td class="right"><span>840</span></td></tr>
+        <tr class="bid"><td class="price"><span>175.36</span></td><td class="right"><span class="depth-bar" style="width:53%"></span><span>400</span></td><td class="right"><span>8</span></td><td class="right"><span>1,240</span></td></tr>
+        <tr class="bid"><td class="price"><span>175.35</span></td><td class="right"><span class="depth-bar" style="width:24%"></span><span>180</span></td><td class="right"><span>4</span></td><td class="right"><span>1,420</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Center -->
+  <div class="col">
+    <div class="section-head">
+      <div class="section-title">cumulative depth</div>
+      <div class="section-aux">10 levels each side</div>
+    </div>
+    <div class="chart-wrap">
+      <svg viewBox="0 0 600 240" width="100%" height="240" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="bidGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#4FA89E" stop-opacity="0.5"/>
+            <stop offset="100%" stop-color="#4FA89E" stop-opacity="0.02"/>
+          </linearGradient>
+          <linearGradient id="askGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#C5765B" stop-opacity="0.5"/>
+            <stop offset="100%" stop-color="#C5765B" stop-opacity="0.02"/>
+          </linearGradient>
+        </defs>
+
+        <!-- Horizontal grid lines -->
+        <line x1="0" y1="48" x2="600" y2="48" stroke="#232847" stroke-width="0.5"/>
+        <line x1="0" y1="96" x2="600" y2="96" stroke="#232847" stroke-width="0.5"/>
+        <line x1="0" y1="144" x2="600" y2="144" stroke="#232847" stroke-width="0.5"/>
+        <line x1="0" y1="192" x2="600" y2="192" stroke="#232847" stroke-width="0.5"/>
+
+        <!-- bid area (left climbing left) -->
+        <path d="M 0 240 L 0 64 L 30 64 L 30 86 L 75 86 L 75 114 L 120 114 L 120 142 L 165 142 L 165 178 L 210 178 L 210 192 L 255 192 L 255 208 L 300 208 L 300 240 Z"
+              fill="url(#bidGrad)" stroke="#4FA89E" stroke-width="1.5"/>
+        <!-- ask area (right climbing right) -->
+        <path d="M 600 240 L 600 40 L 570 40 L 570 60 L 525 60 L 525 76 L 480 76 L 480 104 L 435 104 L 435 144 L 390 144 L 390 174 L 345 174 L 345 202 L 300 202 L 300 240 Z"
+              fill="url(#askGrad)" stroke="#C5765B" stroke-width="1.5"/>
+
+        <!-- mid line -->
+        <line x1="300" y1="0" x2="300" y2="240" stroke="#D4A24C" stroke-width="0.75" stroke-dasharray="4 4" opacity="0.7"/>
+        <text x="306" y="16" font-family="Newsreader" font-style="italic" font-size="12" fill="#D4A24C">mid 175.425</text>
+      </svg>
+      <div class="chart-axis">
+        <span>175.35</span>
+        <span>175.40</span>
+        <span>mid</span>
+        <span>175.45</span>
+        <span>175.50</span>
+      </div>
+      <div class="legend">
+        <span><span class="legend-dot bid"></span>Bid · cum 1,420</span>
+        <span><span class="legend-dot ask"></span>Ask · cum 2,205</span>
+        <span class="imbalance">imbalance · <strong>−27.6%</strong> selling pressure</span>
+      </div>
+    </div>
+
+    <div class="section-head">
+      <div class="section-title">the tape</div>
+      <div class="section-aux">last 12 prints</div>
+    </div>
+    <table class="trades">
+      <thead>
+        <tr>
+          <th>time</th>
+          <th>side</th>
+          <th class="right">price</th>
+          <th class="right">size</th>
+          <th class="right">notional</th>
+          <th class="right">aggressor</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td class="num">09:42:38.123</td><td class="side-buy">BUY</td><td class="right num price-up">175.43</td><td class="right num">100</td><td class="right num">17,543</td><td class="right" style="color:var(--ink-soft)">taker</td></tr>
+        <tr><td class="num">09:42:38.119</td><td class="side-buy">BUY</td><td class="right num price-up">175.43</td><td class="right num">50</td><td class="right num">8,772</td><td class="right" style="color:var(--ink-soft)">taker</td></tr>
+        <tr><td class="num">09:42:38.115</td><td class="side-sell">SELL</td><td class="right num price-dn">175.42</td><td class="right num">75</td><td class="right num">13,157</td><td class="right" style="color:var(--ink-soft)">taker</td></tr>
+        <tr><td class="num">09:42:38.108</td><td class="side-buy">BUY</td><td class="right num price-up">175.43</td><td class="right num">200</td><td class="right num">35,086</td><td class="right" style="color:var(--ink-soft)">taker</td></tr>
+        <tr><td class="num">09:42:38.102</td><td class="side-sell">SELL</td><td class="right num price-dn">175.42</td><td class="right num">120</td><td class="right num">21,050</td><td class="right" style="color:var(--ink-soft)">taker</td></tr>
+        <tr><td class="num">09:42:38.097</td><td class="side-sell">SELL</td><td class="right num price-dn">175.42</td><td class="right num">80</td><td class="right num">14,034</td><td class="right" style="color:var(--ink-soft)">taker</td></tr>
+        <tr><td class="num">09:42:38.091</td><td class="side-buy">BUY</td><td class="right num price-up">175.43</td><td class="right num">300</td><td class="right num">52,629</td><td class="right" style="color:var(--ink-soft)">taker</td></tr>
+        <tr><td class="num">09:42:38.085</td><td class="side-sell">SELL</td><td class="right num price-dn">175.42</td><td class="right num">45</td><td class="right num">7,894</td><td class="right" style="color:var(--ink-soft)">taker</td></tr>
+        <tr><td class="num">09:42:38.078</td><td class="side-buy">BUY</td><td class="right num price-up">175.43</td><td class="right num">125</td><td class="right num">21,929</td><td class="right" style="color:var(--ink-soft)">taker</td></tr>
+        <tr><td class="num">09:42:38.071</td><td class="side-buy">BUY</td><td class="right num price-up">175.44</td><td class="right num">75</td><td class="right num">13,158</td><td class="right" style="color:var(--ink-soft)">taker</td></tr>
+        <tr><td class="num">09:42:38.065</td><td class="side-sell">SELL</td><td class="right num price-dn">175.42</td><td class="right num">200</td><td class="right num">35,084</td><td class="right" style="color:var(--ink-soft)">taker</td></tr>
+        <tr><td class="num">09:42:38.059</td><td class="side-buy">BUY</td><td class="right num price-up">175.43</td><td class="right num">150</td><td class="right num">26,314</td><td class="right" style="color:var(--ink-soft)">taker</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Performance -->
+  <div class="col">
+    <div class="section-head">
+      <div class="section-title">performance</div>
+      <div class="section-aux">single thread</div>
+    </div>
+
+    <div class="perf-block">
+      <div class="perf-label">throughput</div>
+      <div class="perf-headline">6.24<span style="color:var(--ink-soft);font-size:0.6em">M</span><span class="unit">events / sec</span></div>
+      <div class="histo">
+        <div class="bar" style="height:28%"></div><div class="bar" style="height:40%"></div><div class="bar" style="height:55%"></div>
+        <div class="bar" style="height:68%"></div><div class="bar" style="height:78%"></div><div class="bar" style="height:80%"></div>
+        <div class="bar" style="height:84%"></div><div class="bar" style="height:88%"></div><div class="bar" style="height:90%"></div>
+        <div class="bar" style="height:92%"></div><div class="bar" style="height:94%"></div><div class="bar" style="height:95%"></div>
+        <div class="bar" style="height:96%"></div><div class="bar" style="height:96%"></div><div class="bar" style="height:97%"></div>
+        <div class="bar" style="height:97%"></div><div class="bar" style="height:97%"></div><div class="bar" style="height:96%"></div>
+        <div class="bar" style="height:95%"></div><div class="bar" style="height:94%"></div><div class="bar" style="height:92%"></div>
+        <div class="bar" style="height:88%"></div><div class="bar" style="height:80%"></div><div class="bar" style="height:62%"></div>
+        <div class="bar" style="height:38%"></div><div class="bar" style="height:18%"></div><div class="bar" style="height:8%"></div>
+      </div>
+      <div style="font-family:'Newsreader';font-style:italic;font-size:11px;color:var(--ink-soft)">latency distribution, log scale</div>
+    </div>
+
+    <div class="perf-block">
+      <div class="perf-label">per-event latency</div>
+      <div class="perf-grid">
+        <div class="perf-cell"><div class="label">p50</div><div class="num">412 ns</div></div>
+        <div class="perf-cell"><div class="label">p99</div><div class="num">1.8 μs</div></div>
+        <div class="perf-cell"><div class="label">p99.9</div><div class="num">4.3 μs</div></div>
+        <div class="perf-cell"><div class="label">max</div><div class="num">9.7 μs</div></div>
+      </div>
+    </div>
+
+    <div class="perf-block">
+      <div class="perf-label">book state</div>
+      <div class="perf-grid">
+        <div class="perf-cell"><div class="label">orders live</div><div class="num">12,847</div></div>
+        <div class="perf-cell"><div class="label">trades</div><div class="num">89,231</div></div>
+        <div class="perf-cell"><div class="label">levels</div><div class="num">412</div></div>
+        <div class="perf-cell"><div class="label">cancel ratio</div><div class="num">94.2%</div></div>
+      </div>
+    </div>
+
+    <div class="perf-block">
+      <div class="perf-label">replay</div>
+      <div class="replay">
+        tape · <strong>itch · 2024-06-13</strong><br>
+        cursor · <strong>09:42:38.124</strong><br>
+        elapsed · <strong>38m 21s</strong> of session<br>
+        progress · <strong>9.6%</strong>
+      </div>
+      <div class="progress"><div class="progress-bar" style="width:9.6%"></div></div>
+    </div>
+  </div>
+
+</div>
+
+<div class="footer-bar">
+  <span><strong>matching</strong> on core 4 · <strong>publisher</strong> on core 5 · 30 Hz top-of-book sampler · <strong>3</strong> seqlock readers · zero blocking on hot path</span>
+  <span class="dim">meridian v0.1.0 · clang 19.1 · -O3 -march=native · pgo</span>
+</div>
+
+</body>
+</html>
