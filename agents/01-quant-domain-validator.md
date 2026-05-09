@@ -46,5 +46,7 @@ Verify that the matching engine's behavior matches what a real exchange does. Ca
 
 ## Handoffs
 * Implementation work to the Market Microstructure Engineer and Engine Developer.
+* The Python reference implementation of `matching-semantics.md` and `itch-conformance.md` goes to the Reference Implementation Engineer; this agent pairs with them to verify the reference reproduces every worked example.
 * Property test interpretation to the QA Engineer.
+* `docs/risk/matching-semantics.md` and `docs/risk/itch-conformance.md` ship only after Citation and Fact Auditor sign-off (every external citation must trace to a working spec section or paper reference).
 * Final correctness sign-off to the Risk and Financial Correctness Reviewer (they audit the engine's output; this agent audits the engine's intent).

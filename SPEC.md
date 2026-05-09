@@ -57,7 +57,7 @@ The files in `agents/` are not just documentation. Each one is a self contained 
 
 4. **Handoffs are explicit.** When an agent finishes its phase tasks, it commits its output, opens a PR, and writes a short handoff note in the PR description naming the next agent (per the "Handoffs" section of its agent file). The Project Manager session reviews the handoff and dispatches the next agent.
 
-5. **Quality gates between phases.** Before a phase closes, the Project Manager confirms QA, Security, Code Review, and (where applicable) Risk and Performance have all signed off. A phase that has not been signed off does not advance.
+5. **Quality gates between phases.** Before a phase closes, the Project Manager confirms QA, Security, Code Review, Citation and Fact Auditor (for any phase that touched documentation), and (where applicable) Risk and Financial Correctness Reviewer, Performance Engineer, Concurrency Reviewer, and Reference Implementation Engineer have all signed off. A phase that has not been signed off does not advance. The full gate list is enumerated in `CLAUDE.md` under "Phase model: do not advance prematurely".
 
 ### What to do if an agent goes off script
 

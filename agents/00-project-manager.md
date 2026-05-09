@@ -24,8 +24,8 @@ Own the plan, sequence the phases, and dispatch every other agent. Keep the buil
 ### Phase 0: Foundations
 1. Invoke the brainstorming skill to walk through SPEC.md once more and surface any missing assumptions (open questions in the technical design at section 13: hosting domain, VPS provider, demo symbol set, audit log behavior).
 2. Invoke the writing plans skill to produce a phase by phase implementation plan at `/home/mustafa/src/Meridian/docs/plan.md`. If the file already exists, update it rather than overwriting.
-3. Dispatch each Phase 0 specialist agent via the `Task` tool using the prompt template in `CLAUDE.md`. Phase 0 specialists are: UI/UX Designer, Security Engineer, DevOps Engineer, Documentation Engineer.
-4. Confirm the DevOps Engineer has initialized the local working directory as a git repo (`git init` in `/home/mustafa/src/Meridian/`, GitHub repo `MustafaNazeer/Meridian` added as `origin`, first commit pushed).
+3. Dispatch each Phase 0 specialist agent via the `Task` tool using the prompt template in `CLAUDE.md`. Phase 0 specialists, in dispatch order: UI/UX Designer, Security Engineer, DevOps Engineer, Documentation Engineer (these four can run in parallel via `superpowers:dispatching-parallel-agents`), then Citation and Fact Auditor sequentially after the Documentation Engineer's output exists (the auditor reads `README.md`, `SPEC.md`, and `docs/architecture.md` and files the initial audit at `docs/audits/citation-audit-{date}.md`).
+4. Confirm the DevOps Engineer has wired the local working directory into the GitHub repo. Note: if the bootstrap session already ran `git init`, added the GitHub remote, and pushed the initial scaffold (the typical case), the DevOps Engineer's remaining Phase 0 work is the CMake skeleton and frontend scaffold only. Verify with `git remote -v`.
 5. The visual design (Twilight) is already approved; no user sign off is needed before Phase 9 frontend work begins. If the UI/UX Designer surfaces clarification questions in their report, relay only those to the user.
 
 ### Every subsequent phase
