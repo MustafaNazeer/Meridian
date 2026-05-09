@@ -53,10 +53,25 @@ A phase is done when:
 * Code Reviewer has approved every PR in the phase.
 * Risk and Financial Correctness Reviewer has signed off if the phase touched matching semantics, order types, cancel behavior, or the seqlock protocol.
 * Performance Engineer has signed off if the phase changed the hot path or the latency budget.
+* Concurrency Reviewer has signed off if the phase changed threads, atomics, memory ordering, or the seqlock protocol.
+* Citation and Fact Auditor has signed off if the phase touched any document containing concrete numbers or external references.
+* Reference Implementation Engineer has confirmed the Python reference agrees with the C++ engine on the integration corpus, when the phase touched matching semantics or the ITCH parser.
 * Documentation Engineer has updated `docs/`.
 * `docs/plan.md` is updated to reflect the phase as complete.
 * **`STATUS.md` is updated**: the phase status flipped to `completed` with the completion date, and the "Next phase" field updated to point at the next not-started phase.
 * **The mandatory check-in protocol from `CLAUDE.md` ("Pacing rule") has been run, and the user has explicitly responded.** A phase is not closed until the user has confirmed continue, pause, or stop. Auto advancing to the next phase is forbidden, including in auto mode.
 
 ## Handoffs
-The PM session persists across all phases; you do not "hand off" the PM role. After each phase closes, dispatch the agents listed for the next phase per SPEC.md. Phase 1 dispatches: Quant Domain Validator (textbook validation pass), Engine Developer (the matching loop), QA Engineer (unit tests), Performance Engineer (benchmark scaffold), Code Reviewer (final review). Phase 4 dispatches add Risk and Financial Correctness Reviewer for the seqlock protocol. Phase 5 is performance-led. Phase 6 onward sees the WebSocket and frontend phases bring in Security, Frontend Developer, UI/UX Designer, and Accessibility Specialist.
+The PM session persists across all phases; you do not "hand off" the PM role. After each phase closes, dispatch the agents listed for the next phase per SPEC.md.
+
+* **Phase 1**: Quant Domain Validator (textbook validation pass and `matching-semantics.md`), Engine Developer (the matching loop), Market Microstructure Engineer (the matching state machine), Reference Implementation Engineer (Python reference for limit + market + IOC), QA Engineer (unit tests + reference integration), Performance Engineer (benchmark scaffold), Risk and Financial Correctness Reviewer (cross-validation), Code Reviewer (final review).
+* **Phase 2**: Engine Developer (multi-instrument and cancel-by-id), Reference Implementation Engineer (extend reference), QA Engineer (multi-symbol integration tests), Risk and Financial Correctness Reviewer.
+* **Phase 3**: Engine Developer + QA + rapidcheck integration; Reference Implementation Engineer runs the same generated corpus; Risk and Financial Correctness Reviewer adjudicates disagreements.
+* **Phase 4**: Concurrency Reviewer's primary phase (paired with Market Microstructure Engineer from design through implementation), Engine Developer (sampler thread), QA Engineer (TSAN tests), Performance Engineer (memory ordering), Documentation Engineer (seqlock ADR).
+* **Phase 5**: Performance Engineer leads; Concurrency Reviewer pairs on cache-layout changes; Citation and Fact Auditor audits the benchmark report.
+* **Phase 6**: Engine Developer (ITCH parser), Reference Implementation Engineer (Python ITCH parser and `run_reference.py`), QA Engineer (integration test), Risk and Financial Correctness Reviewer, Citation and Fact Auditor (`itch-conformance.md`).
+* **Phase 7**: Engine Developer (post-only + FOK), Reference Implementation Engineer (extend reference), QA, Risk and Financial Correctness Reviewer.
+* **Phase 8**: Engine Developer + DevOps (uWebSockets), Concurrency Reviewer (sampler-publisher-WS handoff), Security Engineer (handshake + origin), Citation and Fact Auditor (`websocket.md`).
+* **Phase 9**: Frontend Developer, UI/UX Designer, Accessibility Specialist, Security Engineer (CSP + connect-src).
+* **Phase 10**: DevOps Engineer (deploy), Security Engineer (final hardening checklist), Observability Engineer (runbook).
+* **Phase 11**: Documentation Engineer (final README and architecture summary), Performance Engineer (final benchmark numbers), Citation and Fact Auditor (full final pass), Risk and Financial Correctness Reviewer and Concurrency Reviewer (final sign-offs).

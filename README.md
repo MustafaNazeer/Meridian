@@ -77,7 +77,7 @@ tests/              unit, property, integration tests
 bench/              CI benchmark baseline JSON
 frontend/           React app for the live demo
 docs/               specs, design, security, perf, risk, ADRs
-agents/             15 specialist briefs
+agents/             18 specialist briefs
 ```
 
 ## License

@@ -14,7 +14,7 @@ This file is the literal step by step guide for the first Claude Code session op
 6. List the contents of `design-mockups/themes/` (the 5 candidate visual directions; the chosen one, Twilight, is also copied to `docs/design/canonical.html`).
 7. Read this file (you are here).
 
-You now know: the project is a price-time priority limit order book and matching engine in C++20 with a live web visualization. There are 12 phases (0 through 11). Each phase has agent task lists. You, by default, are the Project Manager.
+You now know: the project is a price-time priority limit order book and matching engine in C++20 with a live web visualization. There are 12 phases (0 through 11) and 18 agents (00 PM plus 17 specialists). Each phase has agent task lists. You, by default, are the Project Manager.
 
 ### Step 2: confirm with the user
 
@@ -54,10 +54,11 @@ Phase 0 deliverables (per SPEC.md):
 * Project Manager runs brainstorming and writes `docs/plan.md`. (Already done in Step 3.)
 * UI/UX Designer reads the canonical Twilight HTML at `docs/design/canonical.html`, extracts tokens to `docs/design/tokens.md` and a draft `frontend/tailwind.config.ts` extension, and writes screen layout descriptions to `docs/design/wireframes.md`.
 * Security Engineer publishes the threat model and baseline.
-* DevOps Engineer wires the local working directory `/home/mustafa/src/Meridian/` into the existing GitHub repo `MustafaNazeer/Meridian`: runs `git init` locally, adds the GitHub repo as `origin`, pushes existing files as the first commit, then scaffolds the CMake project skeleton (root `CMakeLists.txt`, `include/meridian/`, `src/`, `apps/{bench,replay,server}`, `tests/`) and the `pnpm` plus Vite plus React plus TypeScript plus Tailwind project under `frontend/`, dropping the Tailwind config sketch from the Twilight HTML's tokens into `frontend/tailwind.config.ts`.
+* DevOps Engineer wires the local working directory `/home/mustafa/src/Meridian/` into the existing GitHub repo `MustafaNazeer/Meridian` (note: by the time you read this in a fresh session, this work may already be partially done, since a prior session ran `git init` and pushed the initial scaffold to https://github.com/MustafaNazeer/Meridian. Confirm with `git remote -v`. If the remote is set, the DevOps Engineer's remaining Phase 0 work is the CMake skeleton plus the `pnpm` plus Vite plus React plus TypeScript plus Tailwind project under `frontend/`, dropping the Tailwind config sketch from the Twilight HTML's tokens into `frontend/tailwind.config.ts`.).
 * Documentation Engineer writes the initial README and `docs/architecture.md`.
+* Citation and Fact Auditor runs the first pass on `README.md`, `SPEC.md`, and `docs/architecture.md` once the Documentation Engineer has produced them; files the initial audit at `docs/audits/citation-audit-{date}.md`. This dispatch can be sequential after the Documentation Engineer rather than parallel.
 
-These can run in parallel. Use `superpowers:dispatching-parallel-agents` and dispatch each via the `Task` tool. Use the prompt template in `CLAUDE.md` under "How to dispatch a specialist agent".
+The first four bullets can run in parallel. Use `superpowers:dispatching-parallel-agents` and dispatch each via the `Task` tool. The Citation and Fact Auditor goes after the Documentation Engineer's pass completes. Use the prompt template in `CLAUDE.md` under "How to dispatch a specialist agent".
 
 Concrete example for the Security Engineer dispatch:
 
@@ -131,7 +132,7 @@ Wait for the user's explicit answer. Do not auto advance, even in auto mode.
 ├── SPEC.md                                    # Already exists
 ├── GETTING-STARTED.md                         # Already exists
 ├── future-ideas.md                            # Already exists
-├── agents/                                    # Already exists, 15 files
+├── agents/                                    # Already exists, 18 files
 ├── design-mockups/                            # Already exists, 5 candidate visuals
 ├── CMakeLists.txt                             # Created by DevOps Engineer
 ├── include/meridian/                          # Created by DevOps Engineer (empty placeholder)
@@ -153,6 +154,7 @@ Wait for the user's explicit answer. Do not auto advance, even in auto mode.
 │   ├── security/threat-model.md               # Written by Security Engineer
 │   ├── security/checklist.md                  # Written by Security Engineer
 │   ├── security/secrets.md                    # Written by Security Engineer (stub)
+│   ├── audits/citation-audit-{date}.md        # Written by Citation and Fact Auditor
 │   └── superpowers/specs/2026-05-09-meridian-design.md  # Already exists
 └── frontend/                                  # Initialized by DevOps Engineer with pnpm + Vite + React + TS + Tailwind (empty)
 ```

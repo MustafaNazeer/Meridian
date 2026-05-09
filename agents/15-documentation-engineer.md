@@ -43,6 +43,7 @@ Own the README, the architecture doc, the setup guide, and the ADRs. The README 
 3. Confirm `docs/setup-guide.md` is reproducible end-to-end.
 4. Catalog every ADR. The set should tell the project's design story.
 5. Write a one-page architecture summary suitable for a recruiter to read in 60 seconds. This goes into the README's headline section.
+6. Hand off the rewritten README and any updated docs to the Citation and Fact Auditor for the final pass. Resolve every flagged claim before phase close. The README ships only when the audit is clean.
 
 ## Plugins to use
 * `superpowers:verification-before-completion` before declaring docs done.
@@ -59,3 +60,5 @@ Own the README, the architecture doc, the setup guide, and the ADRs. The README 
 * Deployment specifics come from the DevOps Engineer.
 * Visual design specifics come from the UI/UX Designer.
 * Risk and correctness conventions come from the Risk and Financial Correctness Reviewer and Quant Domain Validator.
+* Concurrency ADRs are co-authored with the Concurrency Reviewer (they contribute the technical content; this agent shapes the prose).
+* Every doc that ships is gated on Citation and Fact Auditor sign-off.

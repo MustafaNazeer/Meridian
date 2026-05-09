@@ -105,63 +105,63 @@ When a phase comes in well under budget, the PM may bundle the next short phase 
 ### Phase 0: Foundations
 **Window cost: ~95 percent of one Max 5x window.** Heavy planning, parallel agent dispatches, repo init, frontend skeleton, threat model, design tokens, and architecture doc all happen here.
 
-Project Manager runs brainstorming and writes the implementation plan in `docs/plan.md`. UI/UX Designer reads the canonical Twilight HTML at `docs/design/canonical.html`, extracts tokens to `docs/design/tokens.md` and a draft `frontend/tailwind.config.ts` extension, and writes screen layout descriptions to `docs/design/wireframes.md`. Security Engineer publishes the threat model and baseline. DevOps Engineer wires the local working directory `/home/mustafa/src/Meridian/` into the existing GitHub repo `MustafaNazeer/Meridian` (run `git init` locally, add the GitHub repo as `origin`, push the existing files as the first commit), then scaffolds the CMake project skeleton (root `CMakeLists.txt`, `include/meridian/`, `src/`, `apps/{bench,replay,server}`, `tests/`) and the `pnpm` plus Vite plus React plus TypeScript plus Tailwind project under `frontend/`, dropping the Tailwind config sketch from the Twilight HTML's tokens into `frontend/tailwind.config.ts`. Documentation Engineer writes the initial README and architecture overview.
+Project Manager runs brainstorming and writes the implementation plan in `docs/plan.md`. UI/UX Designer reads the canonical Twilight HTML at `docs/design/canonical.html`, extracts tokens to `docs/design/tokens.md` and a draft `frontend/tailwind.config.ts` extension, and writes screen layout descriptions to `docs/design/wireframes.md`. Security Engineer publishes the threat model and baseline. DevOps Engineer wires the local working directory `/home/mustafa/src/Meridian/` into the existing GitHub repo `MustafaNazeer/Meridian` (run `git init` locally, add the GitHub repo as `origin`, push the existing files as the first commit), then scaffolds the CMake project skeleton (root `CMakeLists.txt`, `include/meridian/`, `src/`, `apps/{bench,replay,server}`, `tests/`) and the `pnpm` plus Vite plus React plus TypeScript plus Tailwind project under `frontend/`, dropping the Tailwind config sketch from the Twilight HTML's tokens into `frontend/tailwind.config.ts`. Documentation Engineer writes the initial README and architecture overview. Citation and Fact Auditor runs the first pass on `README.md`, `SPEC.md`, and `docs/architecture.md`, files the initial audit at `docs/audits/citation-audit-{date}.md`, and signs off only when every concrete claim traces to code or canonical reference.
 
 **End of phase**: PM runs the mandatory check-in protocol from `CLAUDE.md`.
 
 ### Phase 1: Core data structures and single-symbol matching
 **Window cost: ~95 percent of one window.** This is the engine's first real phase: `Order`, `Level`, `Book`, `OrderPool`, and a working limit + market + IOC matching loop with FIFO at price levels.
 
-Quant Domain Validator confirms the price-time priority semantics and IOC behavior against textbook references. Engine Developer implements the data structures and the matching loop in `libmeridian.a`. QA Engineer writes unit tests for every type. Performance Engineer adds the initial benchmark scaffold under `bench/` and meridian-bench in `apps/bench/`. Code Reviewer audits the hot path for allocations, exceptions, and unnecessary virtual dispatch.
+Quant Domain Validator confirms the price-time priority semantics and IOC behavior against textbook references and writes `docs/risk/matching-semantics.md`. Reference Implementation Engineer writes the first cut of `tests/reference/matching_reference.py` covering limit, market, and IOC; every worked example in `matching-semantics.md` runs against it as a unit test. Engine Developer implements the data structures and the matching loop in `libmeridian.a`. QA Engineer writes unit tests for every C++ type and integrates the Python reference into the test suite. Performance Engineer adds the initial benchmark scaffold under `bench/` and meridian-bench in `apps/bench/`. Code Reviewer audits the hot path for allocations, exceptions, and unnecessary virtual dispatch. Risk and Financial Correctness Reviewer cross-validates by running the same worked examples against both the C++ engine and the Python reference; both must agree.
 
 **End of phase**: run the check-in protocol.
 
 ### Phase 2: Multi-instrument and cancel-by-id
 **Window cost: small alone (~50 percent). PM should bundle Phase 2 plus Phase 3 into a single window unless the user objects at check-in.**
 
-Engine Developer adds `BookRegistry` (`unordered_map<Symbol, Book>`) for multi-instrument dispatch and the O(1) cancel-by-id path via the per-book order ID map. QA Engineer writes integration tests across multiple symbols. Risk and Financial Correctness Reviewer signs off that cancel-after-match is consistent.
+Engine Developer adds `BookRegistry` (`unordered_map<Symbol, Book>`) for multi-instrument dispatch and the O(1) cancel-by-id path via the per-book order ID map. Reference Implementation Engineer extends `tests/reference/matching_reference.py` with multi-symbol dispatch and cancel-by-id, confirming cross-symbol cancels do not leak across books. QA Engineer writes integration tests across multiple symbols, running both the C++ engine and the Python reference and diffing their outputs. Risk and Financial Correctness Reviewer signs off that cancel-after-match is consistent in both implementations.
 
 **End of phase**: if not bundled with Phase 3, run the check-in protocol.
 
 ### Phase 3: Property-based tests for matching invariants
 **Window cost: ~50 percent alone, or ~95 percent when bundled with Phase 2.**
 
-Engine Developer plus QA Engineer wire `rapidcheck` into the test build and implement the ten matching invariants listed in the technical design spec (price-time priority, quantity conservation, no double fill, no lost orders, spread non-negative, cancel idempotence, IOC never rests, FOK is all-or-nothing, post-only never crosses, top-of-book monotonicity within a tick). Each invariant runs ≥1000 generated cases per CI run. Risk and Financial Correctness Reviewer signs off.
+Engine Developer plus QA Engineer wire `rapidcheck` into the test build and implement the ten matching invariants listed in the technical design spec (price-time priority, quantity conservation, no double fill, no lost orders, spread non-negative, cancel idempotence, IOC never rests, FOK is all-or-nothing, post-only never crosses, top-of-book monotonicity within a tick). Each invariant runs ≥1000 generated cases per CI run. Reference Implementation Engineer runs the same generated case corpus against the Python reference; both engines must produce identical execution report sequences for any generated input. Disagreement is signal, and the reference is presumed correct unless this agent identifies the disagreement as a known reference bug. Risk and Financial Correctness Reviewer adjudicates any persistent disagreement and signs off.
 
 **End of phase**: run the check-in protocol.
 
 ### Phase 4: Seqlock-protected top-of-book and sampler
 **Window cost: ~85 percent of one window.** This phase introduces concurrency: a publisher thread reading the seqlock-protected top-of-book at 30 Hz without blocking the matching loop.
 
-Engine Developer implements `TopOfBookSnapshot` with the seqlock writer/reader protocol. QA Engineer writes ThreadSanitizer (TSAN) tests. Performance Engineer profiles the hot path to confirm the seqlock writer adds no observable cost.
+Concurrency Reviewer's primary phase. Pairs with the Market Microstructure Engineer on the seqlock protocol from the start; protocol correctness is a design-time decision, not a code-review afterthought. The agent vetos any seqlock change that does not match textbook seqlock pseudocode and signs off only when the TSAN run with a busy writer and many readers is clean. Engine Developer implements `TopOfBookSnapshot` with the seqlock writer/reader protocol per the Concurrency Reviewer's design. QA Engineer writes ThreadSanitizer tests. Performance Engineer profiles the hot path to confirm the seqlock writer adds no observable cost; coordinates with the Concurrency Reviewer on memory ordering choices (the writer's first sequence increment can be `relaxed`, the data writes need `release` ordering relative to the second sequence increment). Documentation Engineer files `docs/adr/0002-seqlock-for-top-of-book.md` capturing the memory ordering rationale; Concurrency Reviewer contributes the technical content.
 
 **End of phase**: run the check-in protocol.
 
 ### Phase 5: Benchmark hits 6M events per second
 **Window cost: ~95 percent of one window.** The phase that earns the resume bullet.
 
-Performance Engineer drives this phase. Compiler flags (`-O3 -march=native`), Profile Guided Optimization (PGO), cache-line layout audit, branch-prediction friendly inner loops, false sharing audit. Target: meridian-bench reports ≥6M events per second steady state on a modern x86_64 desktop with p50 ≤ 500 ns, p99 ≤ 2 μs, p99.9 ≤ 5 μs. The benchmark report is written to `docs/perf/benchmark-report.md` with histograms and methodology.
+Performance Engineer drives this phase. Compiler flags (`-O3 -march=native`), Profile Guided Optimization (PGO), cache-line layout audit, branch-prediction friendly inner loops, false sharing audit. Target: meridian-bench reports ≥6M events per second steady state on a modern x86_64 desktop with p50 ≤ 500 ns, p99 ≤ 2 μs, p99.9 ≤ 5 μs. The benchmark report is written to `docs/perf/benchmark-report.md` with histograms and methodology. Concurrency Reviewer pairs on any cache-layout or false-sharing change that touches shared state. Citation and Fact Auditor performs an end-to-end pass on the benchmark report once written: every number traces to either `bench/baseline.json` or a histogram CSV checked into the repo; methodology claims (warmup, sample count, machine specs, compiler version) trace to documented config. Any rounding drift between the report and the eventual README headline is caught here, not at Phase 11.
 
 **End of phase**: run the check-in protocol.
 
 ### Phase 6: NASDAQ ITCH 5.0 replay
 **Window cost: ~95 percent of one window.** ITCH parser plus replayer plus integration tests.
 
-Engine Developer implements the ITCH 5.0 message parser as a single header file under `include/meridian/itch.hpp`. Replayer in `apps/replay/` reads a tape and produces `EngineEvent`s for the matching loop. QA Engineer writes an integration test against a small public ITCH sample, comparing the final book state and total fill count against a reference Python implementation (the reference is a one-day-write Python script, not a production ITCH decoder; it lives under `tests/reference/`).
+Engine Developer implements the ITCH 5.0 message parser as a single header file under `include/meridian/itch.hpp`. Replayer in `apps/replay/` reads a tape and produces `EngineEvent`s for the matching loop. Reference Implementation Engineer writes `tests/reference/itch_reference.py` (the simplest possible Python ITCH parser, decoding only the messages the C++ parser handles, with each decoder docstring naming the spec section it implements) and `tests/reference/run_reference.py` (CLI that drives the reference matching engine from the ITCH parser). QA Engineer writes an integration test against a small public ITCH sample: the C++ engine and the reference must agree exactly on final book state and total fill count. Risk and Financial Correctness Reviewer hand-audits at least 10 messages from the sample against the spec and signs off. Citation and Fact Auditor reviews `docs/risk/itch-conformance.md` against the actual ITCH 5.0 specification, spot-checks 10 message-type claims, and signs off.
 
 **End of phase**: run the check-in protocol.
 
 ### Phase 7: Post-only and FOK order types
 **Window cost: small alone (~30 percent). PM should bundle Phase 7 plus Phase 8 into a single window unless the user objects at check-in.**
 
-Engine Developer adds post-only (rejected if it would cross) and FOK (fill-or-kill: fully fill or fully cancel) order types. QA Engineer extends the property tests so the existing invariants still hold. Risk and Financial Correctness Reviewer signs off.
+Engine Developer adds post-only (rejected if it would cross) and FOK (fill-or-kill: fully fill or fully cancel) order types. Reference Implementation Engineer extends the Python reference with post-only and FOK semantics; the reference's worked-example tests must pass for both order types before the C++ engine is signed off. QA Engineer extends the property tests so the existing invariants still hold and adds new invariants specific to post-only (never crosses) and FOK (all-or-nothing). Risk and Financial Correctness Reviewer signs off after confirming both implementations agree on edge cases.
 
 **End of phase**: if not bundled with Phase 8, run the check-in protocol.
 
 ### Phase 8: WebSocket server and protocol
 **Window cost: ~60 percent alone, or ~90 percent when bundled with Phase 7.**
 
-Engine Developer plus DevOps Engineer wire uWebSockets into `apps/server/`. Define the WebSocket protocol: on connect, the client receives a `snapshot` message with the L10 book plus recent trades plus performance metrics; thereafter, the sampler thread pushes a `delta` message at 30 Hz with changes only. The protocol is documented in `docs/api/websocket.md`. Security Engineer reviews the WebSocket handshake, origin checks, max client count, and message size limits.
+Engine Developer plus DevOps Engineer wire uWebSockets into `apps/server/`. Define the WebSocket protocol: on connect, the client receives a `snapshot` message with the L10 book plus recent trades plus performance metrics; thereafter, the sampler thread pushes a `delta` message at 30 Hz with changes only. The protocol is documented in `docs/api/websocket.md`. Security Engineer reviews the WebSocket handshake, origin checks, max client count, and message size limits. Concurrency Reviewer reviews the sampler-publisher-WebSocket event loop interactions: the handoff between the sampler thread and the uWebSockets event loop must be lock-free or use a single SPSC queue with documented memory ordering, and the matching loop must never be blocked by sampler or publisher work. Citation and Fact Auditor reviews `docs/api/websocket.md`: every message field claim is checkable against the actual `apps/server/sampler.cpp` JSON serialization code, and the documented examples parse cleanly.
 
 **End of phase**: run the check-in protocol.
 
@@ -182,13 +182,13 @@ DevOps Engineer deploys the frontend to Cloudflare Pages, sets up the C++ binary
 ### Phase 11: Polish, README, and benchmark report
 **Window cost: ~80 percent of one window.** The phase that turns the working build into a presentable portfolio piece.
 
-Documentation Engineer writes the headline README with the benchmark numbers, design rationale, demo URL, and design doc links. Performance Engineer regenerates the benchmark report PDF with the final hosted-environment numbers. Code Reviewer does one full sweep across `libmeridian.a` for any remaining cleanups. QA Engineer runs the full regression suite one more time. Documentation Engineer writes a one-page architecture summary suitable for a recruiter to read in 60 seconds.
+Documentation Engineer writes the headline README with the benchmark numbers, design rationale, demo URL, and design doc links. Performance Engineer regenerates the benchmark report PDF with the final hosted-environment numbers. Code Reviewer does one full sweep across `libmeridian.a` for any remaining cleanups. QA Engineer runs the full regression suite one more time. Documentation Engineer writes a one-page architecture summary suitable for a recruiter to read in 60 seconds. Citation and Fact Auditor performs the final pass: every shipping document gets audited end to end against code and measurements, every prior `unverified` claim is resolved, and the final audit report at `docs/audits/citation-audit-{date}.md` is the project's pre-publish checklist. Risk and Financial Correctness Reviewer signs off on the project as a whole; Concurrency Reviewer signs off on the threading model; the project ships only when all gates are clean.
 
 **End of phase**: run the check-in protocol; the project is now shipped.
 
 ## Agent roster
 
-Each link points to a file in `agents/`. Numbers 06 (Data Engineer) and 07 (Database Administrator) are skipped because Meridian has no persistence in v1.
+Each link points to a file in `agents/`. Numbers 06 (Data Engineer) and 07 (Database Administrator) are skipped because Meridian has no persistence in v1. Total active agents: **18** (00 PM plus 17 specialists).
 
 | # | Agent | One line mission |
 |---|---|---|
@@ -207,6 +207,9 @@ Each link points to a file in `agents/`. Numbers 06 (Data Engineer) and 07 (Data
 | 14 | [Observability Engineer](agents/14-observability-engineer.md) | Logging discipline (level filtered out of hot path), metrics, error tracking on the live deploy. |
 | 15 | [Documentation Engineer](agents/15-documentation-engineer.md) | README, setup guide, architecture docs, ADRs, benchmark report. |
 | 16 | [Risk and Financial Correctness Reviewer](agents/16-risk-correctness-reviewer.md) | Validates that matching invariants are preserved and that a real exchange's behavior would be reproduced. |
+| 17 | [Citation and Fact Auditor](agents/17-citation-and-fact-auditor.md) | Verifies every concrete claim in shipping documents traces to a code path, a measurement, or an external citation. |
+| 18 | [Reference Implementation Engineer](agents/18-reference-implementation-engineer.md) | Owns the Python reference implementations used as ground truth for the C++ engine. |
+| 19 | [Concurrency Reviewer](agents/19-concurrency-reviewer.md) | Reviews every diff touching threads, atomics, memory ordering, lock-free patterns; vetos seqlock changes. |
 
 ## Coordination rules
 
@@ -216,6 +219,9 @@ Each link points to a file in `agents/`. Numbers 06 (Data Engineer) and 07 (Data
 4. Security Engineer has veto power on any change that touches the WebSocket handshake, origin checks, rate limits, third party calls, or user input.
 5. Risk and Financial Correctness Reviewer has veto power on any change that touches matching semantics, order types, cancel behavior, or the seqlock protocol. The matching engine's correctness is the project's primary value; correctness signoff is non-optional.
 6. Performance Engineer has veto power on any change that affects the hot path's latency budget. A change that makes the matching loop slower is a regression, not progress.
-7. Documentation Engineer updates `docs/` whenever a phase completes.
-8. Future ideas (anything out of scope for v1) are written to `future-ideas.md` at the repo root (gitignored, see `future-ideas.md` privacy note) and not implemented in v1.
-9. **Mandatory check-in after every phase.** The PM session must stop, summarize what shipped, ask the user for current Max plan usage and reset window, and wait for explicit confirmation before starting the next phase. See `CLAUDE.md` "Pacing rule" for the exact protocol. This rule is not optional, even in auto mode.
+7. Concurrency Reviewer has veto power on any change that touches threads, atomics, memory ordering, lock-free patterns, or the seqlock protocol. The Code Reviewer routes such PRs to this agent rather than approving them generically.
+8. Citation and Fact Auditor must sign off on any document that contains a concrete number, a named external reference, a function name, a file path, or a claim about external behavior, before that document ships in a phase close. Hallucinated numbers and drifted documentation are the project's most embarrassing failure mode; this gate is non-optional.
+9. Reference Implementation Engineer owns `tests/reference/`. The Python reference is the canonical "what should the C++ engine have produced?" answer for any disagreement caught by the integration tests or the property tests.
+10. Documentation Engineer updates `docs/` whenever a phase completes.
+11. Future ideas (anything out of scope for v1) are written to `future-ideas.md` at the repo root (gitignored, see `future-ideas.md` privacy note) and not implemented in v1.
+12. **Mandatory check-in after every phase.** The PM session must stop, summarize what shipped, ask the user for current Max plan usage and reset window, and wait for explicit confirmation before starting the next phase. See `CLAUDE.md` "Pacing rule" for the exact protocol. This rule is not optional, even in auto mode.

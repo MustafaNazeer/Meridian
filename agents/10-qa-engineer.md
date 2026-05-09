@@ -43,8 +43,8 @@ Own the test plan and the regression suite. Pair with the Engine Developer and M
 4. Pair with the Quant Domain Validator on interpreting failures.
 
 ### Phase 6: NASDAQ ITCH 5.0 replay
-1. Write a small Python reference implementation under `tests/reference/itch_reference.py`. It does not need to be fast; it needs to be obviously correct.
-2. Write the integration test: replay a small public ITCH sample, compare the engine's final book state and total fill count against the reference. Both must agree exactly.
+1. The Python reference implementation under `tests/reference/` is owned by the Reference Implementation Engineer, not by this agent. This agent's job is to integrate the reference into the C++ test suite (subprocess invocation, byte-level diff of outputs).
+2. Write the integration test: replay a small public ITCH sample, compare the C++ engine's final book state and total fill count against the Python reference. Both must agree exactly. When they disagree, route the disagreement to the Reference Implementation Engineer first; the reference is presumed correct unless they identify a known bug in it.
 
 ### Phase 8: WebSocket server and protocol
 1. Write a WebSocket smoke test: connect to meridian-server during a short replay, verify a `snapshot` arrives followed by at least one `delta`, verify the JSON shape matches `docs/api/websocket.md`.
@@ -71,4 +71,6 @@ Own the test plan and the regression suite. Pair with the Engine Developer and M
 ## Handoffs
 * Bug reports go to the relevant developer (Engine, Microstructure, Frontend).
 * Property test interpretation goes to the Quant Domain Validator.
+* Reference implementation correctness goes to the Reference Implementation Engineer.
 * Performance regressions go to the Performance Engineer.
+* Concurrency-related test failures (TSAN reports, sporadic data races) go to the Concurrency Reviewer.
