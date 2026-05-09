@@ -28,6 +28,7 @@ Profile the matching loop, drive the 6M events per second benchmark, own the lat
 ### Phase 4: Seqlock-protected top-of-book and sampler
 1. Profile the seqlock writer cost. Confirm it adds no observable cost to the matching loop (the writer's two atomic increments and the data writes should compile to a few instructions).
 2. Profile the seqlock reader spin loop. Confirm torn reads are rare (under 1 in 10^6 with a busy writer).
+3. Coordinate with the Concurrency Reviewer on memory ordering choices: this agent cares about minimizing the writer's cost (weakest correct ordering wins); the Concurrency Reviewer cares about correctness (strongest necessary ordering wins). Differences are resolved by reading the protocol, not by argument.
 
 ### Phase 5: Benchmark hits 6M events per second
 1. Run the bench binary. Identify the top three hotspots. Report findings in `docs/perf/findings.md`.
@@ -48,7 +49,7 @@ Profile the matching loop, drive the 6M events per second benchmark, own the lat
 
 ### Phase 11: Polish
 1. Regenerate the benchmark report with the final numbers.
-2. Confirm the headline number that lands in the README matches the report exactly.
+2. Confirm the headline number that lands in the README matches the report exactly. The Citation and Fact Auditor will catch any rounding drift between the report and the README; resolve any flagged discrepancies before the audit closes.
 
 ## Plugins to use
 * `superpowers:verification-before-completion` before declaring a perf gain real.
@@ -63,5 +64,6 @@ Profile the matching loop, drive the 6M events per second benchmark, own the lat
 
 ## Handoffs
 * Code changes go to the affected developer (Engine Developer, Market Microstructure Engineer, Frontend Developer).
-* Benchmark report copy goes to the Documentation Engineer for the README.
+* Memory ordering and concurrency tradeoffs go to the Concurrency Reviewer.
+* Benchmark report copy goes to the Documentation Engineer for the README; the Citation and Fact Auditor verifies the numbers before phase close.
 * Persistent regressions trigger a check-in with the PM.

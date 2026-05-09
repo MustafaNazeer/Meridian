@@ -97,6 +97,9 @@ Plugin and skill names map to what is listed in your session's available skills.
 * Code Reviewer has approved every PR in the phase.
 * Risk and Financial Correctness Reviewer has signed off if the phase touched matching invariants, price-time priority, or any logic where a real exchange would care about determinism.
 * Performance Engineer has signed off if the phase changed the hot path or the latency budget.
+* Concurrency Reviewer has signed off if the phase changed threads, atomics, memory ordering, or the seqlock protocol.
+* Citation and Fact Auditor has signed off if the phase touched any document containing a concrete number, named external reference, function name, file path, or behavior claim. Hallucinated documentation is a phase blocker.
+* Reference Implementation Engineer has confirmed the Python reference under `tests/reference/` agrees with the C++ engine on the integration corpus, when the phase touched matching semantics or the ITCH parser.
 * Documentation Engineer has updated `docs/`.
 
 The PM session checks these gates before opening the next phase.
@@ -150,7 +153,7 @@ Never burn the last few percent of a window on a half finished change that canno
 ├── GETTING-STARTED.md         # First session walkthrough.
 ├── README.md                  # Created in Phase 0 by Documentation Engineer.
 ├── future-ideas.md            # Maintainer's private notes; gitignored.
-├── agents/                    # 15 agent briefs (00 PM plus 14 specialists). Read on dispatch.
+├── agents/                    # 18 agent briefs (00 PM plus 17 specialists). Read on dispatch.
 ├── design-mockups/            # 5 visual direction mockups built during brainstorming (kept for design archaeology).
 │                              # The chosen direction is Twilight; canonical design lives at docs/design/canonical.html.
 ├── docs/                      # All project docs. Created by agents during phases.
@@ -283,17 +286,17 @@ This is the canonical list of which skills are used where. Each agent file resta
 | `superpowers:writing-plans` | Project Manager | Produce per phase implementation plans. |
 | `superpowers:dispatching-parallel-agents` | Project Manager | When two or more independent subagents can run in parallel. |
 | `superpowers:executing-plans` | Engine Developer, Frontend Developer | Execute the PM's plan in the current session. |
-| `superpowers:test-driven-development` | Engine Dev, Frontend Dev, Market Microstructure Engineer, QA, Quant Validator | Test first development. |
-| `superpowers:verification-before-completion` | All agents at sign off | Confirm work is actually done before claiming so. |
+| `superpowers:test-driven-development` | Engine Dev, Frontend Dev, Market Microstructure Engineer, Reference Implementation Engineer, QA, Quant Validator | Test first development. |
+| `superpowers:verification-before-completion` | All agents at sign off (especially Citation and Fact Auditor) | Confirm work is actually done before claiming so. |
 | `superpowers:requesting-code-review` | Engine Dev, Frontend Dev, others | At PR time. |
 | `superpowers:finishing-a-development-branch` | Project Manager, DevOps Engineer | At phase close. |
-| `superpowers:systematic-debugging` | Any agent debugging a failure | Before proposing a fix. |
+| `superpowers:systematic-debugging` | Any agent debugging a failure (especially Concurrency Reviewer chasing a TSAN report) | Before proposing a fix. |
 | `frontend-design` | Frontend Developer, UI/UX Designer | Visual layer of every component. |
 | `vercel-react-best-practices` | Frontend Developer | Performance and idiomatic React. |
 | `vercel-composition-patterns` | Frontend Developer | When components grow large. |
 | `web-design-guidelines` | UI/UX Designer, Accessibility Specialist | Audit pass on the UI. |
 | `security-review` | Security Engineer | Formal security review at phase boundaries. |
-| `code-review:code-review` | Code Reviewer | Every PR. |
+| `code-review:code-review` | Code Reviewer, Concurrency Reviewer | Every PR (Code Reviewer for general quality; Concurrency Reviewer for threads, atomics, seqlock). |
 | `simplify` | Code Reviewer | When the diff has obvious simplification opportunities. |
 
 ## When you get stuck

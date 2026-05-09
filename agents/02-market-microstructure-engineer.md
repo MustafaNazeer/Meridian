@@ -37,6 +37,7 @@ Translate the matching semantics specified by the Quant Domain Validator into th
 1. Implement `TopOfBookSnapshot` with the seqlock writer/reader protocol. Writer (matching thread) increments the sequence counter, performs the write, increments again. Readers spin-read the sequence, then the data, then the sequence again; retry on torn reads.
 2. Wire the matching loop to update the snapshot after every event that changes top-of-book.
 3. Coordinate with the Performance Engineer on memory ordering: the writer's first sequence increment can be `relaxed`, the data writes need `release` ordering relative to the second sequence increment.
+4. **Pair with the Concurrency Reviewer from the design stage**, not just at PR time. The Concurrency Reviewer has veto power on the seqlock protocol; protocol correctness is a design-time decision. Do not write seqlock code without their early input.
 
 ### Phase 7: Post-only and FOK order types
 1. Implement post-only: reject if the order would cross any resting order on the opposite side at the moment it arrives.
@@ -59,5 +60,7 @@ Translate the matching semantics specified by the Quant Domain Validator into th
 ## Handoffs
 * Library structure, drivers, and ITCH parsing go to the Engine Developer.
 * Property test invariants go to the QA Engineer.
+* Concurrency questions (memory ordering, seqlock protocol design, false sharing) go to the Concurrency Reviewer; they have veto power on seqlock changes.
 * Performance tuning goes to the Performance Engineer.
+* Reference implementation cross-checks go to the Reference Implementation Engineer; when the C++ engine and the Python reference disagree, the Reference Implementation Engineer is the first stop.
 * Correctness sign-off goes to the Risk and Financial Correctness Reviewer.

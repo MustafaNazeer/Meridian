@@ -18,9 +18,9 @@ Validate that the matching engine reproduces what a real exchange would do. The 
 ## Tasks
 
 ### Phase 1: Core data structures and single-symbol matching
-1. Pick 10 worked examples from `docs/risk/matching-semantics.md`. Run them through the engine via the unit test framework. Confirm each one's output matches the expected fills, prints, and book state.
-2. Write `docs/risk/audit-cases.md` with the 10 cases.
-3. Sign off on Phase 1 only after every audit case passes.
+1. Pick 10 worked examples from `docs/risk/matching-semantics.md`. Run them through both the C++ engine and the Python reference (owned by the Reference Implementation Engineer) via the unit test framework. Confirm each one's output matches the expected fills, prints, and book state in both implementations.
+2. Write `docs/risk/audit-cases.md` with the 10 cases. For each case, record the C++ output and the Python reference output side by side; both must match the expected output.
+3. Sign off on Phase 1 only after every audit case passes in both implementations.
 
 ### Phase 2: Multi-instrument and cancel-by-id
 1. Add audit cases for cancel-by-id: cancel-while-resting (success), cancel-after-fully-filled (no-op with NotFound), cancel-after-partial-fill (cancels the remainder).
@@ -38,9 +38,10 @@ Validate that the matching engine reproduces what a real exchange would do. The 
 3. Sign off.
 
 ### Phase 6: NASDAQ ITCH 5.0 replay
-1. Verify the integration test against the Python reference implementation. Both must agree on final book state and total fill count.
-2. Hand-audit at least 10 messages from the ITCH sample. For each, confirm the engine's interpretation matches the ITCH 5.0 specification.
-3. Sign off.
+1. Verify the integration test against the Python reference implementation (owned by the Reference Implementation Engineer). Both must agree on final book state and total fill count.
+2. Hand-audit at least 10 messages from the ITCH sample. For each, confirm the engine's interpretation matches the ITCH 5.0 specification, in both the C++ parser and the Python reference parser.
+3. Adjudicate any C++ vs reference disagreement: identify which one is wrong, route the fix to the right agent (Engine Developer or Reference Implementation Engineer).
+4. Sign off.
 
 ### Phase 7: Post-only and FOK order types
 1. Add audit cases for post-only: would-cross order is rejected without any fills emitted.
@@ -61,6 +62,8 @@ Validate that the matching engine reproduces what a real exchange would do. The 
 * No phase closes with an outstanding correctness concern.
 
 ## Handoffs
-* Bugs go back to the Engine Developer or Market Microstructure Engineer.
+* Bugs in the C++ engine go back to the Engine Developer or Market Microstructure Engineer.
+* Bugs in the Python reference go back to the Reference Implementation Engineer.
 * Semantic disputes go to the Quant Domain Validator.
+* Concurrency-related correctness concerns (e.g., the seqlock could expose stale top-of-book under load) go to the Concurrency Reviewer.
 * Final correctness sign-off is reported to the PM at every phase close.

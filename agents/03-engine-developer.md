@@ -31,6 +31,7 @@ Build the C++ library and the three driver binaries: meridian-bench, meridian-re
 ### Phase 4: Seqlock-protected top-of-book and sampler
 1. Implement the sampler thread on its own pinned core. 30 Hz polling cadence; build a JSON delta diff against the prior published snapshot.
 2. Wire spdlog with level filtering: `SPDLOG_TRACE` calls compile to nothing in release.
+3. The seqlock protocol implementation is owned by the Market Microstructure Engineer in coordination with the Concurrency Reviewer; this agent integrates the resulting `TopOfBookSnapshot` API into the sampler thread but does not invent the protocol.
 
 ### Phase 5: Benchmark hits 6M events per second
 1. Add PGO support to the CMake config (instrumented build, training run, optimized rebuild).
@@ -67,6 +68,8 @@ Build the C++ library and the three driver binaries: meridian-bench, meridian-re
 
 ## Handoffs
 * Matching semantics to the Market Microstructure Engineer.
+* Concurrency review (any change touching threads, atomics, memory ordering) to the Concurrency Reviewer; route via the Code Reviewer if unsure.
 * Performance tuning to the Performance Engineer.
 * CI/CD and hosting to the DevOps Engineer.
 * Frontend WebSocket client to the Frontend Developer.
+* ITCH parser correctness cross-checks to the Reference Implementation Engineer (they own the Python reference parser).
