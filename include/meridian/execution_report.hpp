@@ -17,6 +17,7 @@ enum class RejectReason : std::uint8_t {
     NotFound = 2,
     InsufficientLiquidity = 3,
     WouldCross = 4,
+    UnknownSymbol = 5,
 };
 
 // Per docs/risk/matching-semantics.md (Quant Domain Validator, 2026-05-09):

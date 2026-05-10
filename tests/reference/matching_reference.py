@@ -1,11 +1,11 @@
-"""Python reference matching engine for Meridian (single symbol, Phase 1).
+"""Python reference matching engine for Meridian (multi-symbol, Phase 2).
 
 This module is the canonical answer for "what should the C++ engine have
-produced?" for any input event sequence in the Phase 1 scope. It is owned
-by the Reference Implementation Engineer (agent 18). It is intentionally
-slow and obviously correct: pure stdlib, integer math, dict and list data
-structures. The C++ engine is diffed against this reference byte for byte
-on every Phase 1 integration test.
+produced?" for any input event sequence in the Phase 1 and Phase 2 scope.
+It is owned by the Reference Implementation Engineer (agent 18). It is
+intentionally slow and obviously correct: pure stdlib, integer math, dict
+and list data structures. The C++ engine is diffed against this reference
+byte for byte on every Phase 1 and Phase 2 integration test.
 
 Spec sources:
 
@@ -14,6 +14,8 @@ Spec sources:
   (matching invariants).
 * docs/superpowers/plans/2026-05-09-phase-1-single-symbol-matching.md
   "Key decisions captured for Phase 1" (type widths, naming).
+* docs/superpowers/plans/2026-05-09-phase-2-multi-instrument-and-cancel.md
+  (Phase 2 multi-symbol dispatch and cross-symbol cancel-by-id).
 
 Design constraints (see agents/18-reference-implementation-engineer.md):
 
@@ -30,7 +32,21 @@ Phase 1 scope:
   declared in the enum but raise ``NotImplementedError`` on submission;
   they land in Phase 7.
 * Cancel-by-id with ``Reject`` ``NotFound`` for unknown ids.
-* Single symbol per ``MatchingReference`` instance.
+* Single symbol per ``MatchingReference`` instance (legacy form,
+  ``MatchingReference(symbol=1)``).
+
+Phase 2 scope additions:
+
+* Multi-symbol dispatch. ``MatchingReference(symbols=[1, 2, 3, 4, 5])``
+  registers a fixed set of symbols at construction; ``submit_*`` accept
+  an optional ``symbol`` keyword to select which book receives the order.
+* Cross-symbol cancel-by-id. ``cancel(order_id)`` and ``cancel_at(order_id, ts)``
+  consult a top-level id-to-symbol map and dispatch to the correct
+  per-symbol book. A cancel for an order on symbol X never affects book Y.
+* Unknown-symbol reject. A ``NewOrder`` for a symbol that is not in the
+  registered set emits a single ``Reject`` with reason ``UNKNOWN_SYMBOL``
+  (no preceding ``Acknowledge``), matching the pattern used for
+  ``EMPTY_BOOK`` rejects on market-against-empty.
 """
 
 from __future__ import annotations
@@ -39,7 +55,7 @@ import dataclasses
 from collections import OrderedDict
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Optional
+from typing import Iterable, Optional
 
 
 # ---------------------------------------------------------------------------
@@ -90,14 +106,27 @@ class RejectReason(Enum):
     """Reject reason. See matching-semantics.md section 1.
 
     Phase 1 uses ``EMPTY_BOOK`` (market against empty side) and
-    ``NOT_FOUND`` (cancel of unknown id). The remaining values are
-    declared for parity with the C++ enum and are reserved for
+    ``NOT_FOUND`` (cancel of unknown id). Phase 2 adds
+    ``UNKNOWN_SYMBOL`` (NewOrder against an unregistered symbol;
+    Phase 2 plan Task 1 and key decision 3). The remaining values
+    are declared for parity with the C++ enum and are reserved for
     Phase 7 and later.
 
     ``NONE`` is the default value when the report is not a reject;
     it serializes as ``"none"`` and is always present on every
     report so the JSON shape is uniform across kinds (companion
     plan Task 14 step 2).
+
+    Wire-format mapping (must match C++ ``RejectReason``):
+
+    * ``NONE`` -> ``"none"``
+    * ``EMPTY_BOOK`` -> ``"empty_book"`` (C++ ``RejectReason::EmptyBook = 1``)
+    * ``NOT_FOUND`` -> ``"not_found"`` (C++ ``RejectReason::NotFound = 2``)
+    * ``INSUFFICIENT_LIQUIDITY`` -> ``"insufficient_liquidity"``
+      (reserved, C++ id 3)
+    * ``WOULD_CROSS`` -> ``"would_cross"`` (reserved, C++ id 4)
+    * ``UNKNOWN_SYMBOL`` -> ``"unknown_symbol"``
+      (C++ ``RejectReason::UnknownSymbol = 5``; Phase 2 plan Task 1)
     """
 
     NONE = "none"
@@ -105,6 +134,7 @@ class RejectReason(Enum):
     NOT_FOUND = "not_found"
     INSUFFICIENT_LIQUIDITY = "insufficient_liquidity"
     WOULD_CROSS = "would_cross"
+    UNKNOWN_SYMBOL = "unknown_symbol"
 
 
 # ---------------------------------------------------------------------------
@@ -179,7 +209,7 @@ class ExecutionReport:
 
 
 # ---------------------------------------------------------------------------
-# Resting orders, levels, and the book
+# Resting orders, levels, and the per-symbol book
 # ---------------------------------------------------------------------------
 
 
@@ -228,29 +258,18 @@ class _Level:
         return not self.orders
 
 
-# ---------------------------------------------------------------------------
-# Matching engine
-# ---------------------------------------------------------------------------
-
-
-class MatchingReference:
+class _SingleSymbolBook:
     """Single-symbol price-time-priority matching engine.
 
-    Public API (companion plan Task 3, Step 2):
+    This is the per-symbol matching primitive. The public
+    ``MatchingReference`` class owns one of these per registered symbol
+    and routes new-order and cancel events to the correct book. The
+    Phase 1 worked examples in matching-semantics.md operate at this
+    layer (one book, one symbol).
 
-    * ``submit_limit(order_id, side, price, qty, ts) -> list[ExecutionReport]``
-    * ``submit_market(order_id, side, qty, ts) -> list[ExecutionReport]``
-    * ``submit_ioc(order_id, side, price, qty, ts) -> list[ExecutionReport]``
-    * ``cancel(order_id) -> list[ExecutionReport]``
-    * ``top_of_book() -> tuple[best_bid_px, best_bid_qty, best_ask_px, best_ask_qty]``
+    Internal state mirrors the C++ ``Book`` (companion plan Task 4):
 
-    The ``symbol`` argument is stored for parity with the C++ ``Book``
-    constructor but is not used in Phase 1; multi-symbol dispatch
-    lands in Phase 2 via a ``BookRegistry`` analog.
-
-    Internal state:
-
-    * ``_bids``: ``dict[Price, _Level]``. Sorted on demand by walking
+    * ``_bids``: ``dict[Price, _Level]``, sorted on demand by walking
       the keys with ``sorted(..., reverse=True)`` for "best bid first"
       (highest price). The companion plan locks the C++ side to
       ``std::map<Price, Level*>`` for O(log n) ordered traversal; the
@@ -260,7 +279,11 @@ class MatchingReference:
       "best ask first" (lowest price).
     * ``_orders``: ``dict[OrderId, _RestingOrder]``. The per-symbol
       lookup map for cancel-by-id (companion plan key decision 4 and
-      matching-semantics.md section 6).
+      matching-semantics.md section 6). In Phase 2 there is also a
+      cross-symbol id-to-symbol map at the ``MatchingReference`` level;
+      the per-symbol map remains because the matching loop already
+      uses it for fully-filled-maker cleanup (Phase 2 plan key
+      decision 4 documents the dual-index choice).
     """
 
     def __init__(self, symbol: int):
@@ -269,23 +292,25 @@ class MatchingReference:
         self._asks: dict[int, _Level] = {}
         self._orders: dict[int, _RestingOrder] = {}
 
-    # -- public submission API -------------------------------------------------
+    # -- submission API (called from ``MatchingReference``) -------------------
 
     def submit_limit(
         self, order_id: int, side: Side, price: int, qty: int, ts: int
-    ) -> list[ExecutionReport]:
-        """Submit a ``LIMIT`` order.
+    ) -> tuple[list[ExecutionReport], list[int]]:
+        """Submit a ``LIMIT`` order to this book.
 
-        See matching-semantics.md section 3. Always emits an
-        ``Acknowledge`` first (section 2.3 step 6), walks the
-        opposite side while the next maker price satisfies the
-        aggressor's limit, and rests any residual at the limit
-        price on the aggressor's own side.
+        Returns ``(reports, fully_filled_maker_ids)``. The second tuple
+        element is the list of maker order ids that were fully consumed
+        during this match and must be removed from the cross-symbol
+        id-to-symbol map by the caller. The third tuple element implicit
+        in this contract is "did the taker rest?", surfaced by checking
+        whether ``order_id`` is in ``self._orders`` after the call.
+
+        See matching-semantics.md section 3.
         """
 
-        self._require_valid_qty(qty)
-        reports: list[ExecutionReport] = []
-        reports.append(
+        _require_valid_qty(qty)
+        reports: list[ExecutionReport] = [
             ExecutionReport(
                 kind=ReportKind.ACK,
                 order_id=order_id,
@@ -294,27 +319,26 @@ class MatchingReference:
                 qty=qty,
                 ts=ts,
             )
+        ]
+        fully_filled: list[int] = []
+        remaining = self._match(
+            reports, fully_filled, order_id, side, price, qty, ts, OrderType.LIMIT
         )
-        remaining = self._match(reports, order_id, side, price, qty, ts, OrderType.LIMIT)
         if remaining > 0:
             self._rest(order_id, side, price, remaining, qty, ts)
-        return reports
+        return reports, fully_filled
 
     def submit_market(
         self, order_id: int, side: Side, qty: int, ts: int
-    ) -> list[ExecutionReport]:
-        """Submit a ``MARKET`` order.
+    ) -> tuple[list[ExecutionReport], list[int]]:
+        """Submit a ``MARKET`` order to this book.
 
         See matching-semantics.md section 4. If the opposite side is
-        empty on arrival, emit a single ``Reject`` with reason
-        ``EMPTY_BOOK`` and no preceding ``Acknowledge`` (section 4.1
-        convention choice). Otherwise emit an ``Acknowledge`` first,
-        then walk the opposite side with no price limit. Any residual
-        after the opposite side empties is implicitly cancelled (no
-        report).
+        empty on arrival, emit a single ``Reject EMPTY_BOOK`` and no
+        preceding ``Acknowledge``.
         """
 
-        self._require_valid_qty(qty)
+        _require_valid_qty(qty)
         if self._opposite_side_empty(side):
             return [
                 ExecutionReport(
@@ -326,9 +350,8 @@ class MatchingReference:
                     ts=ts,
                     reject_reason=RejectReason.EMPTY_BOOK,
                 )
-            ]
-        reports: list[ExecutionReport] = []
-        reports.append(
+            ], []
+        reports: list[ExecutionReport] = [
             ExecutionReport(
                 kind=ReportKind.ACK,
                 order_id=order_id,
@@ -337,30 +360,27 @@ class MatchingReference:
                 qty=qty,
                 ts=ts,
             )
-        )
+        ]
+        fully_filled: list[int] = []
         # Market orders have no price limit; pass ``None`` to ``_match``
         # to signal "fill at any price on the opposite side".
-        self._match(reports, order_id, side, None, qty, ts, OrderType.MARKET)
+        self._match(
+            reports, fully_filled, order_id, side, None, qty, ts, OrderType.MARKET
+        )
         # Residual is implicitly cancelled (matching-semantics.md
         # section 4 step 4); no further report.
-        return reports
+        return reports, fully_filled
 
     def submit_ioc(
         self, order_id: int, side: Side, price: int, qty: int, ts: int
-    ) -> list[ExecutionReport]:
-        """Submit an ``IOC`` (immediate-or-cancel) order.
+    ) -> tuple[list[ExecutionReport], list[int]]:
+        """Submit an ``IOC`` (immediate-or-cancel) order to this book.
 
-        See matching-semantics.md section 5. Always emits an
-        ``Acknowledge`` first (section 5 step 1, IOC-3 worked
-        example), walks the opposite side while the next maker price
-        satisfies the limit, and implicitly cancels any residual
-        without a ``Cancel`` report (section 5 step 4, "IOC never
-        rests").
+        See matching-semantics.md section 5.
         """
 
-        self._require_valid_qty(qty)
-        reports: list[ExecutionReport] = []
-        reports.append(
+        _require_valid_qty(qty)
+        reports: list[ExecutionReport] = [
             ExecutionReport(
                 kind=ReportKind.ACK,
                 order_id=order_id,
@@ -369,48 +389,27 @@ class MatchingReference:
                 qty=qty,
                 ts=ts,
             )
+        ]
+        fully_filled: list[int] = []
+        self._match(
+            reports, fully_filled, order_id, side, price, qty, ts, OrderType.IOC
         )
-        self._match(reports, order_id, side, price, qty, ts, OrderType.IOC)
         # Residual implicitly cancelled; no further report.
-        return reports
+        return reports, fully_filled
 
-    def cancel(self, order_id: int) -> list[ExecutionReport]:
-        """Cancel a resting order by id.
+    def cancel_at(
+        self, order_id: int, ts: int
+    ) -> list[ExecutionReport]:
+        """Cancel a resting order on this book by id.
 
-        See matching-semantics.md section 6. If the id is in the
-        per-symbol lookup map, unlink the order, possibly remove the
-        now-empty level, and emit a ``Cancel`` report carrying the
-        remaining quantity (CXL-1, CXL-2, CXL-3). If not, emit a
-        ``Reject`` with reason ``NOT_FOUND`` and sentinel side
-        ``BUY`` and price ``0`` (CXL-4, CXL-5, CXL-6, plus the
-        convention choice flagged in matching-semantics.md section
-        8.2).
+        Caller is responsible for confirming via the cross-symbol
+        id-to-symbol map that this book actually owns ``order_id``
+        before calling. If the id is not in this book's per-symbol
+        ``_orders`` map (which should never happen when the caller
+        routes correctly), the method emits the same
+        ``Reject NOT_FOUND`` shape as the public API for safety.
 
-        The cancel event in the JSON Lines wire format does not
-        carry a timestamp on its event (companion plan Task 14
-        step 1: ``elif event["kind"] == "cancel": reports =
-        engine.cancel(event["order_id"])``). The reference therefore
-        propagates the cancelled order's resting ``ts_arrival`` to
-        the report's ``ts``, and uses ``0`` for the unknown-id case.
-        The matching-semantics worked examples write a ``ts`` on
-        the cancel event (e.g., ``ts=21`` in CXL-1) and on the
-        emitted ``Cancel`` report. The unit-test harness in
-        ``test_reference.py`` calls a wrapper that sets the ``ts``
-        explicitly so the worked examples reproduce verbatim; see
-        ``cancel_at`` below.
-        """
-
-        return self.cancel_at(order_id, 0)
-
-    def cancel_at(self, order_id: int, ts: int) -> list[ExecutionReport]:
-        """Cancel a resting order by id, with an explicit cancel timestamp.
-
-        This is the variant matching the worked examples in
-        matching-semantics.md, which carry a ``ts`` on every
-        ``Cancel { order_id, ts }`` event. The ``cancel`` method
-        above forwards to this with ``ts=0`` so the JSON Lines
-        wire format (which does not carry a per-cancel timestamp
-        in the Phase 1 scope) still works.
+        See matching-semantics.md section 6.
         """
 
         order = self._orders.get(order_id)
@@ -426,7 +425,6 @@ class MatchingReference:
                     reject_reason=RejectReason.NOT_FOUND,
                 )
             ]
-        # Unlink from the level and remove the level if it is now empty.
         side_map = self._bids if order.side == Side.BUY else self._asks
         level = side_map[order.price]
         del level.orders[order_id]
@@ -444,7 +442,7 @@ class MatchingReference:
             )
         ]
 
-    # -- public introspection --------------------------------------------------
+    # -- introspection --------------------------------------------------------
 
     def top_of_book(self) -> tuple[Optional[int], int, Optional[int], int]:
         """Return ``(best_bid_px, best_bid_qty, best_ask_px, best_ask_qty)``.
@@ -466,11 +464,12 @@ class MatchingReference:
             best_ask_qty = self._asks[best_ask_px].total_qty()
         return best_bid_px, best_bid_qty, best_ask_px, best_ask_qty
 
-    # -- internal matching loop ------------------------------------------------
+    # -- internal matching loop -----------------------------------------------
 
     def _match(
         self,
         reports: list[ExecutionReport],
+        fully_filled: list[int],
         taker_id: int,
         taker_side: Side,
         taker_limit: Optional[int],
@@ -480,10 +479,10 @@ class MatchingReference:
     ) -> int:
         """Walk the opposite side, filling against makers in price-time order.
 
-        Returns the taker's remaining quantity after the walk. The
-        caller decides what to do with the residual (rest it, cancel
-        it implicitly, or reject it). See matching-semantics.md
-        section 2.3 for the rule list.
+        Returns the taker's remaining quantity after the walk. Appends
+        each fully-filled maker's id to ``fully_filled`` so the caller
+        can remove it from the cross-symbol id-to-symbol map. See
+        matching-semantics.md section 2.3 for the rule list.
         """
 
         opposite = self._asks if taker_side == Side.BUY else self._bids
@@ -493,12 +492,9 @@ class MatchingReference:
             best_price = (
                 min(opposite.keys()) if taker_side == Side.BUY else max(opposite.keys())
             )
-            if not self._price_satisfies_limit(taker_side, taker_limit, best_price):
+            if not _price_satisfies_limit(taker_side, taker_limit, best_price):
                 break
             level = opposite[best_price]
-            # Walk the FIFO queue at this level. Use list(...) to
-            # snapshot the ids so we can mutate the OrderedDict
-            # during iteration when a maker is fully filled.
             for maker_id in list(level.orders.keys()):
                 if remaining == 0:
                     break
@@ -532,38 +528,18 @@ class MatchingReference:
                 maker.qty_remaining -= trade_qty
                 remaining -= trade_qty
                 if maker.qty_remaining == 0:
-                    # Fully filled maker: unlink from level and from
-                    # the per-symbol lookup map.
                     del level.orders[maker_id]
                     del self._orders[maker_id]
+                    fully_filled.append(maker_id)
             if level.is_empty():
                 del opposite[best_price]
 
         # ``taker_type`` is currently used only for documentation
         # clarity; the limit-vs-market distinction is encoded in
-        # ``taker_limit`` (None for market). The argument is kept in
-        # the signature so future extensions (Phase 7 PostOnly, FOK)
-        # can branch on it without changing callers.
+        # ``taker_limit`` (None for market). Phase 7 will branch on it
+        # for PostOnly and FOK without changing callers.
         del taker_type
         return remaining
-
-    @staticmethod
-    def _price_satisfies_limit(
-        taker_side: Side, taker_limit: Optional[int], maker_price: int
-    ) -> bool:
-        """Return True if the taker is willing to trade at ``maker_price``.
-
-        Market orders (``taker_limit is None``) trade at any price.
-        A buy at limit ``L`` trades at any ask price ``<= L``. A sell
-        at limit ``L`` trades at any bid price ``>= L``. See
-        matching-semantics.md section 2.3 step 2.
-        """
-
-        if taker_limit is None:
-            return True
-        if taker_side == Side.BUY:
-            return maker_price <= taker_limit
-        return maker_price >= taker_limit
 
     def _opposite_side_empty(self, taker_side: Side) -> bool:
         opposite = self._asks if taker_side == Side.BUY else self._bids
@@ -580,8 +556,7 @@ class MatchingReference:
     ) -> None:
         """Insert the residual at the tail of the FIFO queue at its
         limit price on its own side. See matching-semantics.md section
-        3 step 2.
-        """
+        3 step 2."""
 
         side_map = self._bids if side == Side.BUY else self._asks
         level = side_map.get(price)
@@ -599,16 +574,346 @@ class MatchingReference:
         level.orders[order_id] = order
         self._orders[order_id] = order
 
-    @staticmethod
-    def _require_valid_qty(qty: int) -> None:
-        """Reject zero or negative quantities. Phase 1 worked examples
-        all use positive quantities; the engine treats ``qty <= 0`` as
-        a programming error rather than a runtime reject. The C++
-        engine guards on submission boundary; the reference matches.
+
+# ---------------------------------------------------------------------------
+# Module-level helpers (shared by the per-symbol book and the dispatcher).
+# ---------------------------------------------------------------------------
+
+
+def _price_satisfies_limit(
+    taker_side: Side, taker_limit: Optional[int], maker_price: int
+) -> bool:
+    """Return True if the taker is willing to trade at ``maker_price``.
+
+    Market orders (``taker_limit is None``) trade at any price. A buy
+    at limit ``L`` trades at any ask price ``<= L``. A sell at limit
+    ``L`` trades at any bid price ``>= L``. See matching-semantics.md
+    section 2.3 step 2.
+    """
+
+    if taker_limit is None:
+        return True
+    if taker_side == Side.BUY:
+        return maker_price <= taker_limit
+    return maker_price >= taker_limit
+
+
+def _require_valid_qty(qty: int) -> None:
+    """Reject zero or negative quantities. Phase 1 worked examples all
+    use positive quantities; the engine treats ``qty <= 0`` as a
+    programming error rather than a runtime reject. The C++ engine
+    guards on submission boundary; the reference matches.
+    """
+
+    if qty <= 0:
+        raise ValueError(f"qty must be positive, got {qty}")
+
+
+# ---------------------------------------------------------------------------
+# Multi-symbol matching reference (public API)
+# ---------------------------------------------------------------------------
+
+
+class MatchingReference:
+    """Multi-symbol price-time-priority matching engine.
+
+    Public API:
+
+    * Single-symbol mode (Phase 1, backward compatible)::
+
+          engine = MatchingReference(symbol=1)
+          engine.submit_limit(101, Side.BUY, 10000, 50, 1)
+          engine.cancel_at(101, ts=21)
+
+      The ``symbol`` keyword on ``submit_*`` defaults to the single
+      registered symbol when only one is configured, so every Phase 1
+      call site continues to work unchanged.
+
+    * Multi-symbol mode (Phase 2)::
+
+          engine = MatchingReference(symbols=[1, 2, 3, 4, 5])
+          engine.submit_limit(101, Side.BUY, 10000, 50, 1, symbol=1)
+          engine.submit_limit(201, Side.BUY, 20000, 30, 2, symbol=2)
+          engine.cancel_at(101, ts=21)  # cross-symbol; routes via id map
+
+      ``cancel`` and ``cancel_at`` route to the correct per-symbol book
+      via an internal id-to-symbol map. A cancel for an order that was
+      placed on symbol X never affects symbol Y (Phase 2 plan key
+      decision 4: dual-index design).
+
+    * Unknown-symbol reject::
+
+          engine.submit_limit(999, Side.BUY, 10000, 50, 1, symbol=99)
+          # -> [Reject UNKNOWN_SYMBOL]
+
+      A ``NewOrder`` whose ``symbol`` is not in the registered set
+      produces a single ``Reject UNKNOWN_SYMBOL`` with no preceding
+      ``Acknowledge`` (Phase 2 plan Task 1; mirrors the EMPTY_BOOK
+      shape from matching-semantics.md section 4).
+
+    Constructor forms:
+
+    * ``MatchingReference(symbol=1)``: legacy single-symbol form.
+      Registers exactly the one symbol given.
+    * ``MatchingReference(symbols=[1, 2, 3])``: multi-symbol form.
+      Registers each symbol in the iterable. Order of the iterable
+      does not matter; books are keyed by symbol id.
+    * ``MatchingReference()``: empty registry. Every ``submit_*``
+      will produce ``Reject UNKNOWN_SYMBOL``. Useful only for tests
+      of the unknown-symbol path.
+
+    Internal state:
+
+    * ``_books``: ``dict[Symbol, _SingleSymbolBook]``. One per
+      registered symbol; created at construction.
+    * ``_id_to_symbol``: ``dict[OrderId, Symbol]``. The cross-symbol
+      lookup that the cancel path consults to find which book owns
+      a given order id. Updated on every successful rest (insert),
+      every fully-filled-maker cleanup (remove), and every cancel
+      (remove). The C++ side calls this ``OrderIndex`` (Phase 2 plan
+      Task 3); the reference uses a single dict for obvious
+      correctness.
+    """
+
+    def __init__(
+        self,
+        *,
+        symbol: Optional[int] = None,
+        symbols: Optional[Iterable[int]] = None,
+    ):
+        if symbol is not None and symbols is not None:
+            raise ValueError("pass either ``symbol=`` or ``symbols=``, not both")
+        if symbol is not None:
+            registered = [int(symbol)]
+        elif symbols is not None:
+            registered = [int(s) for s in symbols]
+        else:
+            registered = []
+        # Preserve the publicly documented attribute ``symbol`` for
+        # single-symbol callers that read it. In multi-symbol mode it
+        # is ``None``; callers should use ``symbols`` instead.
+        if len(registered) == 1:
+            self.symbol: Optional[int] = registered[0]
+        else:
+            self.symbol = None
+        self.symbols: tuple[int, ...] = tuple(registered)
+        self._books: dict[int, _SingleSymbolBook] = {
+            s: _SingleSymbolBook(symbol=s) for s in registered
+        }
+        self._id_to_symbol: dict[int, int] = {}
+
+    # -- submission API -------------------------------------------------------
+
+    def submit_limit(
+        self,
+        order_id: int,
+        side: Side,
+        price: int,
+        qty: int,
+        ts: int,
+        *,
+        symbol: Optional[int] = None,
+    ) -> list[ExecutionReport]:
+        """Submit a ``LIMIT`` order. See matching-semantics.md section 3."""
+
+        return self._dispatch_new_order(
+            "limit", order_id, side, price, qty, ts, symbol
+        )
+
+    def submit_market(
+        self,
+        order_id: int,
+        side: Side,
+        qty: int,
+        ts: int,
+        *,
+        symbol: Optional[int] = None,
+    ) -> list[ExecutionReport]:
+        """Submit a ``MARKET`` order. See matching-semantics.md section 4.
+
+        ``price`` is implicitly ``0`` (no limit). The unknown-symbol
+        reject path emits ``price=0`` in the ``Reject``, matching the
+        ``Acknowledge`` price for market orders.
         """
 
-        if qty <= 0:
-            raise ValueError(f"qty must be positive, got {qty}")
+        return self._dispatch_new_order(
+            "market", order_id, side, 0, qty, ts, symbol
+        )
+
+    def submit_ioc(
+        self,
+        order_id: int,
+        side: Side,
+        price: int,
+        qty: int,
+        ts: int,
+        *,
+        symbol: Optional[int] = None,
+    ) -> list[ExecutionReport]:
+        """Submit an ``IOC`` order. See matching-semantics.md section 5."""
+
+        return self._dispatch_new_order(
+            "ioc", order_id, side, price, qty, ts, symbol
+        )
+
+    def cancel(self, order_id: int) -> list[ExecutionReport]:
+        """Cancel a resting order by id. See matching-semantics.md section 6.
+
+        Cross-symbol: looks up which book owns ``order_id`` via the
+        internal id-to-symbol map; dispatches to that book's cancel.
+        Unknown ids produce ``Reject NOT_FOUND``. Equivalent to
+        ``cancel_at(order_id, ts=0)``; preserved for backward
+        compatibility with the Phase 1 wire-format driver.
+        """
+
+        return self.cancel_at(order_id, 0)
+
+    def cancel_at(self, order_id: int, ts: int) -> list[ExecutionReport]:
+        """Cancel a resting order by id, with an explicit cancel timestamp.
+
+        Cross-symbol routing: consults ``_id_to_symbol`` to find which
+        book owns ``order_id``, then forwards to that book's
+        ``cancel_at``. If the id is unknown across all books, emits a
+        single ``Reject NOT_FOUND`` with sentinel side ``BUY`` and price
+        ``0`` (matching-semantics.md section 8.2).
+        """
+
+        sym = self._id_to_symbol.get(order_id)
+        if sym is None:
+            return [
+                ExecutionReport(
+                    kind=ReportKind.REJECT,
+                    order_id=order_id,
+                    side=Side.BUY,
+                    price=0,
+                    qty=0,
+                    ts=ts,
+                    reject_reason=RejectReason.NOT_FOUND,
+                )
+            ]
+        reports = self._books[sym].cancel_at(order_id, ts)
+        # On a successful cancel the per-symbol book has already removed
+        # the id from its own ``_orders`` map. Mirror the removal in the
+        # cross-symbol map.
+        if reports and reports[0].kind == ReportKind.CANCEL:
+            del self._id_to_symbol[order_id]
+        return reports
+
+    # -- introspection --------------------------------------------------------
+
+    def top_of_book(
+        self, symbol: Optional[int] = None
+    ) -> tuple[Optional[int], int, Optional[int], int]:
+        """Return ``(best_bid_px, best_bid_qty, best_ask_px, best_ask_qty)``
+        for one symbol.
+
+        Single-symbol callers can omit ``symbol`` and the engine returns
+        the only registered book's top-of-book; this preserves Phase 1
+        call shapes. Multi-symbol callers must pass ``symbol``.
+        """
+
+        sym = self._resolve_symbol(symbol)
+        return self._books[sym].top_of_book()
+
+    def book(self, symbol: int) -> _SingleSymbolBook:
+        """Return the per-symbol book for ``symbol``. Raises
+        ``KeyError`` if ``symbol`` is not registered.
+
+        Reserved for tests that want to assert per-symbol book state
+        directly (e.g., "symbol 2's book is unchanged after symbol 1
+        cancels"). Not used on the wire-format diff path.
+        """
+
+        return self._books[symbol]
+
+    @property
+    def _orders(self) -> dict[int, _RestingOrder]:
+        """Backward-compatible flat view across all per-symbol books.
+
+        The Phase 1 conservation-law tests in test_reference.py read
+        ``engine._orders`` to assert that an aggressor (market/IOC)
+        does not rest. In multi-symbol mode this property aggregates
+        the per-symbol books' ``_orders`` maps so the existing tests
+        keep passing without modification.
+        """
+
+        merged: dict[int, _RestingOrder] = {}
+        for book in self._books.values():
+            merged.update(book._orders)
+        return merged
+
+    # -- internals ------------------------------------------------------------
+
+    def _resolve_symbol(self, symbol: Optional[int]) -> int:
+        """Resolve an optional ``symbol`` argument to a concrete id.
+
+        If a single symbol is registered, ``symbol=None`` is allowed
+        and resolves to that symbol (Phase 1 backward compatibility).
+        Otherwise ``symbol`` must be passed explicitly.
+        """
+
+        if symbol is None:
+            if len(self._books) == 1:
+                return next(iter(self._books))
+            raise ValueError(
+                "symbol= is required when the engine has multiple "
+                "registered symbols (or zero); pass symbol= explicitly"
+            )
+        return int(symbol)
+
+    def _dispatch_new_order(
+        self,
+        otype: str,
+        order_id: int,
+        side: Side,
+        price: int,
+        qty: int,
+        ts: int,
+        symbol: Optional[int],
+    ) -> list[ExecutionReport]:
+        """Route a NewOrder to the correct per-symbol book, or emit a
+        ``Reject UNKNOWN_SYMBOL`` if the symbol is not registered.
+
+        After successful dispatch, this method updates the cross-symbol
+        id-to-symbol map for any maker that was fully filled (removed
+        from a book's ``_orders``) and for the taker if it came to rest
+        (still present in the book's ``_orders`` after the call).
+        """
+
+        sym = self._resolve_symbol(symbol)
+        book = self._books.get(sym)
+        if book is None:
+            return [
+                ExecutionReport(
+                    kind=ReportKind.REJECT,
+                    order_id=order_id,
+                    side=side,
+                    price=price,
+                    qty=qty,
+                    ts=ts,
+                    reject_reason=RejectReason.UNKNOWN_SYMBOL,
+                )
+            ]
+
+        if otype == "limit":
+            reports, fully_filled = book.submit_limit(order_id, side, price, qty, ts)
+        elif otype == "market":
+            reports, fully_filled = book.submit_market(order_id, side, qty, ts)
+        elif otype == "ioc":
+            reports, fully_filled = book.submit_ioc(order_id, side, price, qty, ts)
+        else:
+            raise ValueError(f"unknown order type {otype!r}")
+
+        # Cross-symbol id-to-symbol map maintenance.
+        for maker_id in fully_filled:
+            self._id_to_symbol.pop(maker_id, None)
+        # If the taker rested on this book, register it in the
+        # cross-symbol map. Only LIMIT can rest in Phase 1/2; checking
+        # the book's per-symbol ``_orders`` map is the obvious-over-fast
+        # check that matches the actual outcome of the call.
+        if order_id in book._orders:
+            self._id_to_symbol[order_id] = sym
+        return reports
 
 
 # Re-export ``dataclasses.asdict`` for callers that want the built-in
