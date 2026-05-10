@@ -16,14 +16,14 @@ The names and widths below are the locked-in conventions used in every worked ex
 | Name | Type | Notes |
 |---|---|---|
 | `OrderId` | `uint64_t` | Engine-assigned unique identifier per submitted order. |
-| `Symbol` | `uint16_t` | Symbol id, single-symbol scope in Phase 1. Worked examples use `Symbol = 1`. |
+| `Symbol` | `uint16_t` | Symbol id. The single-symbol worked examples use `Symbol = 1`; the multi-symbol extension uses ids 1..5 (see the multi-instrument addendum). |
 | `Side` | `enum class : uint8_t { Buy, Sell }` | Aggressor side; resting orders carry the same side. |
-| `OrderType` | `enum class : uint8_t { Limit, Market, IOC, PostOnly, FOK }` | `PostOnly` and `FOK` declared but not implemented in Phase 1. |
+| `OrderType` | `enum class : uint8_t { Limit, Market, IOC, PostOnly, FOK }` | `PostOnly` and `FOK` are declared in the enum but not yet implemented; they land alongside the post-only / FOK milestone. |
 | `Price` | `int32_t` | Integer ticks. Signed to reserve negatives as sentinels. |
 | `Quantity` | `int32_t` | Integer share count. Signed but never negative in valid events. |
 | `Timestamp` | `int64_t` | Nanoseconds since epoch. Worked examples use small integers (`ts=1, 2, 3, ...`) for clarity; the engine treats these as opaque monotonically nondecreasing values. |
-| `ReportKind` | `enum class : uint8_t { Acknowledge, Fill, Reject, Cancel }` | The four execution-report kinds emitted in Phase 1. |
-| `RejectReason` | `enum class : uint8_t { EmptyBook, NotFound, ... }` | Phase 1 uses `EmptyBook` (market against empty side) and `NotFound` (cancel of unknown id). Other reasons (`WouldCross`, `InsufficientLiquidity`) are reserved for Phase 7 and later. |
+| `ReportKind` | `enum class : uint8_t { Acknowledge, Fill, Reject, Cancel }` | The four execution-report kinds emitted by the engine today. |
+| `RejectReason` | `enum class : uint8_t { EmptyBook, NotFound, ... }` | The single-symbol matching engine uses `EmptyBook` (market against empty side) and `NotFound` (cancel of unknown id); the multi-symbol extension adds `UnknownSymbol`. Other reasons (`WouldCross`, `InsufficientLiquidity`) are reserved for the post-only / FOK milestone. |
 | `ExecutionReport` | struct | Fields: `kind`, `order_id`, `side`, `price`, `qty`, `ts`, plus `reason` (only when `kind == Reject`). |
 | `EngineEvent` | tagged union | `NewOrder` (carries `OrderType`, `Side`, `Price`, `Quantity`, `OrderId`, `Timestamp`) and `Cancel` (carries `OrderId`, `Timestamp`). |
 
@@ -71,7 +71,7 @@ When a `Cancel` event arrives:
 2. If the order is found, unlink it from its level, remove it from the lookup map, possibly remove the now-empty level from the side, and emit a `Cancel` report carrying the cancelled order's remaining quantity.
 3. If the order is not found (either never existed, already fully filled, or already cancelled), emit a `Reject` report with `reason = NotFound`. See section 6 on cancel-by-id for the worked examples.
 
-This single rulebook handles every Phase 1 worked example below.
+This single rulebook handles every single-symbol worked example below.
 
 ---
 
@@ -281,7 +281,7 @@ Bids:                         Asks:
 
 A `Market` order has no price limit. On arrival:
 
-1. If the opposite side is empty, the engine emits a `Reject` report with `reason = EmptyBook` and the order is dropped. No `Acknowledge` is emitted. This is a deliberate convention choice for Phase 1; see section 4.1 for the rationale.
+1. If the opposite side is empty, the engine emits a `Reject` report with `reason = EmptyBook` and the order is dropped. No `Acknowledge` is emitted. This is a deliberate convention choice; see section 4.1 for the rationale.
 2. Otherwise, the order takes liquidity at any available price on the opposite side, walking from the most aggressive resting price as in section 2.3. The price limit is irrelevant; matching continues until either the aggressor's quantity is exhausted or the opposite side is empty.
 3. If the aggressor's quantity is exhausted, the order is fully filled.
 4. If the opposite side empties before the aggressor's quantity is exhausted, the residual is implicitly cancelled (no `Cancel` report). Market orders never rest.
@@ -453,7 +453,7 @@ An `IOC` (Immediate or Cancel) order is a limit order with the additional rule t
 3. Walking stops when the aggressor's quantity is exhausted, the next maker's price violates the limit, or the opposite side is empty.
 4. Any residual is implicitly cancelled (no `Cancel` report). IOC orders never rest.
 
-The "IOC never rests" rule is one of the Phase 1 invariants in section 7.
+The "IOC never rests" rule is one of the single-symbol invariants in section 7.
 
 ### 5.1 Worked example IOC-1: IOC fully filling against a single resting order
 

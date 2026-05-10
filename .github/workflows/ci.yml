@@ -112,5 +112,5 @@ jobs:
           if pnpm run --silent | grep -qE '^\s*test\s*$'; then
             pnpm test --run
           else
-            echo "No 'test' script defined in package.json yet; skipping. Vitest is wired in Phase 9."
+            echo "No 'test' script defined in package.json yet; skipping. Vitest is wired alongside the frontend implementation."
           fi

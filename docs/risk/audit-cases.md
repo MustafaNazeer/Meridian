@@ -109,7 +109,7 @@ Lines 1 through 3 are seed acks (the three resting asks). Lines 4 through 8 are 
 
 ### Status: PASS
 
-C++ and Python streams are byte-identical. Both match the worked example: the aggressor walks 10001 first (fully consumes 30 from order 201), then 10002 (fully consumes 40 from order 202), and stops because the next level (10003) violates its limit. The aggressor's residual of 30 shares would rest at 10002 per LIM-4's "Notes" block; the Phase 1 capture stream records only the report stream, not the post-event book state, but the two engines agree on every emitted report which (combined with the conservation law check) implies they agree on the residual as well.
+C++ and Python streams are byte-identical. Both match the worked example: the aggressor walks 10001 first (fully consumes 30 from order 201), then 10002 (fully consumes 40 from order 202), and stops because the next level (10003) violates its limit. The aggressor's residual of 30 shares would rest at 10002 per LIM-4's "Notes" block; the single-symbol audit capture records only the report stream, not the post-event book state, but the two engines agree on every emitted report which (combined with the conservation law check) implies they agree on the residual as well.
 
 ---
 
@@ -651,7 +651,7 @@ If the dual-index design had a coherence bug (the per-`Book` index erased on ful
 
 ### Status: PASS
 
-C++ and Python streams are byte-identical. Both implementations correctly handle the cancel-after-fully-filled case in the multi-symbol setting: the cross-symbol lookup misses (because the maker was erased from `OrderIndex` when it fully filled at ts=2), the engine emits Reject NotFound with the section 8.2 sentinels, and symbol 4's unrelated bid is unaffected. The follow-on IOC at ts=5 fully crosses order 401, confirming symbol 4's book was never touched. This case is the multi-symbol generalization of CXL-5 and is the regression test for the dual-index coherence invariant called out in ADR 0002 ("the two indexes must never disagree"). It is encoded in `tests/integration/test_multi_instrument.cpp::cancel_after_fully_filled_multi_symbol`, added in this Phase 2 review.
+C++ and Python streams are byte-identical. Both implementations correctly handle the cancel-after-fully-filled case in the multi-symbol setting: the cross-symbol lookup misses (because the maker was erased from `OrderIndex` when it fully filled at ts=2), the engine emits Reject NotFound with the section 8.2 sentinels, and symbol 4's unrelated bid is unaffected. The follow-on IOC at ts=5 fully crosses order 401, confirming symbol 4's book was never touched. This case is the multi-symbol generalization of CXL-5 and is the regression test for the dual-index coherence invariant called out in ADR 0002 ("the two indexes must never disagree"). It is encoded in `tests/integration/test_multi_instrument.cpp::cancel_after_fully_filled_multi_symbol`, added during the multi-instrument review.
 
 ---
 
@@ -862,7 +862,7 @@ C++ and Python streams are byte-identical. Both engines route the cancel of id=5
 
 ---
 
-## Phase 2 Summary table
+## Multi-instrument summary table
 
 | # | Case | Branch under audit | C++ vs expected | Python vs expected | C++ vs Python | Status |
 |---|------|--------------------|-----------------|--------------------|----------------|--------|

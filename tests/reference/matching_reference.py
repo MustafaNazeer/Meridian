@@ -897,7 +897,7 @@ class MatchingReference:
         for maker_id in fully_filled:
             self._id_to_symbol.pop(maker_id, None)
         # If the taker rested on this book, register it in the
-        # cross-symbol map. Only LIMIT can rest in Phase 1/2; checking
+        # cross-symbol map. Only LIMIT can rest under the current scope; checking
         # the book's per-symbol ``_orders`` map is the obvious-over-fast
         # check that matches the actual outcome of the call.
         if order_id in book._orders:

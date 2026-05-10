@@ -81,7 +81,7 @@ The WebSocket client (`frontend/src/ws/client.ts`) implements a four state conne
 
 ### 3.6 deploy topology
 
-* **Frontend**: built with `pnpm build`. v1 will deploy to Cloudflare Pages at `meridian-demo.pages.dev` (default subdomain; no custom domain for v1). The deploy on `main` push will run from `.github/workflows/deploy.yml` once Phase 10 wires it up.
+* **Frontend**: built with `pnpm build`. v1 will deploy to Cloudflare Pages at `meridian-demo.pages.dev` (default subdomain; no custom domain for v1). The deploy on `main` push will run from `.github/workflows/deploy.yml` once the deploy milestone wires it up.
 * **Engine**: packaged into a multi stage Dockerfile (builder stage with the C++ toolchain, runtime stage with Debian slim and the `meridian-server` binary plus the sample ITCH tape, non root user). Deployed to a Fly.io machine described by `fly.toml` with `auto_stop_machines = true`, `auto_start_machines = true`, `min_machines_running = 0`, healthcheck against `/healthz`. Region default `iad` (Ashburn, Virginia). The Fly app name is picked at deploy time (likely `meridian` or `meridian-engine`); the resulting WebSocket origin `wss://<app>.fly.dev` flows into the frontend via `VITE_WS_URL` and into the frontend's CSP `connect-src`. Cold start UX (5 to 15 seconds while Fly wakes the machine) is handled by the `EngineWarmingUp` component on the frontend.
 
 ## 4. Data flow
