@@ -810,11 +810,11 @@ The following five invariants are within scope for the single-symbol matching en
 
 The remaining five invariants are **deferred to later milestones**. The single-symbol property tests do not cover these directly today.
 
-* [ ] **(Deferred to the seqlock / bench work)** Spread non-negative: `best_ask >= best_bid` at all times between events. The seqlock-protected snapshot lands with the concurrency milestone, and the multi-level interleaving needed to stress this in property tests is more naturally exercised once the seqlock and sampler are in place.
+* [x] **Spread non-negative**: `best_ask >= best_bid` at all times between events. Verified by `MatchingInvariants.SpreadNonNegative` over 1000 cases per run: after every accepted event the published top-of-book snapshot is read for every symbol, and any side-pair where both bid and ask are present must satisfy `best_bid_px <= best_ask_px`. The matching loop fully resolves any crossing before publish, so a crossed snapshot can never appear at a reader.
 * [x] **Cancel idempotence**: a second cancel of the same id returns `Reject reason=NotFound`. Covered today by the worked-example unit tests (CXL-4, CXL-5, CXL-6) and by `Differential.RandomSequencesAgreeWithReference`: the random generator emits cancels for both live and unknown ids, and any divergence between the C++ engine's report shape and the Python reference fails the byte-diff. Cancel idempotence is the most common shape exercised by that path.
 * [ ] **(Deferred to the post-only / FOK milestone)** FOK is all-or-nothing.
 * [ ] **(Deferred to the post-only / FOK milestone)** Post-only never crosses.
-* [ ] **(Deferred to the seqlock milestone)** Top-of-book monotonicity within a tick: between event N and event N+1, top-of-book changes are atomic from a reader's perspective (no torn reads). The seqlock protocol that guarantees this lands with the concurrency work.
+* [x] **Top-of-book correctness and atomicity**: between event N and event N+1, the published top-of-book matches the underlying book and is observed atomically by readers. Correctness verified by `MatchingInvariants.SnapshotMatchesBook` (after every event, the snapshot's bid/ask agrees with `Book::best_bid()` / `Book::best_ask()`); reader-side atomicity verified by the multi-threaded `SeqlockConcurrent.OneWriterTwoReadersAgreePerSnapshot` test under ThreadSanitizer. See ADR 0003 for the seqlock layout and memory ordering.
 
 ### 7.1 The conservation law in arithmetic, with a worked example
 

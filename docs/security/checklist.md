@@ -38,8 +38,8 @@ This is engine internals only; no networking, no untrusted input. Most security 
 
 ## Seqlock-protected top-of-book and sampler
 
-* [ ] Confirm the seqlock writer protocol does not introduce a torn read that a future WebSocket reader could observe and forward to the client unchecked.
-* [ ] Confirm the sampler thread does not allocate on the hot path.
+* [x] Confirmed the seqlock writer protocol does not introduce a torn read that a future WebSocket reader could observe and forward to the client unchecked. `tests/concurrency/test_seqlock_concurrent.cpp` runs under ThreadSanitizer with one writer and two readers spinning for at least three seconds (`MERIDIAN_TSAN_DURATION_SEC` env override for longer runs); every observed reader snapshot must satisfy a writer-published invariant relating all five fields, so a torn read is a hard test failure. The per-field `std::atomic<T>` layout (see ADR 0003) makes every read and write race-free under the C++ memory model, so TSAN stays silent on the data fields.
+* [ ] Confirm the sampler thread does not allocate on the hot path. (Lands with the WebSocket server milestone, when the sampler thread itself ships.)
 
 ## Benchmark hits 6M events per second
 

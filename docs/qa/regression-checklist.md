@@ -189,14 +189,18 @@ relevant section above with the concrete commands.
   the five in-scope single-symbol invariants under `tests/property/`
   at 1000 generated cases per invariant per CI run, plus a
   differential test that diffs 100 random sequences byte-for-byte
-  against the Python reference. The four deferred invariants (spread
-  non-negative, top-of-book monotonicity, FOK all-or-nothing, post-only
-  never crosses) land alongside the seqlock and post-only / FOK
-  milestones. Acceptance for the in-scope set is a one-time pass at
-  10000 generated sequences per invariant with zero failures.
-* **TSAN clean for the seqlock**: a dedicated `tests/concurrency/`
-  target is built with ThreadSanitizer; the sampler test runs for at
-  least 60 seconds with no TSAN warnings.
+  against the Python reference. The seqlock concurrency milestone
+  added the spread non-negative and top-of-book correctness invariants
+  (`SpreadNonNegative`, `SnapshotMatchesBook`); the two remaining
+  deferred invariants (FOK all-or-nothing, post-only never crosses)
+  land alongside the post-only / FOK milestone. Acceptance for the
+  in-scope set is a one-time pass at 10000 generated sequences per
+  invariant with zero failures.
+* **TSAN clean for the seqlock**: `tests/concurrency/test_seqlock_concurrent`
+  is built with ThreadSanitizer and runs as part of every CI run for
+  three seconds (one writer, two readers, zero torn reads). Acceptance
+  is a one-time pass at `MERIDIAN_TSAN_DURATION_SEC=60` with zero
+  TSAN warnings and zero torn-read mismatches.
 * **Benchmark regression**: `meridian-bench` runs in CI on every PR
   and compares against `bench/baseline.json`; the build fails if
   throughput drops more than 5 percent or if any of p50, p99, p99.9

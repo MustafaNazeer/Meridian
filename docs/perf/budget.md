@@ -22,7 +22,7 @@ The matching event budget is the headline latency claim that backs the resume bu
 
 | Percentile | Target | Notes | Measured in |
 |---|---|---|---|
-| p50  | <= 50 ns | The seqlock reader in the steady, untorn case is two atomic loads with `acquire` ordering plus a small struct copy, which on modern x86_64 is in the tens-of-nanoseconds range. The 50 ns figure is set as the budget the implementation is held to. `[citation needed]` for an external benchmark anchoring the 50 ns figure to a published seqlock measurement. | After seqlock lands and TSAN tests are wired |
+| p50  | <= 50 ns | The seqlock reader in the steady, untorn case is two acquire seq loads plus five relaxed atomic data loads plus a small struct copy, which on modern x86_64 is in the tens-of-nanoseconds range. The 50 ns figure is set as the budget the implementation is held to. `[citation needed]` for an external benchmark anchoring the 50 ns figure to a published seqlock measurement. | Seqlock landed (ADR 0003); read p50 measured alongside the WebSocket server milestone |
 
 The top-of-book read budget exists so the sampler can hit its 30 Hz cadence with substantial headroom while reading every active symbol. With the demo's five-symbol set (AAPL, SPY, NVDA, TSLA, GOOG), five reads per tick at 50 ns each costs 250 ns per tick on the read path, which is negligible relative to the 33.3 ms tick interval at 30 Hz.
 
@@ -40,7 +40,7 @@ This budget exists in three states across the build:
 
 1. **Now: document only, no enforcement.** This file ships, plus the `meridian-bench` skeleton. The bench harness compiles and runs end to end against `libmeridian.a`, but its throughput and latency numbers are recorded as informational baselines, not as targets. No CI job fails on regression yet. The baseline subsection at the bottom of this document is filled in by the bench scaffold once `libmeridian.a` is linkable.
 
-2. **Top-of-book and sampler enforcement via TSAN.** The seqlock writer/reader protocol lands with the concurrency milestone. A TSAN test suite enforces the seqlock correctness guarantees (no torn reads observed by the reader, writer never blocks). The sampler tick wall time is profiled then and signed off against the < 1 ms target. The 50 ns top-of-book read budget is profiled in the same pass.
+2. **Top-of-book and sampler enforcement via TSAN.** The seqlock writer/reader protocol landed with the concurrency milestone (see ADR 0003 and `tests/concurrency/test_seqlock_concurrent.cpp`). The TSAN test enforces no torn reads under one writer plus two readers spinning for at least three seconds (60 seconds for the documented acceptance pass via `MERIDIAN_TSAN_DURATION_SEC`). The sampler tick wall time is profiled and signed off against the < 1 ms target alongside the WebSocket server milestone, when the sampler thread itself ships. The 50 ns top-of-book read budget is profiled at the same time.
 
 3. **Matching event enforcement via `bench/baseline.json` regression workflow.** `meridian-bench` runs in CI on every PR and compares against `bench/baseline.json` checked into the repo. CI fails the build if throughput drops more than 5% relative to baseline, or if any of p50, p99, p99.9 latency percentiles increase more than 10% relative to baseline. The baseline is updated only by an explicit "regenerate baseline" workflow on `main`, never silently. The first headline benchmark report at `docs/perf/benchmark-report.md` is generated alongside the bench milestone, with histograms, methodology, and reproducibility instructions.
 

@@ -56,6 +56,13 @@ std::vector<ExecutionReport> MatchingEngine::apply(const EngineEvent& event) {
                 });
                 break;
         }
+        // Publish post-event top of book for any path that reached an
+        // accepted book. PostOnly / FOK reject without touching the
+        // book, but republishing the unchanged snapshot is harmless and
+        // keeps the publish path uniform; the only added cost is two
+        // extra seq stores per rejected event, which is not on any hot
+        // measured path.
+        book->publish_top_of_book(event.ts);
     } else {
         apply_cancel(event, out);
     }
@@ -229,6 +236,11 @@ void MatchingEngine::apply_cancel(const EngineEvent& event,
         .ts = event.ts,
         .reject_reason = RejectReason::None,
     });
+    // Publish post-cancel top of book. A NotFound cancel returns
+    // earlier without touching any book, so no publish is needed on
+    // that branch (the snapshot reflects the most recent accepted
+    // event, which is the right reading).
+    book->publish_top_of_book(event.ts);
 }
 
 }  // namespace meridian

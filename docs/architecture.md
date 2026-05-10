@@ -59,7 +59,7 @@ Core types:
 * **OrderPool**: free list allocator over a fixed preallocated arena. The matching loop never calls operator new. A debug build allocator override aborts on any heap allocation during the hot path so this invariant is checked, not assumed.
 * **MatchingEngine**: single writer state machine that consumes `EngineEvent` (NewOrder, Cancel) and produces `ExecutionReport` (Fill, Acknowledge, Reject, Cancel). Implements price-time priority across all five order types (limit, market, IOC, post-only, FOK).
 * **BookRegistry**: `unordered_map<Symbol, Book>` for multi-instrument dispatch. Symbols are pre-allocated at startup from the ITCH directory message; no symbols are added later.
-* **TopOfBookSnapshot**: the seqlock protected struct that the publish path uses to hand top of book updates to readers without blocking the matching loop. Fields: `best_bid_px`, `best_bid_qty`, `best_ask_px`, `best_ask_qty`, `last_seq`. Writer (the matching thread) bumps `seq` before and after each update; readers retry on torn read.
+* **TopOfBookSnapshot**: the seqlock protected struct that the publish path uses to hand top of book updates to readers without blocking the matching loop. Fields: `best_bid_px`, `best_bid_qty`, `best_ask_px`, `best_ask_qty`, `ts` (the event timestamp at publish). The sequence counter is managed inside `SeqlockSnapshot` (see `include/meridian/seqlock_snapshot.hpp`); the writer (the matching thread) bumps `seq` to odd, stores each data field, then bumps `seq` to even. Readers retry on a torn read. See ADR 0003 for the per-field `std::atomic<T>` layout, the memory ordering, and the alternatives (raw fields plus fences, RWLock, RCU, hazard pointers) that were rejected.
 
 ### 3.2 meridian-bench (apps/bench)
 
@@ -107,7 +107,7 @@ The server pins three threads to three different cores so the matching loop is n
 | Sampler | 6 (pinned) | Wakes at 30 Hz, reads each symbol's seqlock snapshot with retry, builds a JSON delta, hands it to the uWebSockets event loop. Owns no engine state. |
 | uWebSockets event loop | 5 (pinned) | Accepts WebSocket connections, sends snapshots on connect, broadcasts deltas at 30 Hz, culls dropped clients. Never touches engine state directly. |
 
-The seqlock protocol on `TopOfBookSnapshot` is what makes the publish step lock free. The writer increments `seq` (odd value: write in progress), writes the data fields (with `release` ordering), increments `seq` again (even value: write complete). The reader loads `seq`, reads the data, loads `seq` again, and retries if the two `seq` reads differ or if `seq` is odd. The ADR for this choice over the alternatives (RWLock, RCU, hazard pointers) will be filed alongside the seqlock implementation. Memory ordering specifics live in that ADR.
+The seqlock protocol on `TopOfBookSnapshot` is what makes the publish step lock free. The writer increments `seq` (odd value: write in progress), writes the data fields (with `release` ordering), increments `seq` again (even value: write complete). The reader loads `seq`, reads the data, loads `seq` again, and retries if the two `seq` reads differ or if `seq` is odd. ADR 0003 documents this choice over the alternatives (raw fields plus `std::atomic_thread_fence`, RWLock, RCU, hazard pointers). Memory ordering specifics live in that ADR.
 
 ## 6. Hosting topology
 

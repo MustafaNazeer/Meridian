@@ -27,3 +27,8 @@ add_executable(test_book_registry test_book_registry.cpp)
 target_link_libraries(test_book_registry PRIVATE meridian GTest::gtest_main)
 target_compile_options(test_book_registry PRIVATE -Wall -Wextra -Wpedantic -Werror)
 gtest_discover_tests(test_book_registry)
+
+add_executable(test_seqlock_snapshot test_seqlock_snapshot.cpp)
+target_link_libraries(test_seqlock_snapshot PRIVATE meridian GTest::gtest_main)
+target_compile_options(test_seqlock_snapshot PRIVATE -Wall -Wextra -Wpedantic -Werror)
+gtest_discover_tests(test_seqlock_snapshot)

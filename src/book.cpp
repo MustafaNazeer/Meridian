@@ -87,4 +87,20 @@ void Book::erase_empty_level(Side side, Price price) {
     }
 }
 
+void Book::publish_top_of_book(Timestamp ts) noexcept {
+    TopOfBookSnapshot snap{};
+    snap.ts = ts;
+    if (!bids_.empty()) {
+        const Level& level = *bids_.begin()->second;
+        snap.best_bid_px  = level.price();
+        snap.best_bid_qty = level.total_qty();
+    }
+    if (!asks_.empty()) {
+        const Level& level = *asks_.begin()->second;
+        snap.best_ask_px  = level.price();
+        snap.best_ask_qty = level.total_qty();
+    }
+    snapshot_.write(snap);
+}
+
 }  // namespace meridian
