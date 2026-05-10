@@ -4,7 +4,7 @@
 
 A price-time priority limit order book and matching engine, written in C++20, with a live web visualization. Meridian is built as a portfolio piece for trading firms and high-frequency-finance roles, and the venue half of a two-project quant systems narrative on the resume (Vega is the pricing half).
 
-The engine is delivered as a static library (`libmeridian.a`) plus three thin driver binaries: `meridian-bench` (zero-I/O throughput and latency benchmark), `meridian-replay` (CLI ITCH replayer that streams JSON Lines), and `meridian-server` (live demo with uWebSockets serving a React frontend). The library and the bench binary contain zero networking code, so the headline 6.2M events per second number is defensible in isolation.
+The engine is delivered as a static library (`libmeridian.a`) plus three thin driver binaries: `meridian-bench` (zero-I/O throughput and latency benchmark), `meridian-replay` (CLI ITCH replayer that streams JSON Lines), and `meridian-server` (live demo with uWebSockets streaming top-of-book deltas to the Cloudflare-Pages-hosted React frontend over WSS). The library and the bench binary contain zero networking code, so the headline 6M events per second target will be defensible in isolation once measured in Phase 5.
 
 GitHub repository: https://github.com/MustafaNazeer/Meridian
 
@@ -126,7 +126,7 @@ Engine Developer adds `BookRegistry` (`unordered_map<Symbol, Book>`) for multi-i
 ### Phase 3: Property-based tests for matching invariants
 **Window cost: ~50 percent alone, or ~95 percent when bundled with Phase 2.**
 
-Engine Developer plus QA Engineer wire `rapidcheck` into the test build and implement the ten matching invariants listed in the technical design spec (price-time priority, quantity conservation, no double fill, no lost orders, spread non-negative, cancel idempotence, IOC never rests, FOK is all-or-nothing, post-only never crosses, top-of-book monotonicity within a tick). Each invariant runs ≥1000 generated cases per CI run. Reference Implementation Engineer runs the same generated case corpus against the Python reference; both engines must produce identical execution report sequences for any generated input. Disagreement is signal, and the reference is presumed correct unless this agent identifies the disagreement as a known reference bug. Risk and Financial Correctness Reviewer adjudicates any persistent disagreement and signs off.
+Engine Developer plus QA Engineer wire `rapidcheck` into the test build and implement the ten matching invariants listed in the technical design spec (price-time priority, quantity conservation, no double fill, no lost orders, spread non-negative, cancel idempotence, IOC never rests, FOK is all-or-nothing, post-only never crosses, top-of-book monotonicity within a tick). Phase 3 closes only after each invariant passes a one-time validation pass at 10,000 generated sequences with zero failures (per design spec section 2.3 success criteria); thereafter every CI build runs at least 1000 cases per invariant as the continuous regression discipline. Reference Implementation Engineer runs the same generated case corpus against the Python reference; both engines must produce identical execution report sequences for any generated input. Disagreement is signal, and the reference is presumed correct unless this agent identifies the disagreement as a known reference bug. Risk and Financial Correctness Reviewer adjudicates any persistent disagreement and signs off.
 
 **End of phase**: run the check-in protocol.
 

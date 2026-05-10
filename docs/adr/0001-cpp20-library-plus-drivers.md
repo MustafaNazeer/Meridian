@@ -55,5 +55,5 @@ The library lives in `include/meridian/` (public headers) and `src/` (implementa
 ## References
 
 * Design spec section 4 (high level architecture): `docs/superpowers/specs/2026-05-09-meridian-design.md`.
-* SPEC.md "Project summary" paragraph: "The library and the bench binary contain zero networking code, so the headline 6.2M events per second number is defensible in isolation."
+* SPEC.md "Project summary" paragraph: "The library and the bench binary contain zero networking code, so the headline 6M events per second target will be defensible in isolation once measured in Phase 5."
 * Repo layout: design spec section 10, plus `CLAUDE.md` "Directory layout" section.

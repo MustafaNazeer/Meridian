@@ -125,7 +125,7 @@ The pipeline includes:
 | STRIDE | Threat | Mitigation | Status |
 |---|---|---|---|
 | Spoofing | An attacker pushes a malicious commit and forces a deploy. | Branch protection on `main` requires PRs and required CI checks. Direct pushes to `main` are blocked; the user uses `gh pr merge --admin` only after green CI. The PR flow is enforced by branch protection plus the local pre-commit hook described in `CLAUDE.md`. | Phase 0 / Phase 10. |
-| Tampering | A FetchContent dependency is replaced upstream. | Each FetchContent declaration pins a specific commit SHA, not a branch or tag. CI fetches by SHA, so upstream tag retargeting is not exploitable. SBOM generation is a Phase 10 deliverable; until it lands, manual upstream advisory checks at Phase 10 cover known issues. [citation needed for any specific advisory] | Phase 0 documents the convention; Phase 10 verifies and produces an SBOM. |
+| Tampering | A FetchContent dependency is replaced upstream. | Each FetchContent declaration pins either a specific commit SHA or an immutable upstream release tag (for example, GoogleTest's `v1.15.2` release tag). Branch tags such as `main` or `master` are forbidden because they retarget. CI fetches the pinned ref, so upstream branch movement is not exploitable. SBOM generation is a Phase 10 deliverable; until it lands, manual upstream advisory checks at Phase 10 cover known issues. | Phase 0 documents the convention; Phase 10 verifies and produces an SBOM. |
 | Repudiation | A malicious workflow run modifies the deployed binary. | All deploys are tied to a commit SHA recorded by Fly's release API and Cloudflare Pages's build log. The deploy workflow logs the SHA it built from. | Phase 10 verifies the workflow logs the SHA. |
 | Information disclosure | Workflow logs leak `FLY_API_TOKEN` or the Cloudflare token. | Both are stored as encrypted repository secrets. GitHub redacts known secret values from logs automatically. The deploy step does not echo secrets. The workflow does not run `set -x`. | Phase 10 hardening checks the workflow files. |
 | Denial of service | Out of scope. | None at the pipeline level. | Accepted. |
@@ -142,13 +142,19 @@ These controls apply across all four surfaces and are tracked in `checklist.md`:
 * **No client side IP logging.** Per design spec section 13, the audit log on the live demo is in memory only and contains only deterministic engine events. Client IPs are not collected, not displayed, not persisted.
 * **Deterministic builds.** CMake build flags, FetchContent SHAs, the Docker base image digest, and the `pnpm` lockfile are all pinned; rebuilding the same commit on the same toolchain produces equivalent binaries. This is a defense in depth against supply chain compromise.
 
-## Open assumptions and `[citation needed]` markers
+## Open assumptions and resolved citations
 
-* **uWebSockets advisory history.** No known CVEs at the pinned version are cited in this document; the Phase 10 hardening pass will verify upstream advisories against the pinned SHA. [citation needed]
-* **Fly.io free tier behavior.** The "auto-stop when idle, auto-start on first request" semantics are documented by Fly; the exact wake latency is observed empirically (5 to 15 seconds is the figure in the design spec section 13 cold start UX, derived from the user's own observation, not from a Fly published guarantee). [citation needed]
-* **Cloudflare Pages security headers.** The mechanism for delivering CSP and HSTS via Cloudflare Pages is the `_headers` file convention. The Phase 10 hardening checklist verifies this works for our routes. [citation needed]
+The three `[citation needed]` markers originally placed in this section were resolved by the Citation and Fact Auditor on 2026-05-09. Each is now a footnoted assumption with a named verifying source.
 
-The Citation and Fact Auditor will run after this document is merged and will either resolve each `[citation needed]` marker or convert it into a footnote that names the verifying source.
+* **uWebSockets advisory history.** No known CVEs at the pinned version are cited in this document; the Phase 10 hardening pass will verify upstream advisories against the pinned SHA. Verified 2026-05-09 against the upstream GitHub Security Advisories page at `https://github.com/uNetworking/uWebSockets/security/advisories`, which reported "There aren't any published security advisories" at the time of audit. The Phase 10 audit re-verifies against the same source plus the GitHub Advisory Database before deploy. [1]
+* **Fly.io free tier behavior.** The "auto-stop when idle, auto-start on first request" semantics are documented by Fly; the exact wake latency is observed empirically (5 to 15 seconds is the figure in the design spec section 13 cold start UX, derived from the user's own observation, not from a Fly published guarantee). The auto-stop and auto-start mechanism itself is documented at `https://fly.io/docs/launch/autostop-autostart/` (the documented behaviors of `auto_stop_machines` and `auto_start_machines`); Fly does not publish a wake-latency SLA, so the 5 to 15 second figure remains a project-local empirical target rather than a vendor guarantee. [2]
+* **Cloudflare Pages security headers.** The mechanism for delivering CSP and HSTS via Cloudflare Pages is the `_headers` file convention, documented at `https://developers.cloudflare.com/pages/configuration/headers/` ("creating a plain text file called `_headers`" in the build output directory; supports `Content-Security-Policy`, `X-Frame-Options`, `Referrer-Policy`, etc.). One known limitation: `_headers` does not apply to responses generated by Pages Functions. Meridian's frontend has no Pages Functions, so the limitation does not apply. The Phase 10 hardening checklist still verifies that the deployed `_headers` file applies to all routes via `curl -I`. [3]
+
+Footnoted sources:
+
+[1] uNetworking/uWebSockets Security Advisories, GitHub. `https://github.com/uNetworking/uWebSockets/security/advisories`. Verified 2026-05-09.
+[2] Fly.io documentation, "Autostop/autostart machines". `https://fly.io/docs/launch/autostop-autostart/`. Verified 2026-05-09.
+[3] Cloudflare Pages documentation, "Headers". `https://developers.cloudflare.com/pages/configuration/headers/`. Verified 2026-05-09.
 
 ## Severity summary
 

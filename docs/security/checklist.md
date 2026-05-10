@@ -124,7 +124,7 @@ This is the master hardening phase. Items here are filled in verbatim from the S
 * [ ] Branch protection on `main` requires PRs and required CI checks. Direct pushes to `main` are blocked at the server side.
 * [ ] CI workflow does not run `set -x`; deploy step does not echo secrets.
 * [ ] CI runs `gitleaks` (or equivalent) as a required check; confirmed by inspecting the workflow file.
-* [ ] CMake FetchContent declarations are pinned by SHA, not tag or branch. `grep -E 'GIT_TAG\s+(v|main|master)' third_party/` returns no hits in production manifests.
+* [ ] CMake FetchContent declarations are pinned by commit SHA or by an immutable upstream release tag (release tags only; branch tags such as `main`, `master`, or `HEAD` are forbidden because they retarget). `grep -E 'GIT_TAG\s+(main|master|HEAD)' third_party/` returns no hits in production manifests.
 * [ ] Verify the deploy workflow records the commit SHA it built from in its log output.
 
 ### Final live demo smoke test

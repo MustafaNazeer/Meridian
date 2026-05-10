@@ -255,7 +255,7 @@ Target: ≥40 unit tests, ≥85% line coverage on `libmeridian.a`.
 9. **Post-only never crosses**: a post-only order that would cross is rejected before any matching
 10. **Top-of-book monotonicity within a tick**: between event N and event N+1, top-of-book changes are atomic from the reader's perspective (no torn reads)
 
-Each property runs ≥1000 generated cases per CI run.
+Each property runs at least 1000 generated cases per CI run as the continuous regression discipline. Phase 3 acceptance is stricter: each invariant must pass a one-time validation pass at 10,000 generated sequences with zero failures before Phase 3 can close (per section 2.3 success criteria).
 
 ### 8.3 Integration tests (Catch2 BDD style)
 * Replay a 5-minute ITCH 5.0 sample, compare final book state against a reference Python implementation
@@ -322,15 +322,15 @@ Meridian/
 │   ├── property/...
 │   └── integration/...
 ├── third_party/                    # Vendored dependencies (CMake FetchContent)
-└── web/                            # React + Vite app
+└── frontend/                       # React + Vite app
     ├── package.json
     ├── vite.config.ts
     ├── tailwind.config.ts
     ├── src/
     │   ├── App.tsx
-    │   ├── components/{Ladder,DepthChart,Tape,Perf,Header}.tsx
-    │   ├── store/useBookStore.ts   # Zustand
-    │   └── ws/client.ts
+    │   ├── components/{Header,Hero,Ladder,DepthChart,Tape,PerfPanel,Footer,EngineWarmingUp}.tsx
+    │   ├── store/index.ts          # Zustand
+    │   └── ws/client.ts            # connection state machine (connecting / live / stalled / disconnected)
     └── public/
 ```
 
