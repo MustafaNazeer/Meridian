@@ -145,7 +145,7 @@ CI/CD is GitHub Actions. Three workflows: `ci.yml` (build matrix on clang and gc
 |   `-- server/                meridian-server
 |-- tests/
 |   |-- unit/                  GoogleTest unit tests
-|   |-- property/              rapidcheck property based tests
+|   |-- property/              property based tests, hand rolled generators
 |   |-- integration/           Integration tests (engine vs Python reference)
 |   |-- concurrency/           TSAN tests for the seqlock and sampler
 |   `-- reference/             Python reference implementation (matching, ITCH)

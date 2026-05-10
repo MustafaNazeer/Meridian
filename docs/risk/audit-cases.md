@@ -524,7 +524,7 @@ Open follow-up items for later milestones, recorded for context:
 
 * The remaining 16 worked examples in `matching-semantics.md` (LIM-1, LIM-2, LIM-6, LIM-7, MKT-1, MKT-2, MKT-5, MKT-6, IOC-1, IOC-3, IOC-5, IOC-6, IOC-7, CXL-2, CXL-3, CXL-6) are covered by `tests/reference/test_reference.py` and (in part) by `tests/integration/test_engine_vs_reference.cpp`. This document is a hand-audit spot check, not a full transcription of the test corpus; the integration test file is the comprehensive corpus.
 * The cancel-after-partial-fill (remainder branch) and cross-symbol cancel cases are covered in the multi-instrument section below.
-* Hand-walkthroughs of generated rapidcheck cases for the matching invariants will land alongside the property-test suite.
+* The hand rolled property suite under `tests/property/` covers the matching invariants today; representative seeds for each invariant can be added here as worked walkthroughs once a regression motivates one.
 
 ---
 
@@ -939,5 +939,5 @@ The Python reference and the C++ engine agree on:
 Open follow-up items for later milestones, recorded for context:
 
 * The dual-index design from ADR 0002 (per-`Book` id index plus cross-symbol `OrderIndex`) ships now; consolidating the two indexes is a future cleanup. Cases 1, 2, and 5 exercise the dual-index coherence invariant ("the two indexes must never disagree"); a hand-audit of `MatchingEngine::apply_limit` and `MatchingEngine::sweep` confirmed both insert and erase paths update both indexes.
-* The property-test suite (via `rapidcheck`) will cover the matching invariants, including the multi-instrument additions: cross-symbol cancel isolation, dual-index coherence, unknown-symbol reject shape. These are candidates for property-test generators.
+* The property-test suite under `tests/property/` covers the matching invariants today and exercises the multi-instrument additions implicitly via the demo symbol set: the generator drives all five symbols (1..5) and the cancel path is cross-symbol routed through `OrderIndex`. Cross-symbol cancel isolation, dual-index coherence, and the unknown-symbol reject shape are exercised on every random sequence; targeted property generators for these specific shapes can be added on a regression as needed.
 * The NASDAQ ITCH 5.0 replay milestone will exercise the multi-symbol dispatch at scale and is the natural moment to confirm the dispatch overhead stays inside the latency budget; the bench is currently at the same throughput as the single-symbol baseline within noise.

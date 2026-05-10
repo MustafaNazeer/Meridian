@@ -34,7 +34,7 @@ This is engine internals only; no networking, no untrusted input. Most security 
 
 ## Property-based tests for matching invariants
 
-* [~] No new attack surface introduced. Property tests only. Security review limited to confirming the test harness does not import unsafe libraries or open network sockets.
+* [x] No new attack surface introduced. Hand rolled deterministic generators in `tests/property/`; no external PBT framework pulled in. The differential test shells out to `python3` via `std::system` to invoke the Python reference (the same call shape already used by `tests/integration/test_engine_vs_reference.cpp`); no other I/O.
 
 ## Seqlock-protected top-of-book and sampler
 
@@ -108,7 +108,7 @@ This is the master hardening list, captured up front so it does not have to be r
 ### Dependency audit
 
 * [ ] Run `pnpm audit` against the frontend lockfile; resolve any high or critical advisories before deploy.
-* [ ] Manual C++ dependency audit: compare the locked commit SHAs in CMake FetchContent declarations against upstream advisories for `uWebSockets`, `simdjson`, `glaze`, `rapidcheck`, `GoogleTest`, and `Google Benchmark`. Record the audit at `docs/security/dependency-audit-{date}.md`. [citation needed for any advisory found]
+* [ ] Manual C++ dependency audit: compare the locked commit SHAs in CMake FetchContent declarations against upstream advisories for `uWebSockets`, `simdjson`, `glaze`, `GoogleTest`, `HDRHistogram-c`, and `Google Benchmark`. Record the audit at `docs/security/dependency-audit-{date}.md`. [citation needed for any advisory found]
 * [ ] If any Python is present in `tests/` or in CI helpers, run `pip-audit` against its environment.
 
 ### Secret rotation

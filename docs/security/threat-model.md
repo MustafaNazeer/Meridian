@@ -114,7 +114,7 @@ The pipeline includes:
 
 * The public GitHub repository `MustafaNazeer/Meridian`.
 * GitHub Actions workflows under `.github/workflows/`.
-* CMake `FetchContent` declarations that pull C++ dependencies (uWebSockets, simdjson, glaze, rapidcheck, GoogleTest, Google Benchmark) at configure time.
+* CMake `FetchContent` declarations that pull C++ dependencies (GoogleTest, HDRHistogram-c today; uWebSockets, simdjson, glaze, Google Benchmark in later milestones) at configure time.
 * `pnpm` lockfile pinning frontend dependencies.
 * `flyctl` invoked from a workflow step to deploy `meridian-server`.
 * The Cloudflare Pages deploy, triggered either by the Cloudflare Pages GitHub integration or by a `wrangler` step in a workflow.

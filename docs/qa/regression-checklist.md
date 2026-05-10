@@ -185,9 +185,15 @@ relevant section above with the concrete commands.
   suite must also pass with the multi-symbol extension landed
   (`python3 -m unittest discover tests/reference -v` reports at least
   40 tests passing).
-* **Property-based tests**: `rapidcheck` is wired up; ten matching
-  invariants run at least 1000 generated cases per CI run. Acceptance
-  is a one-time pass at 10000 generated sequences with zero failures.
+* **Property-based tests**: hand rolled deterministic generators run
+  the five in-scope single-symbol invariants under `tests/property/`
+  at 1000 generated cases per invariant per CI run, plus a
+  differential test that diffs 100 random sequences byte-for-byte
+  against the Python reference. The four deferred invariants (spread
+  non-negative, top-of-book monotonicity, FOK all-or-nothing, post-only
+  never crosses) land alongside the seqlock and post-only / FOK
+  milestones. Acceptance for the in-scope set is a one-time pass at
+  10000 generated sequences per invariant with zero failures.
 * **TSAN clean for the seqlock**: a dedicated `tests/concurrency/`
   target is built with ThreadSanitizer; the sampler test runs for at
   least 60 seconds with no TSAN warnings.

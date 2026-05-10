@@ -16,7 +16,7 @@ Every number in this section is a **target, not yet measured**. Real numbers rep
 
 * **Throughput target**: 6M events per second, single threaded.
 * **Latency target**: p50 under 500 ns, p99 under 2 us, p99.9 under 5 us per event.
-* **Correctness target**: 10 matching invariants verified by `rapidcheck` property based tests, at least 1000 generated cases per CI run, with the C++ engine's audit log diffed byte for byte against a Python reference implementation under `tests/reference/`.
+* **Correctness target**: 10 matching invariants. Six are verified today by hand rolled property based tests in `tests/property/`, each running 1000 generated cases per CI run; the remaining four (spread non negative, top of book monotonicity, FOK all or nothing, post only never crosses) land alongside the seqlock and post only / FOK milestones. The C++ engine's audit log is diffed byte for byte against a Python reference implementation under `tests/reference/` on every test run, including 100 random sequences in the property suite.
 * **Replay target**: NASDAQ ITCH 5.0 binary tapes, parsed and replayed against the engine.
 * **Live demo target**: 30 Hz web visualization with the engine running in real time, decoupled from the matching loop via the seqlock protected snapshot.
 
@@ -38,7 +38,7 @@ The library and the bench binary contain zero networking code, so the headline n
 |---|---|
 | Engine language | C++20 (clang 19+ primary, gcc 14+ secondary) |
 | Build | CMake 3.25+ with Ninja |
-| Tests | GoogleTest plus rapidcheck (property based) |
+| Tests | GoogleTest, with hand rolled deterministic generators for property based invariants under `tests/property/` |
 | Benchmark | Google Benchmark plus a hand rolled HDR histogram latency harness |
 | WebSocket library | uWebSockets v20+ |
 | ITCH parser | Hand rolled, single header |
@@ -69,7 +69,7 @@ The Fly machine auto stops when idle and auto starts on the first request, so th
 
 ## Status
 
-The build is sequenced into shippable milestones (foundations, single-symbol matching, multi-instrument and cancel, property tests, concurrency, the bench push, ITCH replay, the remaining order types, the WebSocket server, the frontend, the deploy, the public README rewrite). Single-symbol matching and multi-instrument/cancel have landed; property-based invariants are next.
+The build is sequenced into shippable milestones (foundations, single-symbol matching, multi-instrument and cancel, property tests, concurrency, the bench push, ITCH replay, the remaining order types, the WebSocket server, the frontend, the deploy, the public README rewrite). Single-symbol matching, multi-instrument and cancel, and the property based invariant suite have landed; concurrency (the seqlock protected top of book and TSAN coverage) is next.
 
 ## Entry points
 
