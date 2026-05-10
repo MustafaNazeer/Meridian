@@ -329,6 +329,60 @@ TEST_F(MatchingTest, CancelAfterPartialFillRemovesResidual) {
     EXPECT_EQ(book.best_ask(), nullptr);
 }
 
+// =============== Phase 7 order types: stub reject ===============
+// PostOnly and FOK are declared in OrderType for parity with Phase 7
+// but are not implemented in Phase 1. The engine emits a Reject (with
+// reason None as a sentinel; PostOnly's WouldCross and FOK's
+// InsufficientLiquidity arrive in Phase 7) so a stray submission does
+// not silently fall through. These tests exercise that defensive
+// branch in matching.cpp's apply() switch so the line shows as covered
+// in Phase 1 lcov reports rather than flagged as a Phase 7 gap. When
+// Phase 7 lands, replace these tests with the real PostOnly and FOK
+// behavior.
+
+TEST_F(MatchingTest, PostOnlyOrderRejectsInPhase1) {
+    EngineEvent ev{
+        .kind = EventKind::NewOrder,
+        .symbol = 1,
+        .ts = 1,
+        .order_id = 1,
+        .side = Side::Buy,
+        .type = OrderType::PostOnly,
+        .price = 100,
+        .qty = 10,
+    };
+    auto reports = engine.apply(ev);
+    ASSERT_EQ(reports.size(), 1u);
+    EXPECT_EQ(reports[0].kind, ReportKind::Reject);
+    EXPECT_EQ(reports[0].order_id, 1u);
+    EXPECT_EQ(reports[0].qty, 10);
+    EXPECT_EQ(reports[0].price, 100);
+    // Book unchanged: a Phase 7 stub reject must never rest.
+    EXPECT_EQ(book.best_bid(), nullptr);
+    EXPECT_EQ(book.best_ask(), nullptr);
+}
+
+TEST_F(MatchingTest, FokOrderRejectsInPhase1) {
+    EngineEvent ev{
+        .kind = EventKind::NewOrder,
+        .symbol = 1,
+        .ts = 1,
+        .order_id = 1,
+        .side = Side::Sell,
+        .type = OrderType::FOK,
+        .price = 200,
+        .qty = 5,
+    };
+    auto reports = engine.apply(ev);
+    ASSERT_EQ(reports.size(), 1u);
+    EXPECT_EQ(reports[0].kind, ReportKind::Reject);
+    EXPECT_EQ(reports[0].order_id, 1u);
+    EXPECT_EQ(reports[0].qty, 5);
+    EXPECT_EQ(reports[0].price, 200);
+    EXPECT_EQ(book.best_bid(), nullptr);
+    EXPECT_EQ(book.best_ask(), nullptr);
+}
+
 // =============== Hot path discipline ===============
 
 TEST_F(MatchingTest, SweepLoopMakesNoHeapAllocation) {
