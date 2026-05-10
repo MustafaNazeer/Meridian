@@ -96,3 +96,10 @@ meridian.local.toml
 
 # Claude Code: maintainer's private files
 CLAUDE.md
+
+# Claude Code: maintainer-private dirs and docs
+agents/
+docs/superpowers/
+STATUS.md
+docs/plan.md
+GETTING-STARTED.md
