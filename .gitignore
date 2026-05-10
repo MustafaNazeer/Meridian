@@ -1,4 +1,4 @@
-# Maintainer's private notes (per CLAUDE.md privacy policy)
+# Maintainer's private notes
 future-ideas.md
 
 # C++ build outputs
@@ -94,12 +94,14 @@ logs/
 # Local config overrides
 meridian.local.toml
 
-# Claude Code: maintainer's private files
+# Maintainer's private session files
 CLAUDE.md
 
-# Claude Code: maintainer-private dirs and docs
+# Maintainer-private dirs and docs
 agents/
 docs/superpowers/
+docs/audits/
 STATUS.md
+SPEC.md
 docs/plan.md
 GETTING-STARTED.md

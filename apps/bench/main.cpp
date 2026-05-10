@@ -1,11 +1,11 @@
-// meridian-bench: Phase 1 skeleton.
+// meridian-bench: working skeleton.
 //
 // This binary is a working harness, not a regression gate. It generates a
 // deterministic stream of synthetic limit orders, drives them through the
 // matching engine, captures per-event latency in an HDRHistogram, and prints
-// a Markdown summary table. The throughput and latency numbers it reports in
-// Phase 1 are informational only; the headline 6M events/sec target is
-// enforced in Phase 5 against bench/baseline.json.
+// a Markdown summary table. The throughput and latency numbers it reports
+// today are informational only; the headline 6M events/sec target is
+// enforced once bench/baseline.json is wired into CI.
 //
 // The pre-generated event vector and the timed apply loop are deliberately
 // kept separate so generation cost does not contaminate the measurement.
@@ -201,7 +201,7 @@ int main(int argc, char** argv) {
     }
 
     // Pool capacity = events + 1024 headroom. Generation produces only
-    // NewOrder events (no cancels in Phase 1 bench), so no slot is ever
+    // NewOrder events (no cancels in this skeleton), so no slot is ever
     // released; one slot per event plus headroom is enough.
     const std::size_t pool_capacity = static_cast<std::size_t>(cfg.events) + 1024;
     meridian::OrderPool pool(pool_capacity);
@@ -220,8 +220,8 @@ int main(int argc, char** argv) {
         const auto t0 = Clock::now();
         // Discard the returned reports; the bench measures apply latency, not
         // downstream report consumption. The vector allocation inside apply()
-        // is a known Phase 1 cost the Engine Developer documents in the
-        // matching-loop allocations note; Phase 5 retires it.
+        // is a known cost in the current implementation; the bench-milestone
+        // pass retires it.
         (void)engine.apply(ev);
         const auto t1 = Clock::now();
         const std::int64_t dt =

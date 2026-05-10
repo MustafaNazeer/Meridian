@@ -2,5 +2,5 @@
 
 add_subdirectory(unit)
 add_subdirectory(integration)
-# add_subdirectory(property)     # added in Phase 3 with rapidcheck
-# add_subdirectory(concurrency)  # added in Phase 4 with TSAN coverage
+# add_subdirectory(property)     # added when rapidcheck is wired up
+# add_subdirectory(concurrency)  # added when TSAN coverage is wired up

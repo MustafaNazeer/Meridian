@@ -1,8 +1,8 @@
 # Meridian design tokens (Twilight)
 
-This file is the canonical extraction of every visual token from `/home/mustafa/src/Meridian/docs/design/canonical.html`. The Twilight theme was chosen on 2026-05-09 from a field of five candidate directions. The Frontend Developer must apply these tokens through Tailwind utilities sourced from the configuration block at the end of this document; no hardcoded color, font size, spacing, radius, shadow, or motion duration is permitted in component code.
+This file is the canonical extraction of every visual token from `/home/mustafa/src/Meridian/docs/design/canonical.html`. The Twilight theme was chosen on 2026-05-09 from a field of five candidate directions. Apply these tokens through Tailwind utilities sourced from the configuration block at the end of this document; no hardcoded color, font size, spacing, radius, shadow, or motion duration is permitted in component code.
 
-A future agent should be able to read this file and produce a faithful Tailwind configuration without ever opening the canonical HTML.
+A future reader should be able to read this file and produce a faithful Tailwind configuration without ever opening the canonical HTML.
 
 ## 1. Colors
 
@@ -176,7 +176,7 @@ Notes on irregularities preserved from the canonical:
 | `histogram-height` | 48 px tall, 1 px gap between bars. | Latency distribution histogram. |
 | `progress-height` | 2 px tall. | Replay progress bar. |
 
-Breakpoints: the canonical HTML is desktop-only. There are no `@media` queries in the file. Mobile is a future-idea per `SPEC.md`. The Tailwind config retains the default breakpoints so the Frontend Developer can opt into them later without re-extracting tokens, but the v1 frontend does not need to honor any below `lg` (1024 px). The minimum supported viewport in v1 is 1280 px.
+Breakpoints: the canonical HTML is desktop-only. There are no `@media` queries in the file. Mobile is a future idea. The Tailwind config retains the default breakpoints so they can be opted into later without re-extracting tokens, but the v1 frontend does not need to honor any below `lg` (1024 px). The minimum supported viewport in v1 is 1280 px.
 
 ## 5. Border radius
 
@@ -199,7 +199,7 @@ There are three glow effects in the canonical HTML, all driven by the gold or se
 | `glow-bid` | `box-shadow: 0 0 8px var(--bid)` | Legend dot for bid in the depth chart caption. |
 | `glow-ask` | `box-shadow: 0 0 8px var(--ask)` | Legend dot for ask in the depth chart caption. |
 
-Tailwind's default `shadow` utilities are not used by any token in the canonical. The Frontend Developer should disable Tailwind's default shadow scale or override it with these three tokens; introducing a generic `shadow-md` would drift from the design.
+Tailwind's default `shadow` utilities are not used by any token in the canonical. Disable Tailwind's default shadow scale or override it with these three tokens; introducing a generic `shadow-md` would drift from the design.
 
 ## 7. Backdrop filter
 
@@ -214,8 +214,8 @@ The canonical HTML defines exactly one keyframe animation and no transition decl
 | Token | Definition | Used by |
 |---|---|---|
 | `animate-pulse-live` | `pulse 1.6s infinite` with keyframe `50% { opacity: 0.4 }` | Header live status dot. |
-| `transition-hover-default` | None declared. Hover effect on the nav back chip (`border-color` and `color` swap to gold) instantly applies. The Frontend Developer may add a `150ms ease` transition to hover states for polish; document any addition here when applied. | Nav back chip on hover (canonical), Frontend Developer hover and focus polish (Phase 9). |
-| `duration-tape-flash` | Reserved. Not in the canonical, but Phase 9 will need a brief highlight for newly arrived trade rows. Recommended: 600 ms ease-out fade from a translucent gold to transparent. Confirm with this agent at Phase 9. | Trade tape new-row highlight (Phase 9 only). |
+| `transition-hover-default` | None declared. Hover effect on the nav back chip (`border-color` and `color` swap to gold) instantly applies. A `150ms ease` transition may be added to hover states for polish; document any addition here when applied. | Nav back chip on hover (canonical), hover and focus polish in the frontend. |
+| `duration-tape-flash` | Reserved. Not in the canonical, but the trade tape will need a brief highlight for newly arrived rows. Recommended: 600 ms ease-out fade from a translucent gold to transparent. | Trade tape new-row highlight. |
 
 ## 9. Z-index
 
@@ -226,7 +226,7 @@ The canonical HTML defines exactly one keyframe animation and no transition decl
 
 ## 10. Component-specific token notes
 
-These are derived tokens (compositions of the base tokens above) called out so the Frontend Developer never has to re-derive them.
+These are derived tokens (compositions of the base tokens above) called out so they never have to be re-derived in component code.
 
 * **Live status dot**: 6 px square, `radius-pill`, `bg-gold`, `glow-gold`, `animate-pulse-live`.
 * **Spread row band**: full-width row inside the ladder. Vertical padding 14 px. Background uses the spread-row gradient recipe (section 1.4). Top and bottom borders `rgba(212, 162, 76, 0.3)`. Italic Newsreader text at 13 px in `ink-soft`. Numerals inside the row reset to JetBrains Mono medium in `gold` with 8 px horizontal margin.
@@ -238,9 +238,9 @@ These are derived tokens (compositions of the base tokens above) called out so t
 * **Progress bar (replay)**: 2 px tall. Track is `rule`. Fill is replay progress gradient with 10 px gold glow.
 * **Footer bar**: 1 px top border in `rule`, 14 px vertical padding, 48 px horizontal padding. Background is `bg-2` (slightly darker than the page). Inter 11 px in `ink-soft` tracked 0.04em. `strong` resets weight to medium and color to `ink`. `dim` recolors to `ink-faint`.
 
-## 11. Connection state surfaces (Phase 9 scope, derived from design spec section 5.5)
+## 11. Connection state surfaces
 
-The canonical HTML renders only the `live` state. Phase 9 also needs to render `connecting`, `stalled`, and `disconnected` states. Tokens for each, building on the palette above:
+The canonical HTML renders only the `live` state. The frontend also needs to render `connecting`, `stalled`, and `disconnected` states. Tokens for each, building on the palette above:
 
 | State | Header dot | Header meta copy | Hero behavior |
 |---|---|---|---|
@@ -249,7 +249,7 @@ The canonical HTML renders only the `live` state. Phase 9 also needs to render `
 | `stalled` | `ink-faint` static (no pulse), then briefly amber. Recommend introducing `--amber: #D4A24C` at 60 percent saturation. To avoid token drift, reuse `gold-deep` (`#B97D2C`). | "stalled · last update Ns ago" in `ink-soft`. | Layout unchanged; ladder, depth chart, tape continue to show the last good state with a `0.5` opacity overlay on numerics. |
 | `disconnected` | `ask` static (no pulse). | "disconnected · reconnecting in Ns" in `ask`. | Layout unchanged; an inline banner above the main grid in `ask-soft` background with `ask`-colored copy explains the reconnect attempt. Banner height: 32 px. Banner padding: 6 px 48 px. |
 
-The Frontend Developer reviews these state surfaces with this agent before Phase 9 closes; if any feels jarring against the canonical, adjust here first, then in code.
+Review these state surfaces against the canonical before shipping; if any feel jarring, adjust here first, then in code.
 
 ## 12. Definition of done
 
@@ -259,13 +259,13 @@ Token extraction is complete when:
 * Every distinct font-size, padding, margin, gap, border-radius, and box-shadow used in the canonical's class definitions is named here.
 * Every gradient (linear or radial) used in the canonical is reproduced as a recipe in section 1.4 or section 6.
 * The Tailwind config block at the end of this document compiles without warnings under Tailwind 3.4 plus and uses only the tokens listed here.
-* The Frontend Developer can build a faithful Header, Hero, Ladder, DepthChart, Tape, PerfPanel, and Footer using only these tokens plus the wireframes in `/home/mustafa/src/Meridian/docs/design/wireframes.md`, with no hardcoded literals.
+* The frontend can build a faithful Header, Hero, Ladder, DepthChart, Tape, PerfPanel, and Footer using only these tokens plus the wireframes in `/home/mustafa/src/Meridian/docs/design/wireframes.md`, with no hardcoded literals.
 
 A future Flow A or Flow B design change updates this file before any React or Tailwind code changes; this file and `canonical.html` must agree at every commit.
 
 ## 13. Tailwind config (drop into frontend/tailwind.config.ts)
 
-This is the initial Tailwind 3 plus configuration. The DevOps Engineer scaffolds the frontend in parallel with this dispatch, so this block is provided here for the PM to reconcile into `frontend/tailwind.config.ts` once the scaffold lands. The Frontend Developer extends this in Phase 9; the Engine Developer and other agents do not touch it.
+This is the initial Tailwind 3 plus configuration. Reconcile this block into `frontend/tailwind.config.ts` once the frontend scaffold lands. Extend in component code only through the design tokens declared here.
 
 ```ts
 import type { Config } from "tailwindcss";
@@ -439,4 +439,4 @@ const config: Config = {
 export default config;
 ```
 
-Reconciliation note for the PM: the DevOps Engineer's `pnpm create vite` scaffold produces a default `tailwind.config.ts`. Replace its contents wholesale with the block above. The block assumes Tailwind 3.4 plus; if DevOps installs Tailwind 4, the Frontend Developer adapts the config to the v4 token model in Phase 9 and updates this section here to match.
+Reconciliation note: a `pnpm create vite` scaffold produces a default `tailwind.config.ts`. Replace its contents wholesale with the block above. The block assumes Tailwind 3.4 plus; if Tailwind 4 is installed, adapt the config to the v4 token model and update this section to match.

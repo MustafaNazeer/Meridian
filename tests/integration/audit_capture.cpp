@@ -1,14 +1,14 @@
-// Risk Reviewer Phase 1 audit capture harness.
+// Single-symbol audit capture harness.
 //
-// Standalone tool that runs each Phase 1 audit case through the C++
+// Standalone tool that runs each single-symbol audit case through the C++
 // MatchingEngine and prints one JSON Lines block per case to stdout. The
 // matching-semantics.md case names label each block so the output can be
 // pasted into docs/risk/audit-cases.md verbatim.
 //
 // This file is intentionally not linked into the test suite; it exists as
-// a one-shot capture tool that backs the Phase 1 audit document at
+// a one-shot capture tool that backs the audit document at
 // docs/risk/audit-cases.md (section 12 documents how to build and run it).
-// The QA Engineer's parameterized integration test
+// The parameterized integration test
 // (tests/integration/test_engine_vs_reference.cpp) is the comprehensive
 // CI gate and covers all 26 worked examples by name. This capture tool
 // exists so the audit document can carry verbatim JSON Lines outputs

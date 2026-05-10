@@ -1,19 +1,17 @@
 # Matching Semantics: Limit, Market, and IOC
 
-**Owner**: Quant Domain Validator (agent 01)
-**Phase**: 1 (Core data structures and single-symbol matching)
-**Status**: Draft, awaiting Citation and Fact Auditor pass
 **Date**: 2026-05-09
+**Status**: in force for the single-symbol scope
 
-This document is the canonical conventions reference for the Meridian matching engine's Phase 1 behavior. It defines, in worked-example form, exactly what the engine must produce for each event in the Phase 1 scope: **limit**, **market**, and **IOC** new-order events plus **cancel-by-id**. Post-only and FOK are explicitly out of scope for this document; they land in Phase 7 with a follow-up extension to this file.
+This document is the canonical conventions reference for the Meridian matching engine's single-symbol behavior. It defines, in worked-example form, exactly what the engine must produce for each event in the initial scope: **limit**, **market**, and **IOC** new-order events plus **cancel-by-id**. Post-only and FOK are explicitly out of scope for this document; they land later with a follow-up extension to this file.
 
-The Reference Implementation Engineer (agent 18) implements `tests/reference/matching_reference.py` so that every worked example below passes as a unit test. The Engine Developer / Market Microstructure Engineer (agents 02 and 03, played by the PM session in Phase 1) implements `libmeridian.a` so that its execution-report stream matches the reference byte for byte on every input. The QA Engineer (agent 10) turns the invariant checklist in section 7 into property tests in Phase 3.
+`tests/reference/matching_reference.py` is the Python reference implementation; every worked example below also runs as a unit test there. `libmeridian.a` (under `src/`) must produce an execution-report stream that matches the reference byte for byte on every input. The invariant checklist in section 7 is the basis for the property-based test suite.
 
 ---
 
 ## 1. Type widths and naming
 
-The names and widths below are locked by the Phase 1 companion plan ("Key decisions captured for Phase 1", section 5) at `docs/superpowers/plans/2026-05-09-phase-1-single-symbol-matching.md`. Every worked example uses these exact names.
+The names and widths below are the locked-in conventions used in every worked example.
 
 | Name | Type | Notes |
 |---|---|---|
@@ -290,9 +288,9 @@ A `Market` order has no price limit. On arrival:
 
 ### 4.1 Convention choice: market against empty book is a Reject (no Acknowledge first)
 
-The textbook references give two acceptable behaviors for a market order against an empty book: (a) emit an `Acknowledge` followed immediately by a `Reject` with `reason = EmptyBook`, or (b) emit only a `Reject` and skip the `Acknowledge`. Real exchanges differ. This document picks **(b): a single `Reject` with `reason = EmptyBook` and no preceding `Acknowledge`**, on the grounds that the order never reached the matching loop in any meaningful sense and a downstream consumer correlating fills to acks gets a cleaner trace if rejected orders skip the ack entirely. The Reference Implementation Engineer must implement this convention; the C++ engine must agree.
+The textbook references give two acceptable behaviors for a market order against an empty book: (a) emit an `Acknowledge` followed immediately by a `Reject` with `reason = EmptyBook`, or (b) emit only a `Reject` and skip the `Acknowledge`. Real exchanges differ. This document picks **(b): a single `Reject` with `reason = EmptyBook` and no preceding `Acknowledge`**, on the grounds that the order never reached the matching loop in any meaningful sense and a downstream consumer correlating fills to acks gets a cleaner trace if rejected orders skip the ack entirely. The Python reference and the C++ engine both implement this convention.
 
-This is one of the two convention choices flagged for PM review in the Quant Domain Validator's hand-off note (see section 8 of this document).
+This is one of the two convention choices documented in section 8 below.
 
 ### 4.2 Worked example MKT-1: market buy fully filling against a single resting ask
 
@@ -650,12 +648,12 @@ Bids:                         Asks:
 
 ## 6. Cancel-by-id semantics
 
-A `Cancel` event names an `OrderId`. The engine looks the id up in the per-symbol `OrderId -> Order*` map (added to the `Book` in Phase 1 per the companion plan key decision 4).
+A `Cancel` event names an `OrderId`. The engine looks the id up in the per-symbol `OrderId -> Order*` map carried by every `Book`.
 
 1. If the lookup hits a resting order, the engine unlinks the order from its `Level`, removes it from the lookup map, removes the now-empty level from the side if applicable, and emits a `Cancel` report carrying the cancelled order's remaining quantity.
 2. If the lookup misses (the id was never registered, or it was already fully filled, or it was already cancelled), the engine emits a `Reject` report with `reason = NotFound`. This makes the cancel-by-id path idempotent in the sense that issuing a cancel for an id that is no longer in the book always produces a `Reject` and never a phantom side effect.
 
-The "cancel idempotence" invariant in design spec section 8.2 (item 6) is the property-test version of this rule. It is deferred to a later phase (see section 7 of this document) because Phase 1's invariant set is intentionally minimal.
+The "cancel idempotence" invariant (item 6 in section 7 below) is the property-test version of this rule. It is deferred to a later milestone because the single-symbol invariant set is intentionally minimal.
 
 ### 6.1 Worked example CXL-1: cancel a fully resting order
 
@@ -800,23 +798,23 @@ Bids:                         Asks:
 
 ---
 
-## 7. Phase 1 invariants (checklist for QA Engineer)
+## 7. Single-symbol invariants (checklist for property tests)
 
-The following five invariants are within scope for Phase 1 and should be turned into property tests by the QA Engineer in Phase 3 (Phase 3 is when `rapidcheck` is wired up; the tests are not written in Phase 1 itself, but the invariants must be established here so the Phase 1 implementation is built against them). Each item below names the design-spec section 8.2 invariant it corresponds to and gives the precise statement.
+The following five invariants are within scope for the single-symbol matching engine and are the basis for the property-based test suite. They are established here so the implementation can be built against them; the property tests themselves land alongside the rapidcheck wiring.
 
-* [ ] **1. Price-time priority preserved across arbitrary sequences.** For any sequence of `EngineEvent`s applied in order, the order in which orders fill at a given price level is the order in which they were inserted at that level (FIFO at the level). (Design spec 8.2 item 1.)
-* [ ] **2. Quantity conservation.** For any `OrderId` ever submitted, `submitted_qty == filled_qty + resting_qty + cancelled_qty` at every point in time after the order has reached a terminal or resting state. (Design spec 8.2 item 2.)
-* [ ] **3. No double fill.** No `OrderId` ever receives a stream of `Fill` reports whose cumulative quantity exceeds its submitted quantity. (Design spec 8.2 item 3.)
-* [ ] **4. No lost orders.** Every submitted `OrderId` is, at any point in time, in exactly one of these states: `filled` (no remaining qty, all filled), `partially-filled-resting` (some filled, some resting on the book), `fully-resting` (no fills, full qty resting), `cancelled-with-no-fills` (no fills, cancelled), or `cancelled-after-partial-fill` (some fills, then cancelled). The five states are mutually exclusive and collectively exhaustive. (Design spec 8.2 item 4, expanded to make the cancel-after-partial-fill case explicit.)
-* [ ] **5. IOC never rests.** No `OrderId` submitted with `OrderType::IOC` is ever found in the book's `OrderId -> Order*` lookup map after the matching loop returns. (Design spec 8.2 item 7.)
+* [ ] **1. Price-time priority preserved across arbitrary sequences.** For any sequence of `EngineEvent`s applied in order, the order in which orders fill at a given price level is the order in which they were inserted at that level (FIFO at the level).
+* [ ] **2. Quantity conservation.** For any `OrderId` ever submitted, `submitted_qty == filled_qty + resting_qty + cancelled_qty` at every point in time after the order has reached a terminal or resting state.
+* [ ] **3. No double fill.** No `OrderId` ever receives a stream of `Fill` reports whose cumulative quantity exceeds its submitted quantity.
+* [ ] **4. No lost orders.** Every submitted `OrderId` is, at any point in time, in exactly one of these states: `filled` (no remaining qty, all filled), `partially-filled-resting` (some filled, some resting on the book), `fully-resting` (no fills, full qty resting), `cancelled-with-no-fills` (no fills, cancelled), or `cancelled-after-partial-fill` (some fills, then cancelled). The five states are mutually exclusive and collectively exhaustive.
+* [ ] **5. IOC never rests.** No `OrderId` submitted with `OrderType::IOC` is ever found in the book's `OrderId -> Order*` lookup map after the matching loop returns.
 
-The remaining five invariants from design spec section 8.2 are **deferred to later phases**. QA must not write Phase 1 property tests for these.
+The remaining five invariants are **deferred to later milestones**. The single-symbol property tests do not cover these.
 
-* [ ] **(Deferred to Phase 4 / Phase 5)** Spread non-negative: `best_ask >= best_bid` at all times between events. The seqlock-protected snapshot lands in Phase 4, and the multi-level interleaving needed to stress this in property tests is more naturally exercised once the seqlock and sampler are in place. (Design spec 8.2 item 5.)
-* [ ] **(Deferred to Phase 3 / Phase 7)** Cancel idempotence: a second cancel of the same id returns `Reject reason=NotFound`. The Phase 1 worked examples (CXL-4, CXL-5, CXL-6) cover this in unit tests; the property-test form lands in Phase 3 alongside the other generated-sequence invariants. (Design spec 8.2 item 6.)
-* [ ] **(Deferred to Phase 7)** FOK is all-or-nothing. Phase 7 is when `OrderType::FOK` is implemented. (Design spec 8.2 item 8.)
-* [ ] **(Deferred to Phase 7)** Post-only never crosses. Phase 7 is when `OrderType::PostOnly` is implemented. (Design spec 8.2 item 9.)
-* [ ] **(Deferred to Phase 4)** Top-of-book monotonicity within a tick: between event N and event N+1, top-of-book changes are atomic from a reader's perspective (no torn reads). The seqlock protocol that guarantees this lands in Phase 4. (Design spec 8.2 item 10.)
+* [ ] **(Deferred to the seqlock / bench work)** Spread non-negative: `best_ask >= best_bid` at all times between events. The seqlock-protected snapshot lands with the concurrency milestone, and the multi-level interleaving needed to stress this in property tests is more naturally exercised once the seqlock and sampler are in place.
+* [ ] **(Deferred to the property-test / post-only-FOK milestones)** Cancel idempotence: a second cancel of the same id returns `Reject reason=NotFound`. The single-symbol worked examples (CXL-4, CXL-5, CXL-6) cover this in unit tests; the property-test form lands alongside the rapidcheck wiring.
+* [ ] **(Deferred to the post-only / FOK milestone)** FOK is all-or-nothing.
+* [ ] **(Deferred to the post-only / FOK milestone)** Post-only never crosses.
+* [ ] **(Deferred to the seqlock milestone)** Top-of-book monotonicity within a tick: between event N and event N+1, top-of-book changes are atomic from a reader's perspective (no torn reads). The seqlock protocol that guarantees this lands with the concurrency work.
 
 ### 7.1 The conservation law in arithmetic, with a worked example
 
@@ -843,37 +841,37 @@ Walk through CXL-2 (section 6.2):
 * The cancel removed the remaining 20 shares from the book. So `cancelled = 20`. After the cancel, `resting = 0`.
 * Check: `50 == 30 + 0 + 20`. The arithmetic balances.
 
-The QA Engineer's Phase 3 property test for invariant 2 generates an arbitrary event sequence, replays it through both the C++ engine and the Python reference, and at every intermediate step asserts the conservation law for every `OrderId` that has been submitted so far.
+The property test for invariant 2 generates an arbitrary event sequence, replays it through both the C++ engine and the Python reference, and at every intermediate step asserts the conservation law for every `OrderId` that has been submitted so far.
 
 ---
 
-## 8. Decisions flagged for PM review
+## 8. Convention choices
 
-The Quant Domain Validator made two convention choices in this document where the textbook references admit more than one acceptable behavior. These are flagged here so the PM can ratify or override before the Reference Implementation Engineer encodes them in the Python reference.
+Two convention choices in this document picked between behaviors where the textbook references admit more than one acceptable answer. They are documented here so future readers can see the rationale.
 
 ### 8.1 Market against empty book: single Reject vs Acknowledge-then-Reject
 
-Section 4.1 picks **single `Reject` with `reason=EmptyBook`, no preceding `Acknowledge`**. Some real exchanges emit an `Acknowledge` first. Picking the single-reject form is cleaner for the downstream consumer and matches what a defensible fast path would do (the engine never reached the matching loop in any meaningful sense). The Reference Implementation Engineer must implement this choice; the C++ engine must match. If the PM overrides this to "ack then reject", every MKT-* worked example with an empty opposite side (MKT-4, MKT-7) and the Phase 3 property tests must be updated.
+Section 4.1 picks **single `Reject` with `reason=EmptyBook`, no preceding `Acknowledge`**. Some real exchanges emit an `Acknowledge` first. Picking the single-reject form is cleaner for the downstream consumer and matches what a defensible fast path would do (the engine never reached the matching loop in any meaningful sense). The Python reference and the C++ engine both implement this. If this is ever flipped to "ack then reject", every MKT-* worked example with an empty opposite side (MKT-4, MKT-7) and the corresponding property tests must be updated.
 
 ### 8.2 Reject report sentinel side and price for unknown OrderId cancel
 
-Section 6.4 picks `Side::Buy` and `price=0` as sentinels in the `Reject` report when the cancel target `OrderId` is unknown. The engine has no way to know the actual side or price (the order was never registered), so any choice here is arbitrary. `Side::Buy` is the value zero of the `Side` enum, so it is a natural sentinel; a future refactor that adds a third enumerator like `Side::Unknown` would be cleaner but adds a tag bit to the hot path. The Reference Implementation Engineer should match whatever the C++ engine does. If the PM prefers a different sentinel convention, CXL-4, CXL-5, and CXL-6 must be updated.
+Section 6.4 picks `Side::Buy` and `price=0` as sentinels in the `Reject` report when the cancel target `OrderId` is unknown. The engine has no way to know the actual side or price (the order was never registered), so any choice here is arbitrary. `Side::Buy` is the value zero of the `Side` enum, so it is a natural sentinel; a future refactor that adds a third enumerator like `Side::Unknown` would be cleaner but adds a tag bit to the hot path. If a different sentinel convention is preferred later, CXL-4, CXL-5, and CXL-6 must be updated.
 
 ---
 
 ## 9. Citations
 
-The references below are listed with the specific section that supports each rule. Where this document was written without direct access to the cited text, the citation is marked `[citation needed]` so the Citation and Fact Auditor (agent 17) can resolve the exact section number in their pass before this document ships.
+The references below are listed with the specific section that supports each rule. Where this document was written without direct access to the cited text, the citation is marked `[citation needed]` and should be resolved on the next refresh.
 
 * **Harris, Larry. *Trading and Exchanges: Market Microstructure for Practitioners*. Oxford University Press, 2003.**
   * Chapter 6, "Order-Driven Market Mechanisms": the formal treatment of order precedence rules: price priority is primary; time priority breaks ties at a price level. Cited in section 2.1 and section 2.2 of this document. [citation needed: confirm exact sub-section number within Chapter 6 for the price-time priority statement]
   * Chapter 4, "Orders and Order Properties": the canonical taxonomy of order types (limit, market, IOC, FOK, post-only). Cited implicitly in sections 3, 4, 5 of this document. [citation needed: confirm exact sub-section number]
-* The earlier draft of this document also cited O'Hara, *Market Microstructure Theory*, Chapter 1 for the formal limit-order-book definition. The Citation and Fact Auditor's Phase 1 pass found that Chapter 1 ("Markets and Market Making") does not contain a formal LOB definition; the citation has been removed pending a future refresh that locates the correct chapter in O'Hara or substitutes another reference (e.g., Hasbrouck, *Empirical Market Microstructure*, 2007). The Harris Chapter 6 citation alone is sufficient for Phase 1.
+* An earlier draft of this document also cited O'Hara, *Market Microstructure Theory*, Chapter 1 for the formal limit-order-book definition. A subsequent fact-check found that Chapter 1 ("Markets and Market Making") does not contain a formal LOB definition; the citation was removed pending a future refresh that locates the correct chapter in O'Hara or substitutes another reference (e.g., Hasbrouck, *Empirical Market Microstructure*, 2007). The Harris Chapter 6 citation alone is sufficient.
 * **NASDAQ TotalView-ITCH 5.0 Specification, document version 5.0, NASDAQ MarketWatch.**
   * The `Order Executed Message` (Type `E`) and `Order Executed With Price Message` (Type `C`) document the maker-taker fill semantics that this document's section 2.3 mirrors. [citation needed: confirm exact page or section]
   * The order-priority invariant is implicit in the message protocol: the spec assumes a price-time-priority matching engine. [citation needed: confirm wording]
-  * Phase 6 will produce `docs/risk/itch-conformance.md` (a separate document by the same Quant Domain Validator) that lists every ITCH 5.0 message type and its mapping to an `EngineEvent`. The present document references ITCH only for terminology and only where wording is borrowed verbatim.
+  * A future `docs/risk/itch-conformance.md` will list every ITCH 5.0 message type and its mapping to an `EngineEvent`. The present document references ITCH only for terminology and only where wording is borrowed verbatim.
 * **Lyons, Richard K. *The Microstructure Approach to Exchange Rates*. MIT Press, 2001.**
-  * Listed as background reading in `agents/01-quant-domain-validator.md` for context on order-book theory. Not directly cited in any rule of this document; left in the references for completeness.
+  * Background reading on order-book theory; not directly cited in any rule of this document, left in the references for completeness.
 
-The Citation and Fact Auditor's job in Phase 1 is to resolve every `[citation needed]` above into a specific section, page number, or paragraph reference that another reader could verify by opening the same source.
+Every `[citation needed]` marker above should be resolved on the next pass into a specific section, page number, or paragraph reference that another reader could verify by opening the same source.

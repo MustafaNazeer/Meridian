@@ -20,7 +20,7 @@ enum class RejectReason : std::uint8_t {
     UnknownSymbol = 5,
 };
 
-// Per docs/risk/matching-semantics.md (Quant Domain Validator, 2026-05-09):
+// Per docs/risk/matching-semantics.md (2026-05-09):
 // each match emits TWO Fill reports back to back (maker first, then taker).
 // Each report is self-describing about its own side. Acknowledge precedes
 // any fills against an accepted NewOrder. Outright rejects (market against

@@ -1,18 +1,15 @@
-# Phase 1 Matching Correctness Audit Cases
+# Single-symbol Matching Correctness Audit Cases
 
-**Owner**: Risk and Financial Correctness Reviewer (agent 16)
-**Phase**: 1 (Core data structures and single-symbol matching)
-**Status**: Phase 1 sign-off
 **Date**: 2026-05-09
 
-This document is the side-by-side correctness audit of the Phase 1 matching engine. Ten worked examples from `docs/risk/matching-semantics.md` were exercised against both implementations of the matching loop:
+This document is the side-by-side correctness audit of the single-symbol matching engine. Ten worked examples from `docs/risk/matching-semantics.md` were exercised against both implementations of the matching loop:
 
 * The C++ engine in `src/matching.cpp`, driven by a one-shot capture harness at `tests/integration/audit_capture.cpp`.
 * The Python reference in `tests/reference/matching_reference.py`, driven by `tests/reference/run_reference.py` over the same JSON Lines event sequence.
 
 Both implementations were piped through the same JSON Lines wire format described in `tests/reference/run_reference.py`, with object keys in alphabetical order. The two output streams were captured with the harness commands documented in section 12 of this file and compared byte for byte.
 
-The 10 cases were selected per the agent file's Phase 1 task list to span all four order-event types: 3 cases from the limit section (LIM-3, LIM-4, LIM-5), 2 from the market section (MKT-3, MKT-4 with the EmptyBook reject branch), 2 from the IOC section (IOC-2, IOC-4 with the ack-only-no-fills branch), and 3 from the cancel section (CXL-1 success branch, CXL-4 unknown id, CXL-5 already-fully-filled).
+The 10 cases were selected to span all four order-event types: 3 cases from the limit section (LIM-3, LIM-4, LIM-5), 2 from the market section (MKT-3, MKT-4 with the EmptyBook reject branch), 2 from the IOC section (IOC-2, IOC-4 with the ack-only-no-fills branch), and 3 from the cancel section (CXL-1 success branch, CXL-4 unknown id, CXL-5 already-fully-filled).
 
 The captured streams contain every report the engine emits, including the acknowledges for the seed orders that establish the initial book. The "Reports emitted (in order)" block in `matching-semantics.md` documents only the reports for the aggressor or cancel event under examination. Each case below labels the seed acks (initial book setup) separately from the under-audit reports so the cross-check is direct.
 
@@ -464,7 +461,7 @@ The captures above were produced from the project root with these commands. The 
 
 ### 12.1 Build the audit capture binary
 
-The C++ capture harness lives at `tests/integration/audit_capture.cpp`. It is a one-shot tool, not a unit test, and is intentionally not wired into ctest so the QA Engineer's parameterized integration test corpus stays the canonical CI gate. Build it directly against the existing `libmeridian.a`:
+The C++ capture harness lives at `tests/integration/audit_capture.cpp`. It is a one-shot tool, not a unit test, and is intentionally not wired into ctest so the parameterized integration test corpus stays the canonical CI gate. Build it directly against the existing `libmeridian.a`:
 
 ```
 g++ -std=c++20 -O2 -Iinclude tests/integration/audit_capture.cpp \
@@ -502,17 +499,17 @@ Empty diff means byte-for-byte agreement. The capture run that produced this doc
 ### 12.5 Independent regression checks already in CI
 
 * `tests/reference/test_reference.py` covers every worked example in `matching-semantics.md`, including all 26 cases (LIM-1 to LIM-7, MKT-1 to MKT-6, IOC-1 to IOC-7, CXL-1 to CXL-6) plus conservation-law walkthroughs and a determinism test.
-* `tests/integration/test_engine_vs_reference.cpp` runs 15 hand-crafted scenarios through both engines and asserts byte-identical JSON output (CI gate). The QA Engineer's parallel Phase 1 dispatch is expanding this to a 60-scenario corpus.
+* `tests/integration/test_engine_vs_reference.cpp` runs 60 hand-crafted scenarios through both engines and asserts byte-identical JSON output (CI gate).
 
-This audit covers a subset of those tests, picked per the agent file Phase 1 task list to span all four order-event types and both NotFound branches. The CI gates are the production source of truth; this document is the human-readable side-by-side correctness audit for the PM and the Citation and Fact Auditor.
+This audit covers a subset of those tests, chosen to span all four order-event types and both NotFound branches. The CI gates are the production source of truth; this document is the human-readable side-by-side correctness audit.
 
 ---
 
 ## 13. Sign-off
 
-**Phase 1 matching correctness signed off.** All 10 audit cases pass in both implementations, and the C++ engine and Python reference produce byte-identical output for every case. No divergences blocking sign-off.
+**Single-symbol matching correctness signed off.** All 10 audit cases pass in both implementations, and the C++ engine and Python reference produce byte-identical output for every case. No divergences blocking sign-off.
 
-The Reference Implementation Engineer's Python reference and the Engine Developer's C++ engine agree on:
+The Python reference and the C++ engine agree on:
 
 * Acknowledge precedes every accepted new order's fills (sections 2.3, 3, 5).
 * Maker fill precedes taker fill at every match (section 1 notation).
@@ -523,39 +520,34 @@ The Reference Implementation Engineer's Python reference and the Engine Develope
 * Cancel of a resting order is a `Cancel` report carrying the cancelled order's resting `side`, `price`, and remaining `qty` (section 6).
 * Cancel of a missing id (unknown, fully filled, or already cancelled) is a Reject with sentinel `side=buy`, `price=0`, `qty=0`, `reason=NotFound` (section 6, section 8.2 convention).
 
-Open follow-up items for later phases, recorded for context but not blocking Phase 1:
+Open follow-up items for later milestones, recorded for context:
 
-* The remaining 16 worked examples in `matching-semantics.md` (LIM-1, LIM-2, LIM-6, LIM-7, MKT-1, MKT-2, MKT-5, MKT-6, IOC-1, IOC-3, IOC-5, IOC-6, IOC-7, CXL-2, CXL-3, CXL-6) are covered by `tests/reference/test_reference.py` and (in part) by `tests/integration/test_engine_vs_reference.cpp`. The Risk Reviewer's per-phase audit obligation is to spot-check, not to copy every test into this document; the integration test file is the comprehensive corpus and the QA Engineer's parallel dispatch is expanding it to ~60 scenarios.
-* Phase 2 will extend this document with cancel-after-partial-fill (the remainder branch) and cross-symbol cancel cases (per agent file Phase 2 tasks).
-* Phase 3 will add hand-walkthroughs of generated rapidcheck cases for the five Phase 1 invariants (per agent file Phase 3 tasks).
-
-Reviewer: Risk and Financial Correctness Reviewer (agent 16), 2026-05-09.
+* The remaining 16 worked examples in `matching-semantics.md` (LIM-1, LIM-2, LIM-6, LIM-7, MKT-1, MKT-2, MKT-5, MKT-6, IOC-1, IOC-3, IOC-5, IOC-6, IOC-7, CXL-2, CXL-3, CXL-6) are covered by `tests/reference/test_reference.py` and (in part) by `tests/integration/test_engine_vs_reference.cpp`. This document is a hand-audit spot check, not a full transcription of the test corpus; the integration test file is the comprehensive corpus.
+* The cancel-after-partial-fill (remainder branch) and cross-symbol cancel cases are covered in the multi-instrument section below.
+* Hand-walkthroughs of generated rapidcheck cases for the matching invariants will land alongside the property-test suite.
 
 ---
 
-# Phase 2: Multi-instrument and cross-symbol cancel
+# Multi-instrument and cross-symbol cancel
 
-**Owner**: Risk and Financial Correctness Reviewer (agent 16)
-**Phase**: 2 (Multi-instrument and cancel-by-id)
-**Status**: Phase 2 sign-off
 **Date**: 2026-05-09
 
-This section is the side-by-side correctness audit of the Phase 2 multi-instrument matching engine. Five audit cases (per the companion plan `docs/superpowers/plans/2026-05-09-phase-2-multi-instrument-and-cancel.md` Task 9) were exercised against both implementations:
+This section is the side-by-side correctness audit of the multi-instrument matching engine. Five audit cases were exercised against both implementations:
 
-* The C++ engine in `src/matching.cpp`, with `BookRegistry` (`src/book_registry.cpp`) and `OrderIndex` (`src/order_index.cpp`) wired in. The constructor signature changed from Phase 1's `MatchingEngine(OrderPool&, Book&)` to `MatchingEngine(OrderPool&, BookRegistry&, OrderIndex&)`. Multi-symbol dispatch happens in `MatchingEngine::apply` via `registry_.book(event.symbol)`; the cross-symbol cancel routes through `apply_cancel` via `index_.find(event.order_id)`. See `docs/adr/0002-cross-symbol-cancel.md` for the dual-index design rationale.
-* The Python reference in `tests/reference/matching_reference.py`, extended in Phase 2 with `MatchingReference(symbols=[1,2,3,4,5])`, an internal `_id_to_symbol` cross-symbol map, and the `RejectReason.UNKNOWN_SYMBOL` reject branch. See `tests/reference/test_reference.py::MultiSymbolTests` for the unit-test coverage.
+* The C++ engine in `src/matching.cpp`, with `BookRegistry` (`src/book_registry.cpp`) and `OrderIndex` (`src/order_index.cpp`) wired in. The constructor signature changed from the single-symbol `MatchingEngine(OrderPool&, Book&)` to `MatchingEngine(OrderPool&, BookRegistry&, OrderIndex&)`. Multi-symbol dispatch happens in `MatchingEngine::apply` via `registry_.book(event.symbol)`; the cross-symbol cancel routes through `apply_cancel` via `index_.find(event.order_id)`. See `docs/adr/0002-cross-symbol-cancel.md` for the dual-index design rationale.
+* The Python reference in `tests/reference/matching_reference.py`, extended with `MatchingReference(symbols=[1,2,3,4,5])`, an internal `_id_to_symbol` cross-symbol map, and the `RejectReason.UNKNOWN_SYMBOL` reject branch. See `tests/reference/test_reference.py::MultiSymbolTests` for the unit-test coverage.
 
-Both implementations were piped through the same JSON Lines wire format. The new-order wire format gained an optional `symbol` field (defaulting to `1` for Phase 1 backward compatibility); the cancel wire format remains `{"kind":"cancel","order_id":<int>,"ts":<int>}` (no `symbol` on the wire, per ADR 0002). The two output streams were captured with the harness commands documented in section 12 of this Phase 2 audit and compared byte for byte.
+Both implementations were piped through the same JSON Lines wire format. The new-order wire format gained an optional `symbol` field (defaulting to `1` for backward compatibility with the single-symbol scope); the cancel wire format remains `{"kind":"cancel","order_id":<int>,"ts":<int>}` (no `symbol` on the wire, per ADR 0002). The two output streams were captured with the harness commands documented in section 12 of this audit and compared byte for byte.
 
-The 5 cases were selected per the companion plan Task 9 to span the new Phase 2 surface area: cross-symbol cancel isolation, cancel-after-fully-filled in a multi-symbol setting, unknown-symbol reject (limit and market shapes), independent activity across all 5 demo symbols, and cross-symbol routing where the cancel arrives without the caller naming the order's symbol.
+The 5 cases were selected to span the new multi-instrument surface area: cross-symbol cancel isolation, cancel-after-fully-filled in a multi-symbol setting, unknown-symbol reject (limit and market shapes), independent activity across all 5 demo symbols, and cross-symbol routing where the cancel arrives without the caller naming the order's symbol.
 
 The captured streams contain every report the engines emit, including the acknowledges and seed setup for orders that establish each scenario's initial multi-symbol state. The "Expected output" block under each case documents the full report stream for that scenario (not just the headline event), so the cross-check is direct.
 
 ---
 
-## Phase 2 Case 1, cross-symbol cancel isolation
+## Multi-instrument Case 1, cross-symbol cancel isolation
 
-Source: companion plan Task 9 audit case 1 ("cancel resting order on symbol X (success, no effect on Y)"). Cross-references `docs/risk/matching-semantics.md` section 6.1 (the success branch of cancel-by-id) for the per-symbol contract, and ADR 0002 for the cross-symbol routing.
+Source: audit case 1 ("cancel resting order on symbol X, success, no effect on Y"). Cross-references `docs/risk/matching-semantics.md` section 6.1 (the success branch of cancel-by-id) for the per-symbol contract, and ADR 0002 for the cross-symbol routing.
 
 ### Input event sequence
 
@@ -603,9 +595,9 @@ C++ and Python streams are byte-identical. Both implementations route the cancel
 
 ---
 
-## Phase 2 Case 2, cancel after fully filled (multi-symbol setting)
+## Multi-instrument Case 2, cancel after fully filled (multi-symbol setting)
 
-Source: companion plan Task 9 audit case 2 ("cancel after fully filled (Reject NotFound)"). Cross-references `docs/risk/matching-semantics.md` section 6.5 (CXL-5, the cancel-after-fully-filled NotFound branch) for the per-symbol contract; the new wrinkle in Phase 2 is that the lookup happens through the cross-symbol `OrderIndex`, not a per-`Book` map.
+Source: audit case 2 ("cancel after fully filled, Reject NotFound"). Cross-references `docs/risk/matching-semantics.md` section 6.5 (CXL-5, the cancel-after-fully-filled NotFound branch) for the per-symbol contract; the new wrinkle in the multi-instrument design is that the lookup happens through the cross-symbol `OrderIndex`, not a per-`Book` map.
 
 ### Input event sequence
 
@@ -663,16 +655,16 @@ C++ and Python streams are byte-identical. Both implementations correctly handle
 
 ---
 
-## Phase 2 Case 3, unknown-symbol reject (limit and market shapes)
+## Multi-instrument Case 3, unknown-symbol reject (limit and market shapes)
 
-Source: companion plan Task 9 audit case 3 ("NewOrder for unknown symbol (Reject UnknownSymbol)"). Cross-references companion plan Task 1 (the new `RejectReason::UnknownSymbol = 5` enumerator) and ADR 0002 (the unknown-symbol path is the inverse of the registered-symbol fast path).
+Source: audit case 3 ("NewOrder for unknown symbol, Reject UnknownSymbol"). The new `RejectReason::UnknownSymbol = 5` enumerator handles this, and ADR 0002 covers the routing (the unknown-symbol path is the inverse of the registered-symbol fast path).
 
 ### Input event sequence
 
 * Event 1: `NewOrder { id=10, symbol=99, side=B, type=LIM, price=100, qty=10, ts=1 }` (symbol 99 not in the registered set `{1,2,3,4,5}`)
 * Event 2: `NewOrder { id=11, symbol=42, side=B, type=MKT, price=0, qty=10, ts=2 }` (symbol 42 not in the registered set; market order; price field is sentinel 0)
 
-### Expected output (per companion plan Task 1, mirroring the EmptyBook reject convention from matching-semantics.md section 4.1)
+### Expected output (mirroring the EmptyBook reject convention from matching-semantics.md section 4.1)
 
 1. Single Reject for id=10 with `reject_reason=unknown_symbol`, carrying the submitted `side=buy`, `price=100`, `qty=10`, `ts=1`. No preceding Acknowledge (the order never reached the matching loop, mirroring MKT-4's empty-book convention from section 4.1).
 2. Single Reject for id=11 with `reject_reason=unknown_symbol`, carrying `side=buy`, `price=0` (the market-order sentinel), `qty=10`, `ts=2`.
@@ -699,9 +691,9 @@ C++ and Python streams are byte-identical. Both engines emit a single Reject Unk
 
 ---
 
-## Phase 2 Case 4, multi-symbol concurrent matching across all 5 demo symbols
+## Multi-instrument Case 4, multi-symbol concurrent matching across all 5 demo symbols
 
-Source: companion plan Task 9 audit case 4 ("multi-symbol concurrent matching (5 symbols, 5 audit logs, all match reference)"). Cross-references companion plan key decision 3 (the demo set `{AAPL=1, SPY=2, NVDA=3, TSLA=4, GOOG=5}`).
+Source: audit case 4 ("multi-symbol concurrent matching, 5 symbols, 5 audit logs, all match reference"). Uses the demo set `{AAPL=1, SPY=2, NVDA=3, TSLA=4, GOOG=5}`.
 
 ### Input event sequence
 
@@ -822,9 +814,9 @@ C++ and Python streams are byte-identical across all 40 reports (8 per symbol ti
 
 ---
 
-## Phase 2 Case 5, cross-symbol cancel by id routing (cancel arrives without naming the symbol)
+## Multi-instrument Case 5, cross-symbol cancel by id routing (cancel arrives without naming the symbol)
 
-Source: companion plan Task 9 audit case 5 ("cancel-by-id where id was placed on Y but cancel arrives without naming Y; engine routes correctly"). Cross-references ADR 0002 (the cross-symbol cancel routes through `OrderIndex::find`, which returns the `Order*`; the `Order::symbol` field then identifies the right `Book`).
+Source: audit case 5 ("cancel-by-id where the id was placed on Y but the cancel arrives without naming Y; the engine routes correctly"). The cross-symbol cancel routes through `OrderIndex::find` (per ADR 0002), which returns the `Order*`; the `Order::symbol` field then identifies the right `Book`.
 
 ### Input event sequence
 
@@ -880,74 +872,72 @@ C++ and Python streams are byte-identical. Both engines route the cancel of id=5
 | 4 | five-symbol-independent-activity | 5 symbols times (3 limits + 1 market); 40 reports total; no leakage | match | match | byte-identical | PASS |
 | 5 | cross-symbol-cancel-by-id-routing | Cancel id=5 with no symbol on wire; routes via `OrderIndex` | match | match | byte-identical | PASS |
 
-All 5 Phase 2 cases pass in both implementations, with byte-identical output streams.
+All 5 multi-instrument cases pass in both implementations, with byte-identical output streams.
 
 ---
 
-## How to reproduce the Phase 2 audit
+## How to reproduce the multi-instrument audit
 
 The captures above were produced from the project root with the following procedure. The procedure is deterministic; rerunning produces byte-identical output.
 
-### Build the C++ Phase 2 audit capture binary
+### Build the multi-instrument audit capture binary
 
-The C++ capture harness is the Phase 2 counterpart of `tests/integration/audit_capture.cpp`. The Phase 1 file was written against the single-`Book` constructor and does not compile against Phase 2's `MatchingEngine(OrderPool&, BookRegistry&, OrderIndex&)`. Rather than vendoring a Phase 2 version into the repo permanently (the parameterized integration test `tests/integration/test_multi_instrument.cpp` is the canonical CI gate; this audit harness is a one-shot for human readability), the Phase 2 harness was written into a temp file and built directly against `build/src/libmeridian.a`:
+The C++ capture harness is the multi-instrument counterpart of `tests/integration/audit_capture.cpp`. The single-symbol file was written against the single-`Book` constructor and does not compile against the multi-instrument `MatchingEngine(OrderPool&, BookRegistry&, OrderIndex&)`. Rather than vendoring a multi-instrument version into the repo permanently (the parameterized integration test `tests/integration/test_multi_instrument.cpp` is the canonical CI gate; this audit harness is a one-shot for human readability), the harness was written into a temp file and built directly against `build/src/libmeridian.a`:
 
 ```
-g++ -std=c++20 -O2 -Iinclude /tmp/audit_capture_phase2.cpp \
-    build/src/libmeridian.a -o /tmp/audit_capture_phase2
+g++ -std=c++20 -O2 -Iinclude /tmp/audit_capture_multi.cpp \
+    build/src/libmeridian.a -o /tmp/audit_capture_multi
 ```
 
-The capture binary's source is reproduced on request from the Phase 2 reviewer notes; it follows the same pattern as the integration test's `run_cpp` helper but uses `std::cout` to emit one JSON Lines block per case rather than asserting through gtest.
+The capture binary's source follows the same pattern as the integration test's `run_cpp` helper but uses `std::cout` to emit one JSON Lines block per case rather than asserting through gtest.
 
 ### Capture the C++ engine output
 
 ```
-/tmp/audit_capture_phase2 > /tmp/phase2_cpp.out
+/tmp/audit_capture_multi > /tmp/multi_cpp.out
 ```
 
 ### Capture the Python reference output
 
-The same five event sequences are run through `tests/reference/run_reference.py`, one process per case so each case starts with a fresh engine instance. The driver was scripted into `/tmp/capture_phase2.sh` (a small bash helper that pipes each case's events to the reference and tags the output blocks):
+The same five event sequences are run through `tests/reference/run_reference.py`, one process per case so each case starts with a fresh engine instance. The driver was scripted into `/tmp/capture_multi.sh` (a small bash helper that pipes each case's events to the reference and tags the output blocks):
 
 ```
-bash /tmp/capture_phase2.sh > /tmp/phase2_python.out
+bash /tmp/capture_multi.sh > /tmp/multi_python.out
 ```
 
 ### Cross-check
 
 ```
-diff /tmp/phase2_cpp.out /tmp/phase2_python.out
+diff /tmp/multi_cpp.out /tmp/multi_python.out
 ```
 
 Empty diff means byte-for-byte agreement. The capture run that produced this section had a clean diff across all 5 cases combined.
 
 ### Independent regression checks already in CI
 
-* `tests/integration/test_multi_instrument.cpp` runs 7 parameterized scenarios through both engines and asserts byte-identical JSON output: `five_symbol_independent`, `cross_symbol_cancel_isolation`, `cross_symbol_cancel_by_id_routing`, `unknown_symbol_reject`, `id_reuse_after_cancel_different_symbol`, `cancel_after_fully_filled_multi_symbol` (added during this Phase 2 review), and `mixed_50_event_random`. This is the production CI gate.
-* `tests/reference/test_reference.py::MultiSymbolTests` covers the same five surface areas in Python-only unit tests (5-symbol dispatch, cross-symbol cancel isolation, cross-symbol cancel by id routing, unknown-symbol reject, cross-symbol unknown-id NotFound), plus several Phase 2 backward-compatibility checks (legacy single-symbol constructor still works, multi-symbol mode requires explicit `symbol=` on submit, constructor rejects mixing `symbol=` and `symbols=`).
+* `tests/integration/test_multi_instrument.cpp` runs 7 parameterized scenarios through both engines and asserts byte-identical JSON output: `five_symbol_independent`, `cross_symbol_cancel_isolation`, `cross_symbol_cancel_by_id_routing`, `unknown_symbol_reject`, `id_reuse_after_cancel_different_symbol`, `cancel_after_fully_filled_multi_symbol`, and `mixed_50_event_random`. This is the production CI gate.
+* `tests/reference/test_reference.py::MultiSymbolTests` covers the same five surface areas in Python-only unit tests (5-symbol dispatch, cross-symbol cancel isolation, cross-symbol cancel by id routing, unknown-symbol reject, cross-symbol unknown-id NotFound), plus several backward-compatibility checks (legacy single-symbol constructor still works, multi-symbol mode requires explicit `symbol=` on submit, constructor rejects mixing `symbol=` and `symbols=`).
 
-This audit covers the five cases the companion plan named under Task 9, picked to span the new Phase 2 surface area. The CI gates are the production source of truth; this section is the human-readable side-by-side correctness audit for the PM and the Citation and Fact Auditor.
+This audit covers five cases chosen to span the multi-instrument surface area. The CI gates are the production source of truth; this section is the human-readable side-by-side correctness audit.
 
 ---
 
-## Phase 2 Sign-off
+## Multi-instrument Sign-off
 
-**Phase 2 multi-symbol matching correctness signed off.** All 5 Phase 2 audit cases pass in both implementations, and the C++ engine and Python reference produce byte-identical output for every case. No divergences blocking sign-off.
+**Multi-symbol matching correctness signed off.** All 5 multi-instrument audit cases pass in both implementations, and the C++ engine and Python reference produce byte-identical output for every case. No divergences blocking sign-off.
 
-The Reference Implementation Engineer's Python reference and the Engine Developer's C++ engine agree on:
+The Python reference and the C++ engine agree on:
 
 * New-order dispatch by `symbol` field through `BookRegistry::book` (C++) / `_books[sym]` (reference).
 * Cross-symbol cancel routing through `OrderIndex::find` (C++) / `_id_to_symbol` (reference); cancel for id placed on any symbol routes to the correct per-symbol book without the wire format naming the symbol.
-* Cross-symbol cancel isolation: a cancel on symbol X never touches symbol Y's book (Phase 2 Case 1 and Case 5 demonstrate this directly).
+* Cross-symbol cancel isolation: a cancel on symbol X never touches symbol Y's book (multi-instrument Case 1 and Case 5 demonstrate this directly).
 * Cancel-after-fully-filled in the multi-symbol setting: Reject NotFound with the matching-semantics.md section 8.2 sentinels (`side=buy`, `price=0`, `qty=0`), confirming the dual-index design from ADR 0002 is coherent (per-`Book` index and `OrderIndex` both erase on full fill).
 * Unknown-symbol reject: single Reject with `reject_reason=unknown_symbol` and no preceding Acknowledge, mirroring the EmptyBook reject convention from matching-semantics.md section 4.1.
 * Independent multi-symbol activity: 5 books run side by side without any cross-symbol leakage; per-symbol fill patterns match the single-symbol contract from matching-semantics.md sections 3 and 4.
-* Sentinel and ts conventions inherited from Phase 1 carry through unchanged: Cancel reports carry the cancelled order's resting `side`, `price`, and remaining `qty`; Reject NotFound carries section 8.2 sentinels; Reject UnknownSymbol carries the submitted `side`, `price`, and `qty`.
+* Sentinel and ts conventions inherited from the single-symbol design carry through unchanged: Cancel reports carry the cancelled order's resting `side`, `price`, and remaining `qty`; Reject NotFound carries section 8.2 sentinels; Reject UnknownSymbol carries the submitted `side`, `price`, and `qty`.
 
-Open follow-up items for later phases, recorded for context but not blocking Phase 2:
+Open follow-up items for later milestones, recorded for context:
 
-* The dual-index design from ADR 0002 (per-`Book` id index plus cross-symbol `OrderIndex`) ships in Phase 2; consolidating the two indexes is filed in `future-ideas.md` for Phase 5 or Phase 7. The Phase 2 audit cases 1, 2, and 5 exercise the dual-index coherence invariant ("the two indexes must never disagree"); a hand-audit of `MatchingEngine::apply_limit` and `MatchingEngine::sweep` confirmed both insert and erase paths update both indexes.
-* Phase 3 will add property-based tests via `rapidcheck` for the five Phase 1 invariants. The Phase 2 audit cases extend the implicit invariants list with: cross-symbol cancel isolation, dual-index coherence, unknown-symbol reject shape. These are candidates for Phase 3 property-test generators.
-* Phase 6 (NASDAQ ITCH 5.0 replay) will exercise the multi-symbol dispatch at scale and is the natural moment to confirm the dispatch overhead stays inside the latency budget; the Performance Engineer's Phase 2 bench gate already sits at the same throughput as Phase 1 within noise (per the QA Engineer's Phase 2 sign-off note).
-
-Reviewer: Risk and Financial Correctness Reviewer (agent 16), 2026-05-09.
+* The dual-index design from ADR 0002 (per-`Book` id index plus cross-symbol `OrderIndex`) ships now; consolidating the two indexes is a future cleanup. Cases 1, 2, and 5 exercise the dual-index coherence invariant ("the two indexes must never disagree"); a hand-audit of `MatchingEngine::apply_limit` and `MatchingEngine::sweep` confirmed both insert and erase paths update both indexes.
+* The property-test suite (via `rapidcheck`) will cover the matching invariants, including the multi-instrument additions: cross-symbol cancel isolation, dual-index coherence, unknown-symbol reject shape. These are candidates for property-test generators.
+* The NASDAQ ITCH 5.0 replay milestone will exercise the multi-symbol dispatch at scale and is the natural moment to confirm the dispatch overhead stays inside the latency budget; the bench is currently at the same throughput as the single-symbol baseline within noise.

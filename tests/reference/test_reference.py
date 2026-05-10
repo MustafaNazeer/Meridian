@@ -11,8 +11,7 @@ worked example, submits the event, and asserts that:
    the engine's internal ``_orders`` lookup map, matches the
    "Post-event book" block of the worked example.
 
-The bar for the reference is that every worked example passes
-(agents/18-reference-implementation-engineer.md, "Definition of done").
+The bar for the reference is that every worked example passes.
 
 Run from the repo root:
 
@@ -639,8 +638,8 @@ class ConservationLawTests(_BaseRefTest):
 
     The conservation law ``submitted = filled + resting + cancelled``
     is checked here on a few examples by reading the engine state
-    after the event. This does not replace the QA Engineer's Phase 3
-    property tests; it is a sanity check at unit-test scale.
+    after the event. This does not replace the property-based tests;
+    it is a sanity check at unit-test scale.
     """
 
     def test_mkt_3_conservation(self) -> None:
@@ -685,22 +684,21 @@ class ConservationLawTests(_BaseRefTest):
 
 
 # ---------------------------------------------------------------------------
-# Phase 2: multi-symbol dispatch and cross-symbol cancel
+# Multi-symbol routing and cross-symbol cancel
 # ---------------------------------------------------------------------------
 
 
 class MultiSymbolTests(unittest.TestCase):
-    """Phase 2 plan task 5 cases: 5-symbol dispatch, cross-symbol cancel
+    """Multi-symbol cases: 5-symbol routing, cross-symbol cancel
     isolation, cross-symbol cancel by id, and unknown-symbol reject.
 
-    The chosen design is option (a) from the Phase 2 dispatch prompt:
     ``MatchingReference`` accepts a list of symbols at construction.
     The single-symbol form ``MatchingReference(symbol=1)`` continues to
-    work; every Phase 1 worked-example test exercises it. The
+    work; every single-symbol worked-example test exercises it. The
     multi-symbol form ``MatchingReference(symbols=[1, 2, 3, 4, 5])``
     registers a fixed set of per-symbol books and routes ``submit_*``
     by an explicit ``symbol=`` keyword. Cancel is cross-symbol: it
-    consults a top-level id-to-symbol map and dispatches to the right
+    consults a top-level id-to-symbol map and routes to the right
     book without the caller naming the symbol.
     """
 
@@ -866,8 +864,8 @@ class MultiSymbolTests(unittest.TestCase):
         """After 101 is cancelled on symbol 1, the id is free again
         and can be assigned to a fresh order on symbol 2.
 
-        This is a Phase 2 invariant the C++ side gets via the
-        ``OrderIndex::erase`` path; the reference must agree.
+        This is the multi-instrument invariant the C++ side gets via
+        the ``OrderIndex::erase`` path; the reference must agree.
         """
 
         self.engine.submit_limit(101, Side.BUY, 10000, 50, 1, symbol=1)
@@ -886,9 +884,8 @@ class MultiSymbolTests(unittest.TestCase):
         interleaved order; the per-symbol final book states match what
         each symbol would have produced in isolation.
 
-        This pins the "no cross-symbol leakage" invariant from the
-        Phase 2 plan Task 6 scenario list (item 1: independent
-        activity per symbol)."""
+        This pins the "no cross-symbol leakage" invariant: independent
+        activity per symbol."""
 
         # Symbol 1: a buy at 10000 partial-filled by a 30 sell.
         self.engine.submit_limit(11, Side.BUY, 10000, 50, 1, symbol=1)
@@ -913,7 +910,7 @@ class MultiSymbolTests(unittest.TestCase):
 
     def test_legacy_single_symbol_constructor_still_works(self) -> None:
         """Backward compatibility: ``MatchingReference(symbol=1)``
-        keeps the Phase 1 single-symbol API. ``submit_*`` and
+        keeps the original single-symbol API. ``submit_*`` and
         ``cancel_at`` work without a ``symbol=`` keyword."""
 
         legacy = MatchingReference(symbol=1)
@@ -954,7 +951,7 @@ class DeterminismTests(unittest.TestCase):
 
         engine = MatchingReference(symbol=1)
         events = []
-        # A small mixed corpus exercising every Phase 1 path.
+        # A small mixed corpus exercising every single-symbol path.
         events.extend(engine.submit_limit(101, Side.BUY, 10000, 50, 1))
         events.extend(engine.submit_limit(102, Side.BUY, 10000, 30, 2))
         events.extend(engine.submit_limit(201, Side.SELL, 10001, 40, 3))
