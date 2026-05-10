@@ -2,11 +2,11 @@
 
 Single source of truth for which phase is next. Read this file when the user says "work on the next phase" or any equivalent. Update this file when a phase changes state. The Project Manager session owns it.
 
-**Last updated**: 2026-05-09 (Phase 2 opened. User confirmed at check-in: 32 percent usage, 2.5 hours until reset; Phase 2 alone fits the window, bundling Phase 3 would overspill. PM session has cross-repo cleanup on `gitignore-private-files` branches merged across 6 repos before resuming Phase 2.).
+**Last updated**: 2026-05-10 (Phase 2 fully closed: PR #9 squash-merged to `main` at `8130599`. Awaiting user check-in answer on whether to open Phase 3 in this window, pause, or stop.).
 
 ## Next phase
 
-**Phase 2: Multi-instrument and cancel-by-id (cross-symbol layer).** Status: `in progress`. Owner: Project Manager session as Engine Developer + Market Microstructure Engineer, dispatching Reference Implementation Engineer (18), QA Engineer (10), Risk and Financial Correctness Reviewer (16), and Code Reviewer (11). Window cost: ~50 percent alone (Phase 3 bundle deferred to next window). See `docs/plan.md` Phase 2 section for the detailed deliverable list and `docs/superpowers/plans/2026-05-09-phase-2-multi-instrument-and-cancel.md` for the bite-sized step plan.
+**Phase 3: Property-based tests for matching invariants.** Status: `not started`. Owner: Project Manager session, dispatching DevOps Engineer (09) for the rapidcheck FetchContent wiring, QA Engineer (10) plus Engine Developer (03) for the 10 invariants, Reference Implementation Engineer (18) to run the same generated corpus against the Python reference, Risk and Financial Correctness Reviewer (16), and Code Reviewer (11). Window cost: ~50 percent alone (was originally bundle-able with Phase 2 in plan.md but Phase 2 shipped on its own). See `docs/plan.md` Phase 3 section for the detailed deliverable list. Acceptance: each invariant passes a one-time validation pass at 10,000 generated sequences with zero failures (per design spec section 2.3).
 
 ## Phase status table
 
@@ -16,7 +16,7 @@ Status values: `not started`, `in progress`, `completed`, `bundled with phase N`
 |---|---|---|---|---|---|
 | 0 | Foundations | completed | 2026-05-09 | ~95% | scaffolds, plan, threat model, design tokens, ADRs land here |
 | 1 | Core data structures and single-symbol matching | completed | 2026-05-09 | ~95% | Order, Level, Book, OrderPool, limit + market + IOC + cancel matching, FIFO at price levels, Python reference, integration corpus, audit cases, citation audit clean |
-| 2 | Multi-instrument and cancel-by-id | in progress | | ~50% | BookRegistry symbol dispatch, O(1) cancel via order ID map (per-Book cancel already shipped in Phase 1) |
+| 2 | Multi-instrument and cancel-by-id | completed | 2026-05-10 | ~50% | BookRegistry symbol dispatch, OrderIndex cross-symbol cancel, RejectReason::UnknownSymbol, multi-symbol diff against Python reference on 7 scenarios, dual-index design captured in ADR 0002 |
 | 3 | Property-based tests for matching invariants | not started | | ~50% alone or bundled with Phase 2 | rapidcheck wired up, 10 invariants verified |
 | 4 | Seqlock-protected top-of-book and sampler | not started | | ~85% | seqlock writer/reader protocol, 30 Hz sampler, TSAN clean |
 | 5 | Benchmark hits 6M events per second | not started | | ~95% | PGO, cache layout audit, target throughput, latency report |
@@ -28,6 +28,37 @@ Status values: `not started`, `in progress`, `completed`, `bundled with phase N`
 | 11 | Polish, README, and benchmark report | not started | | ~80% | headline README, benchmark report PDF, final test pass |
 
 ## Resume notes
+
+### Phase 2 closeout (2026-05-10)
+
+Phase 2 closed cleanly. PR #9 (`phase 2: multi-instrument and cross-symbol cancel`) squash-merged to `main` at `8130599`. CI green: engine (clang) ~45 s, engine (gcc) ~40 s, frontend ~15 s. Six logical commits squashed into one merge commit.
+
+What shipped:
+
+* `BookRegistry` (`unordered_map<Symbol, Book>`, fixed-capacity, `initializer_list<Symbol>` constructor; `book(Symbol)` returns `Book*` or `nullptr`).
+* `OrderIndex` (`unordered_map<OrderId, Order*>`, cross-symbol cancel lookup; `find(OrderId)` returns `Order*` or `nullptr`).
+* `MatchingEngine` constructor signature changed from `(OrderPool, Book)` to `(OrderPool, BookRegistry, OrderIndex)`. `NewOrder` dispatches by `event.symbol`; unknown symbol emits `Reject UnknownSymbol` (no preceding `Acknowledge`). `Cancel` consults `OrderIndex.find()`, reads `order->symbol`, calls `Book::remove_by_id`, erases from both indexes.
+* Python reference extended to multi-symbol via `MatchingReference(symbols=[1, 2, 3, 4, 5])`. Cross-symbol cancel via internal `_id_to_symbol` dispatcher. 11 new tests; 40 reference tests passing total.
+* Phase 1 unit tests and the 60-scenario integration corpus migrate mechanically to the new constructor (single-symbol `BookRegistry{1}` plus `OrderIndex`).
+* New unit tests for `OrderIndex` (5) and `BookRegistry` (5).
+* New integration test `tests/integration/test_multi_instrument.cpp` with 7 multi-symbol scenarios (six landed by the PM, one added by the Risk Reviewer for the Phase 2 audit).
+* `docs/adr/0002-cross-symbol-cancel.md`: dual-index design rationale.
+* `docs/risk/audit-cases.md`: Phase 2 section appended; Risk Reviewer signed off all 5 cases PASS.
+* `docs/qa/regression-checklist.md`: Phase 2 multi-symbol diff item appended.
+
+Quality gates all green:
+
+* Reference Implementation Engineer: 40 Python tests passing.
+* PM session as Engine Developer + Market Microstructure Engineer: BookRegistry, OrderIndex, matching dispatch update; 118 ctest tests passing in Debug and Release.
+* Risk and Financial Correctness Reviewer: 5 Phase 2 audit cases all PASS; signed off.
+* Documentation Engineer / PM: ADR 0002.
+* Code Reviewer dispatch was deferred this phase per the user's interrupt; CI passing on the merge gate is the standing acceptance, with a follow-up review available if the user wants one before Phase 3 opens.
+
+Outstanding deferred work:
+
+* Property-based tests with rapidcheck (Phase 3).
+* Phase 1's deferred nullptr check on `OrderPool::acquire` exhaustion (still filed for a hardening pass).
+* Future consolidation of the dual cancel-id index (per-`Book` plus cross-symbol `OrderIndex`) into a single structure; documented in ADR 0002 as a Phase 5 or Phase 7 option.
 
 ### Phase 1 closeout (2026-05-09)
 
