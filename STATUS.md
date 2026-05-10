@@ -2,11 +2,11 @@
 
 Single source of truth for which phase is next. Read this file when the user says "work on the next phase" or any equivalent. Update this file when a phase changes state. The Project Manager session owns it.
 
-**Last updated**: 2026-05-09 (Phase 1 fully closed: PR #6 squash-merged to `main` at `bc5e9ee`. Awaiting user check-in answer on whether to open Phase 2 in this window, pause, or stop.).
+**Last updated**: 2026-05-09 (Phase 2 opened. User confirmed at check-in: 32 percent usage, 2.5 hours until reset; Phase 2 alone fits the window, bundling Phase 3 would overspill. PM session has cross-repo cleanup on `gitignore-private-files` branches merged across 6 repos before resuming Phase 2.).
 
 ## Next phase
 
-**Phase 2: Multi-instrument and cancel-by-id (cross-symbol layer).** Status: `not started`. Owner: Project Manager session, dispatching Engine Developer (03), Market Microstructure Engineer (02), Reference Implementation Engineer (18), QA Engineer (10), Risk and Financial Correctness Reviewer (16), and Code Reviewer (11). Window cost: ~50 percent alone or ~95 percent when bundled with Phase 3 (property-based tests). See `docs/plan.md` Phase 2 section for the detailed deliverable list.
+**Phase 2: Multi-instrument and cancel-by-id (cross-symbol layer).** Status: `in progress`. Owner: Project Manager session as Engine Developer + Market Microstructure Engineer, dispatching Reference Implementation Engineer (18), QA Engineer (10), Risk and Financial Correctness Reviewer (16), and Code Reviewer (11). Window cost: ~50 percent alone (Phase 3 bundle deferred to next window). See `docs/plan.md` Phase 2 section for the detailed deliverable list and `docs/superpowers/plans/2026-05-09-phase-2-multi-instrument-and-cancel.md` for the bite-sized step plan.
 
 ## Phase status table
 
@@ -16,7 +16,7 @@ Status values: `not started`, `in progress`, `completed`, `bundled with phase N`
 |---|---|---|---|---|---|
 | 0 | Foundations | completed | 2026-05-09 | ~95% | scaffolds, plan, threat model, design tokens, ADRs land here |
 | 1 | Core data structures and single-symbol matching | completed | 2026-05-09 | ~95% | Order, Level, Book, OrderPool, limit + market + IOC + cancel matching, FIFO at price levels, Python reference, integration corpus, audit cases, citation audit clean |
-| 2 | Multi-instrument and cancel-by-id | not started | | ~50% alone or bundled with Phase 3 | BookRegistry symbol dispatch, O(1) cancel via order ID map |
+| 2 | Multi-instrument and cancel-by-id | in progress | | ~50% | BookRegistry symbol dispatch, O(1) cancel via order ID map (per-Book cancel already shipped in Phase 1) |
 | 3 | Property-based tests for matching invariants | not started | | ~50% alone or bundled with Phase 2 | rapidcheck wired up, 10 invariants verified |
 | 4 | Seqlock-protected top-of-book and sampler | not started | | ~85% | seqlock writer/reader protocol, 30 Hz sampler, TSAN clean |
 | 5 | Benchmark hits 6M events per second | not started | | ~95% | PGO, cache layout audit, target throughput, latency report |
