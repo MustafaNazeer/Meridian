@@ -237,12 +237,12 @@ unit tests written first.
 
 | File or artifact | Owner |
 |---|---|
-| `include/meridian/types.h` (Order, OrderId, Price, Quantity, Side) | Engine Developer (03) |
-| `include/meridian/order_pool.h` and `src/order_pool.cpp` | Engine Developer (03) |
-| `include/meridian/level.h` and `src/level.cpp` (FIFO queue) | Engine Developer (03) |
-| `include/meridian/book.h` and `src/book.cpp` (single-symbol L3 book) | Engine Developer (03), Market Microstructure Engineer (02) |
-| `include/meridian/matching.h` and `src/matching.cpp` (limit, market, IOC) | Engine Developer (03), Market Microstructure Engineer (02) |
-| `include/meridian/execution_report.h` | Engine Developer (03) |
+| `include/meridian/types.hpp` (Order, OrderId, Price, Quantity, Side) | Engine Developer (03) |
+| `include/meridian/order_pool.hpp` and `src/order_pool.cpp` | Engine Developer (03) |
+| `include/meridian/level.hpp` and `src/level.cpp` (FIFO queue) | Engine Developer (03) |
+| `include/meridian/book.hpp` and `src/book.cpp` (per-symbol L3 book, both sides) | Engine Developer (03), Market Microstructure Engineer (02) |
+| `include/meridian/matching.hpp` and `src/matching.cpp` (limit, market, IOC, cancel) | Engine Developer (03), Market Microstructure Engineer (02) |
+| `include/meridian/execution_report.hpp` | Engine Developer (03) |
 | `tests/unit/test_order_pool.cpp` | QA Engineer (10) |
 | `tests/unit/test_level.cpp` | QA Engineer (10) |
 | `tests/unit/test_book.cpp` | QA Engineer (10) |
@@ -285,8 +285,11 @@ unit tests written first.
    on `acquire()` or `release()`. Test the slot-recycling invariant.
 5. Implement `Level` (FIFO order queue at one price). Test FIFO
    discipline.
-6. Implement `Book` with two heaps (bids descending, asks ascending) of
-   `Level` pointers. Test top-of-book read and update.
+6. Implement `Book` as a per-symbol L3 book holding both bid and ask
+   sides. Each side is a `std::map<Price, Level*>` (bids ordered
+   descending, asks ascending). The book also owns an
+   `unordered_map<OrderId, Order*>` for O(1) cancel within the symbol.
+   Test top-of-book read and update plus cancel-by-id.
 7. Implement `match_limit`, `match_market`, `match_ioc` in
    `matching.cpp`. Each function returns a list of `ExecutionReport`s.
    Test against the Python reference for at least 50 hand-crafted
@@ -1026,6 +1029,15 @@ here so they do not get lost in commit messages.
 * **2026-05-09**: Phase 10 deploy stack changed from VPS plus systemd
   to Fly.io Dockerfile plus `fly.toml`. Phase 10 window-cost
   estimate dropped from 85 percent to 75 percent.
+* **2026-05-09 (Phase 1 open)**: `Book` ships cancel-by-id at the
+  per-symbol level in Phase 1. The cross-symbol `BookRegistry` plus
+  `OrderIndex` layer is still Phase 2. Reference:
+  `docs/superpowers/plans/2026-05-09-phase-1-single-symbol-matching.md`
+  key decision 4. Same commit also amends the design spec section 5.1
+  (`Book` is the full L3 book per symbol with both sides, not "one
+  side") and `docs/plan.md` Phase 1 task 6 wording (two `std::map`
+  per side, not "two heaps") to remove cross-document contradictions
+  surfaced by the PM at Phase 1 open.
 
 (New decisions append here in chronological order with date and a
 one-paragraph rationale.)
