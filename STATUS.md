@@ -35,8 +35,9 @@ Phase 0 closed cleanly. PR #3 (`phase 0: brainstorm, plan, scaffold, and audit`)
 
 **Outstanding deferred work** (not Phase 0 blockers, but worth tracking):
 
-* Branch protection on `main` is not yet flipped via the GitHub web UI. The required-check names (`engine (clang)`, `engine (gcc)`, `frontend`) are registered with GitHub after the first PR run, so flipping this is a manual UI step the user can do at any time per `docs/setup-guide.md` section 12.1.
 * No Code Reviewer dispatch ran on Phase 0; PR review by a dispatched Code Reviewer agent was deferred since Phase 0 is mostly docs and scaffolding. Phase 1 onward will dispatch Code Reviewer per the PM brief.
+
+**Branch protection on `main`**: applied 2026-05-09 via `gh api`. Required checks `engine (clang)`, `engine (gcc)`, `frontend`; 1 review required; linear history; conversation resolution; no force pushes; no deletions. `enforce_admins` is `false` so `gh pr merge --admin` continues to work for the review-bypass case per `CLAUDE.md`'s standing push protocol. Details in `docs/setup-guide.md` section 12.1.
 
 ## Design sync log
 
