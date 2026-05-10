@@ -16,6 +16,7 @@
 // docs/risk/matching-semantics.md section 7.
 
 #include "harness.hpp"
+#include "meridian/seqlock_snapshot.hpp"
 #include "meridian/types.hpp"
 
 #include <cstdint>
@@ -298,6 +299,86 @@ TEST(MatchingInvariants, PriceTimePriority) {
             ASSERT_TRUE(resting.contains(id))
                 << "engine reports id " << id
                 << " resting; shadow does not";
+        }
+    }
+}
+
+// Invariant 6 (formerly deferred to the seqlock milestone): the
+// published top-of-book snapshot satisfies best_ask >= best_bid at all
+// times when both sides are present. The matching loop fully resolves
+// any crossing before the snapshot is published, so a crossed book
+// never appears at any reader's read.
+TEST(MatchingInvariants, SpreadNonNegative) {
+    for (int i = 0; i < kCases; ++i) {
+        const std::uint64_t seed = kSeedBase + static_cast<std::uint64_t>(i);
+        SCOPED_TRACE(::testing::Message() << "seed=" << seed);
+        auto events = EventGenerator(seed).generate();
+        // Drive the engine event by event so we can read the snapshot
+        // after each apply.
+        OrderPool pool(2 * events.size() + 64);
+        BookRegistry registry{kDemoSymbols[0], kDemoSymbols[1], kDemoSymbols[2],
+                              kDemoSymbols[3], kDemoSymbols[4]};
+        OrderIndex index;
+        MatchingEngine engine{pool, registry, index};
+        for (const auto& g : events) {
+            (void)engine.apply(g.ev);
+            for (Symbol s : kDemoSymbols) {
+                Book* book = registry.book(s);
+                ASSERT_NE(book, nullptr);
+                const TopOfBookSnapshot snap = book->top_of_book();
+                if (snap.has_bid() && snap.has_ask()) {
+                    ASSERT_LE(snap.best_bid_px, snap.best_ask_px)
+                        << "crossed book at symbol " << s
+                        << ": bid=" << snap.best_bid_px
+                        << " ask=" << snap.best_ask_px;
+                }
+            }
+        }
+    }
+}
+
+// Invariant 7 (formerly deferred to the seqlock milestone): the
+// published snapshot agrees with the book's actual best bid / best ask
+// after each event. This is the correctness side of "top-of-book
+// monotonicity within a tick"; the atomicity side (no torn reads under
+// concurrent access) is covered structurally by tests/concurrency/.
+TEST(MatchingInvariants, SnapshotMatchesBook) {
+    for (int i = 0; i < kCases; ++i) {
+        const std::uint64_t seed = kSeedBase + static_cast<std::uint64_t>(i);
+        SCOPED_TRACE(::testing::Message() << "seed=" << seed);
+        auto events = EventGenerator(seed).generate();
+        OrderPool pool(2 * events.size() + 64);
+        BookRegistry registry{kDemoSymbols[0], kDemoSymbols[1], kDemoSymbols[2],
+                              kDemoSymbols[3], kDemoSymbols[4]};
+        OrderIndex index;
+        MatchingEngine engine{pool, registry, index};
+        for (const auto& g : events) {
+            (void)engine.apply(g.ev);
+            for (Symbol s : kDemoSymbols) {
+                Book* book = registry.book(s);
+                ASSERT_NE(book, nullptr);
+                const TopOfBookSnapshot snap = book->top_of_book();
+                Level* bid = book->best_bid();
+                Level* ask = book->best_ask();
+                if (bid != nullptr) {
+                    ASSERT_TRUE(snap.has_bid())
+                        << "book has best bid but snapshot does not, symbol " << s;
+                    ASSERT_EQ(snap.best_bid_px, bid->price());
+                    ASSERT_EQ(snap.best_bid_qty, bid->total_qty());
+                } else {
+                    ASSERT_FALSE(snap.has_bid())
+                        << "snapshot reports a bid but book is empty, symbol " << s;
+                }
+                if (ask != nullptr) {
+                    ASSERT_TRUE(snap.has_ask())
+                        << "book has best ask but snapshot does not, symbol " << s;
+                    ASSERT_EQ(snap.best_ask_px, ask->price());
+                    ASSERT_EQ(snap.best_ask_qty, ask->total_qty());
+                } else {
+                    ASSERT_FALSE(snap.has_ask())
+                        << "snapshot reports an ask but book is empty, symbol " << s;
+                }
+            }
         }
     }
 }
