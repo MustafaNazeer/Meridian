@@ -224,9 +224,26 @@ PM dispatches per the brief.
 
 ## Phase 1: Core data structures and single-symbol matching
 
-**Status:** not started.
+**Status:** completed 2026-05-09 (PR #6 squash-merged to `main` at `bc5e9ee`; CI green on both initial and post-review-fix runs).
 
-**Window cost:** ~95 percent of one Claude Max window.
+**Window cost:** ~95 percent of one Claude Max window. Actual: opened at 4 percent usage with 4.75 hours of headroom; closed cleanly inside the same window.
+
+### Phase 1 close summary
+
+`libmeridian.a` ships its first real lines: `Order`, `Level`, `Book`,
+`OrderPool` with the debug allocator tripwire, and a working
+`MatchingEngine::apply` for limit, market, IOC, and cancel events.
+The Python reference under `tests/reference/` mirrors the same
+semantics; the integration test diffs the C++ engine against the
+reference on 60 hand-crafted plus corner-case scenarios. Quality
+gates all green at close: Quant Domain Validator, Reference
+Implementation Engineer, QA Engineer (97 percent coverage on
+libmeridian.a, 41 unit tests, 60 integration scenarios), Performance
+Engineer (latency budget plus working bench skeleton, baseline
+informational), Risk Reviewer (10 audit cases all PASS), Citation
+Auditor (86 verified, 0 wrong remaining; 3 found and resolved before
+merge), Code Reviewer (approved with 5 non-blocking nits, 4 fixed,
+1 deferred).
 
 **Goal:** Ship the matching engine's core types and a working
 single-symbol matching loop. Limit, market, and IOC order types. FIFO
