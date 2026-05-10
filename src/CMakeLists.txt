@@ -2,6 +2,7 @@ add_library(meridian STATIC
     order_pool.cpp
     level.cpp
     book.cpp
+    matching.cpp
 )
 
 target_include_directories(meridian PUBLIC
