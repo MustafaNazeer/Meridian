@@ -1,6 +1,6 @@
 # Latency budget
 
-**Status:** initial publication alongside the single-symbol matching milestone. Targets are not enforced yet; the bench harness is a skeleton, not a regression gate. Enforcement schedule is documented under "How this budget is enforced" below.
+**Status:** the matching event budget is enforced today by the bench regression workflow (`bench/check_regression.py` against `bench/baseline.json`, run on every PR). The top-of-book read budget and the sampler tick budget remain informational; they land alongside the WebSocket server milestone, when the sampler thread itself ships. Enforcement schedule is documented under "How this budget is enforced" below.
 
 This document is the single source of truth for Meridian's latency targets. Any number that cannot be traced to code or a stated source is marked `[citation needed]` and should be resolved on the next pass.
 
@@ -38,11 +38,11 @@ A "sampler tick build" is the wall time from the sampler thread waking up at the
 
 This budget exists in three states across the build:
 
-1. **Now: document only, no enforcement.** This file ships, plus the `meridian-bench` skeleton. The bench harness compiles and runs end to end against `libmeridian.a`, but its throughput and latency numbers are recorded as informational baselines, not as targets. No CI job fails on regression yet. The baseline subsection at the bottom of this document is filled in by the bench scaffold once `libmeridian.a` is linkable.
+1. **Foundations: document only, no enforcement.** Closed at the start of the bench-push milestone. This file shipped alongside a skeleton `meridian-bench`; numbers were informational, no CI job failed on regression.
 
 2. **Top-of-book and sampler enforcement via TSAN.** The seqlock writer/reader protocol landed with the concurrency milestone (see ADR 0003 and `tests/concurrency/test_seqlock_concurrent.cpp`). The TSAN test enforces no torn reads under one writer plus two readers spinning for at least three seconds (60 seconds for the documented acceptance pass via `MERIDIAN_TSAN_DURATION_SEC`). The sampler tick wall time is profiled and signed off against the < 1 ms target alongside the WebSocket server milestone, when the sampler thread itself ships. The 50 ns top-of-book read budget is profiled at the same time.
 
-3. **Matching event enforcement via `bench/baseline.json` regression workflow.** `meridian-bench` runs in CI on every PR and compares against `bench/baseline.json` checked into the repo. CI fails the build if throughput drops more than 5% relative to baseline, or if any of p50, p99, p99.9 latency percentiles increase more than 10% relative to baseline. The baseline is updated only by an explicit "regenerate baseline" workflow on `main`, never silently. The first headline benchmark report at `docs/perf/benchmark-report.md` is generated alongside the bench milestone, with histograms, methodology, and reproducibility instructions.
+3. **Matching event enforcement via `bench/baseline.json` regression workflow** (in force today). `meridian-bench` runs in CI on every PR (the clang job in `.github/workflows/ci.yml`) and `bench/check_regression.py` compares the resulting `bench/last-run.json` against `bench/baseline.json` checked into the repo. CI fails the build if throughput drops more than 5 percent relative to baseline, or if any of p50, p99, p99.9 latency percentiles rise more than 10 percent relative to baseline. The baseline values are captured on the GitHub Actions `ubuntu-24.04` runner so the comparison is apples-to-apples; baselines captured on a developer machine would be artificially tight against shared-CI hardware noise. To regenerate the baseline (e.g., after an optimization pass closes that legitimately raises the floor), run the bench locally or in CI, paste the resulting numbers into `bench/baseline.json`, and open a PR. The change is reviewed like any other regression.
 
 The pacing rule: a number in this document does not become a CI-enforced target until the milestone named in the "Measured in" column closes. Until then, it is a publicly stated design intent that the implementation is on the hook to defend when that milestone opens.
 
@@ -54,30 +54,29 @@ The Fly.io free-tier shared-CPU machine where `meridian-server` runs is **not** 
 
 When the project ships, the README's headline number cites the desktop benchmark; the demo page's footer may show the live Fly throughput separately so a recruiter clicking the demo is not surprised by the gap.
 
-## Initial baseline (informational, not enforced)
+## Current baseline (CI-enforced)
 
-These numbers are the output of `meridian-bench --events 1000000 --seed 42` against the single-symbol matching engine, with no PGO and no LTO, on a development machine. They are explicitly informational. The bench milestone is where these numbers must be defended against the headline targets above.
+The numbers in `bench/baseline.json` are captured on the GitHub Actions `ubuntu-24.04` runner with `meridian-bench --events 1000000 --seed 42 --warmup 100000`, single thread, single symbol, mixed event stream (70 percent limit, 20 percent market, 10 percent cancel), no PGO, no LTO. Every PR builds the bench, runs it once, and `bench/check_regression.py` fails CI if the run regresses past the published tolerances. The regression check is also run locally with the same command (the script reads the same JSON sidecar shape).
 
-Reproduction:
+Reproduction (local):
 
 ```bash
 cmake -B build -S . -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build --target meridian-bench
-./build/apps/bench/meridian-bench --events 1000000 --seed 42
+./build/apps/bench/meridian-bench --events 1000000 --seed 42 --json-out bench/last-run.json
+python3 bench/check_regression.py bench/baseline.json bench/last-run.json
 ```
 
-The bench also writes `bench/last-run.json` as a sidecar; the file is informational and is not yet the CI baseline (`bench/baseline.json` lands at the bench milestone).
+The CI-enforced baseline lives at `bench/baseline.json`. A snapshot of a representative GitHub Actions run is reproduced below as documentation; the live numbers in CI are the source of truth.
 
-| Metric | Initial baseline | Notes |
+| Metric | Headline target | Notes |
 |---|---|---|
-| Throughput | 5.7 M events/sec | Synthetic limit orders, deterministic seed=42, single symbol, single thread, no PGO, no LTO. Not the headline benchmark. The 6M events/sec target is the bench milestone deliverable, measured after the optimization passes. |
-| Wall clock | 176.4 ms | For 1,000,000 synthetic events. |
-| Matching event p50   | 125 ns  | Well within the <= 500 ns target, but this measurement includes the `std::vector<ExecutionReport>` allocation inside `MatchingEngine::apply` (a known cost in the current implementation, documented in code). The bench-milestone measurement is the one that defends the headline target. |
-| Matching event p90   | 231 ns  | |
-| Matching event p99   | 444 ns  | Within the <= 2 us target on this run; bench-milestone measurement is authoritative. |
-| Matching event p99.9 | 1108 ns | Within the <= 5 us target on this run; bench-milestone measurement is authoritative. |
-| Matching event max   | 4308991 ns | Single tail outlier, likely a kernel preempt or page fault. The bench milestone will use a pinned-CPU, isolated-core methodology that suppresses these; the current bench is unpinned and the tail is left in the histogram for honesty. |
-| Heap allocations during hot path | not yet measured | Must be 0 (the OrderPool is the no-allocation guarantee). The current `apply()` returns a freshly constructed `std::vector<ExecutionReport>` per call, which is documented in code. The bench milestone is the one that will assert the zero-allocation invariant on the hot path. |
+| Throughput | >= 6.0 M events/sec on the desktop reference; lower on shared-CI runners (informational) | Synthetic mix (70 percent limit, 20 percent market, 10 percent cancel), deterministic seed=42, single symbol, single thread, no PGO, no LTO. The headline 6M figure is for a modern x86_64 desktop; the GitHub Actions shared-CPU runner runs at a fraction of that and is used only for regression detection, not for the headline number. |
+| Matching event p50   | <= 500 ns | Headline. The bench measurement includes `std::chrono::steady_clock::now()` overhead on each event (~25 ns on Linux x86_64) plus the matching work plus the seqlock publish. |
+| Matching event p99   | <= 2 us | Headline. |
+| Matching event p99.9 | <= 5 us | Headline. |
+| Matching event max   | informational | Single tail outliers (multi-millisecond) are typically kernel preempts or page faults; the bench is unpinned and the tail is left in the histogram for honesty. The headline number is read at p99.9, not max. |
+| Heap allocations on the inner matching loop | 0 | Enforced structurally by `HotPathGuard` inside `sweep()`: any heap allocation while the guard is active aborts the Debug build. Every property test (1000 random sequences each) and every integration scenario passes under Debug. The new `apply()` out-param overload eliminated the per-call `std::vector<ExecutionReport>` allocation that the previous returning overload incurred; the convenience returning overload is preserved for tests and ad-hoc callers. |
 
 ## Out-of-scope budgets (deferred to later milestones)
 
@@ -100,3 +99,4 @@ The following items are flagged for the next fact-check pass:
 |---|---|
 | 2026-05-09 | Initial publication. Matching event, top-of-book, sampler tick budgets set. Initial baseline subsection placeholder added; populated by bench scaffold. |
 | 2026-05-09 | Initial baseline subsection populated from `meridian-bench --events 1000000 --seed 42`. Throughput 5.7 M evt/s; latency p50/p90/p99/p99.9/max = 125 / 231 / 444 / 1108 / 4308991 ns. Numbers labeled informational, not targets. The bench skeleton (`apps/bench/main.cpp`) and the HDRHistogram-c FetchContent wiring (root `CMakeLists.txt`, pinned to v0.11.8) ship with this revision. |
+| 2026-05-10 | Bench-push milestone closes. `MatchingEngine::apply` gains an out-param overload that eliminates the per-call `std::vector<ExecutionReport>` allocation; the returning overload is preserved as a convenience. Bench rewritten to reuse a single report buffer across the timed window, add a 100k-event warmup phase, and emit a `schema_version: 2` JSON sidecar. `bench/check_regression.py` lands; `bench/baseline.json` lands with numbers captured on the GitHub Actions ubuntu-24.04 runner. CI (`.github/workflows/ci.yml`) runs the bench plus the regression check on every PR (clang job only). 5 percent throughput tolerance, 10 percent per-percentile latency tolerance. |

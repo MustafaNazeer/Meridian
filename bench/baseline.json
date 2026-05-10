@@ -1,0 +1,17 @@
+{
+  "schema_version": 2,
+  "events": 1000000,
+  "warmup_events": 100000,
+  "seed": 42,
+  "wall_clock_ms": 244.0,
+  "throughput_mevents_per_sec": 4.10,
+  "latency_ns": {
+    "p50": 160,
+    "p90": 361,
+    "p99": 721,
+    "p99_9": 2545,
+    "max": 8114175
+  },
+  "_captured_on": "GitHub Actions ubuntu-24.04 runner, clang job, run id 25640483845, 2026-05-10",
+  "_methodology": "meridian-bench --events 1000000 --seed 42 --warmup 100000, single thread, single symbol, 70/20/10 mix of limit/market/cancel, no PGO, no LTO. Tolerances enforced by bench/check_regression.py: throughput must stay >= baseline * 0.95, p50/p99/p99.9 latency must stay <= baseline * 1.10."
+}

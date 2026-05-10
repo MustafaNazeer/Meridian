@@ -29,7 +29,26 @@ public:
     MatchingEngine(OrderPool& pool, BookRegistry& registry,
                    OrderIndex& index) noexcept;
 
-    std::vector<ExecutionReport> apply(const EngineEvent& event);
+    // Hot-path API: appends every report produced by this event to
+    // `out`. Caller owns the vector and is responsible for clear()ing
+    // it if they want only this event's reports. The matching loop
+    // (`sweep()`) runs under a HotPathGuard so the Debug heap-alloc
+    // check catches any accidental allocation in the inner loop.
+    // Legitimate allocations on the new-price-level path
+    // (`std::map<Price, std::unique_ptr<Level>>` insertion in
+    // `Book::add`) are by design and run outside the guard.
+    void apply(const EngineEvent& event, std::vector<ExecutionReport>& out);
+
+    // Convenience overload: allocates a fresh vector and forwards to
+    // the out-param overload. Used by tests and ad-hoc callers; the
+    // bench and any future zero-alloc consumer should call the
+    // out-param overload directly.
+    std::vector<ExecutionReport> apply(const EngineEvent& event) {
+        std::vector<ExecutionReport> out;
+        out.reserve(64);
+        apply(event, out);
+        return out;
+    }
 
 private:
     void apply_limit(const EngineEvent& event, Book& book,
