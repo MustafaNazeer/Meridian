@@ -1,5 +1,6 @@
 add_library(meridian STATIC
     order_pool.cpp
+    level.cpp
 )
 
 target_include_directories(meridian PUBLIC
