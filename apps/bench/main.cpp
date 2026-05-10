@@ -1,14 +1,36 @@
-// meridian-bench: working skeleton.
+// meridian-bench: zero-I/O throughput and latency benchmark.
 //
-// This binary is a working harness, not a regression gate. It generates a
-// deterministic stream of synthetic limit orders, drives them through the
-// matching engine, captures per-event latency in an HDRHistogram, and prints
-// a Markdown summary table. The throughput and latency numbers it reports
-// today are informational only; the headline 6M events/sec target is
-// enforced once bench/baseline.json is wired into CI.
+// Headline number: events per second through MatchingEngine::apply on a
+// single thread, single symbol, with a deterministic synthetic event
+// stream. The bench is allocation-free on the hot path: a single
+// std::vector<ExecutionReport> is allocated outside the timed window
+// and reused across every apply() call via the engine's out-param
+// overload, and the event stream is generated up front.
 //
-// The pre-generated event vector and the timed apply loop are deliberately
-// kept separate so generation cost does not contaminate the measurement.
+// What gets measured:
+//
+//   * Throughput: total wall clock from the first measured apply() to
+//     the last, divided by the measured event count.
+//   * Per-event latency, captured into an HDR histogram with three
+//     significant figures of precision.
+//
+// What is excluded from measurement:
+//
+//   * Event generation (pre-generated, before the timed window).
+//   * Warmup events (a 10% prefix of the stream is run through
+//     apply() without timing, to let the L1/L2 caches and the branch
+//     predictor settle into steady state).
+//   * The std::chrono::steady_clock::now() overhead itself shows up in
+//     every measurement; on Linux x86_64 this is ~25 ns. It is the
+//     irreducible floor of any per-event timed measurement and is
+//     reported as a known cost.
+//
+// Output:
+//
+//   * Markdown summary table on stdout.
+//   * JSON sidecar at --json-out (default bench/last-run.json) for
+//     downstream tools (the regression check, the perf report
+//     generator).
 
 #include "meridian/book.hpp"
 #include "meridian/book_registry.hpp"
@@ -36,16 +58,25 @@ namespace {
 struct BenchConfig {
     std::uint64_t events = 1'000'000;
     std::uint64_t seed = 42;
+    // Warmup events run through apply() before the timed window. A
+    // small prefix lets caches and the branch predictor settle, which
+    // pulls the first-event tail latency out of the steady-state
+    // measurement. Fixed at 10% of total events; small enough to keep
+    // the bench wall time under a couple of seconds, large enough to
+    // visibly reduce p99 noise.
+    std::uint64_t warmup_events = 100'000;
     std::string json_out = "bench/last-run.json";
 };
 
 void print_usage(const char* argv0) {
     std::fprintf(stderr,
-                 "Usage: %s [--events N] [--seed N] [--json-out PATH]\n"
-                 "  --events    Number of synthetic events to generate "
+                 "Usage: %s [--events N] [--seed N] [--warmup N] [--json-out PATH]\n"
+                 "  --events    Number of measured events "
                  "(default: 1000000)\n"
                  "  --seed      RNG seed for deterministic generation "
                  "(default: 42)\n"
+                 "  --warmup    Warmup events run before measurement "
+                 "(default: 100000)\n"
                  "  --json-out  Path for JSON sidecar output "
                  "(default: bench/last-run.json)\n",
                  argv0);
@@ -87,6 +118,12 @@ bool parse_args(int argc, char** argv, BenchConfig& cfg) {
                 std::fprintf(stderr, "error: --seed must be a non-negative integer\n");
                 return false;
             }
+        } else if (std::strcmp(a, "--warmup") == 0) {
+            const char* v = need_value("--warmup");
+            if (v == nullptr || !parse_uint(v, cfg.warmup_events)) {
+                std::fprintf(stderr, "error: --warmup must be a non-negative integer\n");
+                return false;
+            }
         } else if (std::strcmp(a, "--json-out") == 0) {
             const char* v = need_value("--json-out");
             if (v == nullptr) {
@@ -105,44 +142,90 @@ bool parse_args(int argc, char** argv, BenchConfig& cfg) {
     return true;
 }
 
-// Generate a deterministic stream of synthetic limit-order NewOrder events.
-// Sides alternate Buy/Sell. Prices are drawn uniformly from
-// [midpoint - 50, midpoint + 50] ticks. Quantities are drawn uniformly from
-// [1, 100]. Timestamps are a strictly increasing nanosecond counter.
+// Generate a deterministic synthetic event stream. Single symbol.
+// Mix per 100 events:
+//
+//   * 70 NewOrder Limit, alternating buy and sell, prices uniform in
+//     [midpoint - 50, midpoint + 50] ticks, qty uniform in [1, 100].
+//   * 20 NewOrder Market, alternating buy and sell, qty uniform in
+//     [1, 20] (small so the book does not drain too fast).
+//   * 10 Cancel: targets a random previously-submitted order id.
+//
+// Timestamps are a strictly increasing nanosecond counter. Order ids
+// are monotonically increasing for new orders; cancels reuse a random
+// past id (which may already be cancelled or filled - the engine
+// emits Reject NotFound on those, which is fine for the bench).
+//
+// The mix is closer to a real trading session than the pure-limit
+// stream the skeleton used: it exercises the cancel-by-id path, the
+// market-against-empty-book reject path, and the matching loop's
+// liquidity-consumption branch on every market order.
 void generate_events(std::vector<meridian::EngineEvent>& out,
                      std::uint64_t count,
                      std::uint64_t seed) {
     constexpr meridian::Symbol kSymbol = 1;
     constexpr meridian::Price kMidpoint = 10000;
     constexpr meridian::Price kPriceJitter = 50;
-    constexpr meridian::Quantity kMinQty = 1;
-    constexpr meridian::Quantity kMaxQty = 100;
+    constexpr meridian::Quantity kMinLimitQty = 1;
+    constexpr meridian::Quantity kMaxLimitQty = 100;
+    constexpr meridian::Quantity kMinMarketQty = 1;
+    constexpr meridian::Quantity kMaxMarketQty = 20;
 
     out.clear();
     out.reserve(count);
 
     std::mt19937_64 rng(seed);
     std::uniform_int_distribution<int> price_dist(-kPriceJitter, kPriceJitter);
-    std::uniform_int_distribution<meridian::Quantity> qty_dist(kMinQty, kMaxQty);
+    std::uniform_int_distribution<meridian::Quantity> limit_qty_dist(
+        kMinLimitQty, kMaxLimitQty);
+    std::uniform_int_distribution<meridian::Quantity> market_qty_dist(
+        kMinMarketQty, kMaxMarketQty);
+    std::uniform_int_distribution<int> bucket_dist(0, 99);
+
+    meridian::OrderId next_id = 1;
+    meridian::OrderId max_submitted_id = 0;
 
     for (std::uint64_t i = 0; i < count; ++i) {
-        meridian::Side side =
+        const meridian::Side side =
             (i % 2 == 0) ? meridian::Side::Buy : meridian::Side::Sell;
-        meridian::Price price = kMidpoint + price_dist(rng);
-        meridian::Quantity qty = qty_dist(rng);
-        meridian::OrderId order_id = static_cast<meridian::OrderId>(i + 1);
-        meridian::Timestamp ts = static_cast<meridian::Timestamp>(i);
+        const meridian::Timestamp ts = static_cast<meridian::Timestamp>(i);
+        const int bucket = bucket_dist(rng);
 
-        out.push_back(meridian::EngineEvent{
-            .kind = meridian::EventKind::NewOrder,
-            .symbol = kSymbol,
-            .ts = ts,
-            .order_id = order_id,
-            .side = side,
-            .type = meridian::OrderType::Limit,
-            .price = price,
-            .qty = qty,
-        });
+        meridian::EngineEvent ev{};
+        ev.symbol = kSymbol;
+        ev.ts = ts;
+        ev.side = side;
+
+        if (bucket < 70 || max_submitted_id == 0) {
+            // Limit. Always issued for the first event so cancels later
+            // have a non-empty id pool to draw from.
+            ev.kind = meridian::EventKind::NewOrder;
+            ev.type = meridian::OrderType::Limit;
+            ev.order_id = next_id++;
+            ev.price = kMidpoint + price_dist(rng);
+            ev.qty = limit_qty_dist(rng);
+            max_submitted_id = ev.order_id;
+        } else if (bucket < 90) {
+            // Market.
+            ev.kind = meridian::EventKind::NewOrder;
+            ev.type = meridian::OrderType::Market;
+            ev.order_id = next_id++;
+            ev.price = 0;
+            ev.qty = market_qty_dist(rng);
+            max_submitted_id = ev.order_id;
+        } else {
+            // Cancel. Target id is uniform over previously-submitted
+            // ids (1..max_submitted_id). May hit a filled or already-
+            // cancelled id; the engine emits Reject NotFound, which is
+            // a realistic outcome on a real order book.
+            std::uniform_int_distribution<meridian::OrderId> cancel_dist(
+                1, max_submitted_id);
+            ev.kind = meridian::EventKind::Cancel;
+            ev.order_id = cancel_dist(rng);
+            ev.price = 0;
+            ev.qty = 0;
+        }
+        out.push_back(ev);
     }
 }
 
@@ -163,9 +246,9 @@ void write_json_sidecar(const std::string& path,
         return;
     }
     f << "{\n"
-      << "  \"phase\": 1,\n"
-      << "  \"informational\": true,\n"
+      << "  \"schema_version\": 2,\n"
       << "  \"events\": " << cfg.events << ",\n"
+      << "  \"warmup_events\": " << cfg.warmup_events << ",\n"
       << "  \"seed\": " << cfg.seed << ",\n"
       << "  \"wall_clock_ms\": " << wall_ms << ",\n"
       << "  \"throughput_mevents_per_sec\": " << throughput_meps << ",\n"
@@ -187,9 +270,6 @@ int main(int argc, char** argv) {
         return 2;
     }
 
-    // HDRHistogram: track latencies from 1 ns to 1 second with 3 significant
-    // figures. 1 second is far above any plausible per-event latency; the
-    // upper bound only affects bucket allocation, not measurement accuracy.
     hdr_histogram* hist = nullptr;
     int hdr_rc = hdr_init(/*lowest_discoverable_value=*/1,
                           /*highest_trackable_value=*/1'000'000'000LL,
@@ -200,29 +280,44 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    // Pool capacity = events + 1024 headroom. Generation produces only
-    // NewOrder events (no cancels in this skeleton), so no slot is ever
-    // released; one slot per event plus headroom is enough.
-    const std::size_t pool_capacity = static_cast<std::size_t>(cfg.events) + 1024;
+    // Total events to generate = warmup + measured.
+    const std::uint64_t total_events = cfg.warmup_events + cfg.events;
+
+    // Pool capacity: at most one resting order per submitted id, plus
+    // headroom. Real workload churn (cancels and full fills release
+    // slots) keeps actual peak utilisation well below this bound;
+    // dimensioned for the worst case where every event is a passive
+    // limit that rests forever.
+    const std::size_t pool_capacity = static_cast<std::size_t>(total_events) + 1024;
     meridian::OrderPool pool(pool_capacity);
     meridian::BookRegistry registry{1};
     meridian::OrderIndex index;
     meridian::MatchingEngine engine(pool, registry, index);
 
     std::vector<meridian::EngineEvent> events;
-    generate_events(events, cfg.events, cfg.seed);
+    generate_events(events, total_events, cfg.seed);
+
+    // Single reusable report buffer. Reserve generously so apply()
+    // never grows it during the timed window. The hot path is
+    // allocation-free under the new apply() out-param overload.
+    std::vector<meridian::ExecutionReport> reports;
+    reports.reserve(1024);
 
     using Clock = std::chrono::steady_clock;
     using ns = std::chrono::nanoseconds;
 
+    // Warmup pass: drive events through apply() without timing.
+    for (std::uint64_t i = 0; i < cfg.warmup_events; ++i) {
+        reports.clear();
+        engine.apply(events[i], reports);
+    }
+
+    // Timed pass.
     const auto wall_start = Clock::now();
-    for (const auto& ev : events) {
+    for (std::uint64_t i = cfg.warmup_events; i < total_events; ++i) {
+        reports.clear();
         const auto t0 = Clock::now();
-        // Discard the returned reports; the bench measures apply latency, not
-        // downstream report consumption. The vector allocation inside apply()
-        // is a known cost in the current implementation; the bench-milestone
-        // pass retires it.
-        (void)engine.apply(ev);
+        engine.apply(events[i], reports);
         const auto t1 = Clock::now();
         const std::int64_t dt =
             std::chrono::duration_cast<ns>(t1 - t0).count();
@@ -247,10 +342,12 @@ int main(int argc, char** argv) {
     std::printf("\n");
     std::printf("| metric | value |\n");
     std::printf("|---|---|\n");
-    std::printf("| events processed | %llu |\n",
+    std::printf("| events processed (measured) | %llu |\n",
                 static_cast<unsigned long long>(cfg.events));
+    std::printf("| warmup events (excluded) | %llu |\n",
+                static_cast<unsigned long long>(cfg.warmup_events));
     std::printf("| wall clock | %.1f ms |\n", wall_ms);
-    std::printf("| throughput | %.1f M evt/s |\n", throughput_meps);
+    std::printf("| throughput | %.2f M evt/s |\n", throughput_meps);
     std::printf("| p50 latency | %lld ns |\n", static_cast<long long>(p50));
     std::printf("| p90 latency | %lld ns |\n", static_cast<long long>(p90));
     std::printf("| p99 latency | %lld ns |\n", static_cast<long long>(p99));

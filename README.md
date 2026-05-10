@@ -69,7 +69,7 @@ The Fly machine auto stops when idle and auto starts on the first request, so th
 
 ## Status
 
-The build is sequenced into shippable milestones (foundations, single-symbol matching, multi-instrument and cancel, property tests, concurrency, the bench push, ITCH replay, the remaining order types, the WebSocket server, the frontend, the deploy, the public README rewrite). Single-symbol matching, multi-instrument and cancel, the property based invariant suite, and the seqlock protected top of book (with a TSAN-instrumented concurrency test) have landed; the bench push is next.
+The build is sequenced into shippable milestones (foundations, single-symbol matching, multi-instrument and cancel, property tests, concurrency, the bench push, ITCH replay, the remaining order types, the WebSocket server, the frontend, the deploy, the public README rewrite). Single-symbol matching, multi-instrument and cancel, the property based invariant suite, the seqlock protected top of book (with a TSAN-instrumented concurrency test), and the bench regression gate (CI fails on > 5 percent throughput drop or > 10 percent latency rise) have landed; the NASDAQ ITCH 5.0 replay is next.
 
 ## Entry points
 

@@ -71,6 +71,17 @@ jobs:
       - name: Test
         run: ctest --test-dir build --output-on-failure
 
+      - name: Bench
+        if: matrix.toolchain == 'clang'
+        run: |
+          ./build/apps/bench/meridian-bench \
+              --events 1000000 --seed 42 \
+              --json-out bench/last-run.json
+
+      - name: Bench regression check
+        if: matrix.toolchain == 'clang'
+        run: python3 bench/check_regression.py bench/baseline.json bench/last-run.json
+
   frontend:
     name: frontend
     runs-on: ubuntu-24.04

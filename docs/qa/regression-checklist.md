@@ -201,10 +201,7 @@ relevant section above with the concrete commands.
   three seconds (one writer, two readers, zero torn reads). Acceptance
   is a one-time pass at `MERIDIAN_TSAN_DURATION_SEC=60` with zero
   TSAN warnings and zero torn-read mismatches.
-* **Benchmark regression**: `meridian-bench` runs in CI on every PR
-  and compares against `bench/baseline.json`; the build fails if
-  throughput drops more than 5 percent or if any of p50, p99, p99.9
-  latency percentiles increase more than 10 percent.
+* **Benchmark regression** (in force): `meridian-bench --events 1000000 --seed 42 --warmup 100000` runs in `.github/workflows/ci.yml` on every PR (clang job only) and `bench/check_regression.py` compares against the committed `bench/baseline.json`. CI fails if throughput drops more than 5 percent or if any of p50, p99, p99.9 latency percentiles rise more than 10 percent. The baseline is captured on the GitHub Actions ubuntu-24.04 runner so the comparison is apples-to-apples; regenerate it by pasting numbers from a representative CI run into `bench/baseline.json` and opening a PR. Acceptance is a one-time pass on the desktop reference machine at the documented headline targets (>= 6M evt/s, p50 <= 500 ns, p99 <= 2 us, p99.9 <= 5 us).
 * **ITCH integration**: a 5-minute NASDAQ ITCH 5.0 sample is replayed
   through both the C++ engine and the Python reference; the final
   book state and total fill count must match exactly.

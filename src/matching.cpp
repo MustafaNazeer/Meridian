@@ -22,9 +22,16 @@ MatchingEngine::MatchingEngine(OrderPool& pool, BookRegistry& registry,
                                OrderIndex& index) noexcept
     : pool_(pool), registry_(registry), index_(index) {}
 
-std::vector<ExecutionReport> MatchingEngine::apply(const EngineEvent& event) {
-    std::vector<ExecutionReport> out;
-    out.reserve(1024);
+void MatchingEngine::apply(const EngineEvent& event,
+                           std::vector<ExecutionReport>& out) {
+    // HotPathGuard remains inside sweep(): it watches the inner
+    // matching loop, where any allocation would indicate a bug (a
+    // runaway report buffer growth, an accidental temporary). The
+    // legitimate allocations on the new-price-level path
+    // (`std::map<Price, std::unique_ptr<Level>>` insertion in
+    // `Book::add`) are by design and must not trip the debug
+    // allocator. Lifting the guard to wrap the whole apply() would
+    // false-positive on those legitimate paths.
     if (event.kind == EventKind::NewOrder) {
         Book* book = registry_.book(event.symbol);
         if (book == nullptr) [[unlikely]] {
@@ -37,7 +44,7 @@ std::vector<ExecutionReport> MatchingEngine::apply(const EngineEvent& event) {
                 .ts = event.ts,
                 .reject_reason = RejectReason::UnknownSymbol,
             });
-            return out;
+            return;
         }
         switch (event.type) {
             case OrderType::Limit:  apply_limit(event,  *book, out); break;
@@ -66,7 +73,6 @@ std::vector<ExecutionReport> MatchingEngine::apply(const EngineEvent& event) {
     } else {
         apply_cancel(event, out);
     }
-    return out;
 }
 
 namespace {

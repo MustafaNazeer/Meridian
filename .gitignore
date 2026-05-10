@@ -46,6 +46,7 @@ Makefile
 bench/output/
 bench/*.csv
 bench/*.png
+bench/last-run.json
 
 # Python
 __pycache__/
