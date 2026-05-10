@@ -45,7 +45,7 @@ Notation in the worked examples:
 
 A bid at a higher price has priority over a bid at a lower price. An ask at a lower price has priority over an ask at a higher price. An aggressing buy order seeking liquidity walks the ask side from the lowest ask price upward, taking each price level in turn until either the order's quantity is exhausted, the order's price limit is reached (for limit and IOC), or the opposite side is empty. An aggressing sell order walks the bid side from the highest bid price downward, symmetrically.
 
-This rule is the standard "price priority" of a continuous limit order book. See Harris, *Trading and Exchanges: Market Microstructure for Practitioners* (Oxford University Press, 2003), Chapter 6 ("Order-Driven Markets") section on order precedence rules. See also O'Hara, *Market Microstructure Theory* (Blackwell, 1995), Chapter 1 for the formal definition of a limit order book as a sorted collection of price levels with FIFO queues at each level. [citation needed: confirm exact section number for Harris and O'Hara]
+This rule is the standard "price priority" of a continuous limit order book. See Harris, *Trading and Exchanges: Market Microstructure for Practitioners* (Oxford University Press, 2003), Chapter 6 ("Order-Driven Market Mechanisms") on order precedence rules. [citation needed: confirm exact sub-section number within Harris Chapter 6.]
 
 ### 2.2 Time priority (tie-breaking at a price level)
 
@@ -866,10 +866,9 @@ Section 6.4 picks `Side::Buy` and `price=0` as sentinels in the `Reject` report 
 The references below are listed with the specific section that supports each rule. Where this document was written without direct access to the cited text, the citation is marked `[citation needed]` so the Citation and Fact Auditor (agent 17) can resolve the exact section number in their pass before this document ships.
 
 * **Harris, Larry. *Trading and Exchanges: Market Microstructure for Practitioners*. Oxford University Press, 2003.**
-  * Chapter 6, "Order-Driven Markets": the formal treatment of order precedence rules: price priority is primary; time priority breaks ties at a price level. Cited in section 2.1 and section 2.2 of this document. [citation needed: confirm exact section number within Chapter 6 for the price-time priority statement]
-  * Chapter 4 or 5: the canonical taxonomy of order types: limit, market, IOC, FOK, post-only. Cited implicitly in sections 3, 4, 5 of this document. [citation needed: confirm chapter number]
-* **O'Hara, Maureen. *Market Microstructure Theory*. Blackwell Publishers, 1995.**
-  * Chapter 1, "An Introduction to Market Microstructure": the formal definition of a limit order book as a collection of price levels with FIFO queues at each level. Cited in section 2.1 of this document. [citation needed: confirm exact section number]
+  * Chapter 6, "Order-Driven Market Mechanisms": the formal treatment of order precedence rules: price priority is primary; time priority breaks ties at a price level. Cited in section 2.1 and section 2.2 of this document. [citation needed: confirm exact sub-section number within Chapter 6 for the price-time priority statement]
+  * Chapter 4, "Orders and Order Properties": the canonical taxonomy of order types (limit, market, IOC, FOK, post-only). Cited implicitly in sections 3, 4, 5 of this document. [citation needed: confirm exact sub-section number]
+* The earlier draft of this document also cited O'Hara, *Market Microstructure Theory*, Chapter 1 for the formal limit-order-book definition. The Citation and Fact Auditor's Phase 1 pass found that Chapter 1 ("Markets and Market Making") does not contain a formal LOB definition; the citation has been removed pending a future refresh that locates the correct chapter in O'Hara or substitutes another reference (e.g., Hasbrouck, *Empirical Market Microstructure*, 2007). The Harris Chapter 6 citation alone is sufficient for Phase 1.
 * **NASDAQ TotalView-ITCH 5.0 Specification, document version 5.0, NASDAQ MarketWatch.**
   * The `Order Executed Message` (Type `E`) and `Order Executed With Price Message` (Type `C`) document the maker-taker fill semantics that this document's section 2.3 mirrors. [citation needed: confirm exact page or section]
   * The order-priority invariant is implicit in the message protocol: the spec assumes a price-time-priority matching engine. [citation needed: confirm wording]

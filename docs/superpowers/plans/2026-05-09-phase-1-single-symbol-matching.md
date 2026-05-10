@@ -476,7 +476,7 @@ hit a throughput target. Tasks:
 3. Modify /home/mustafa/src/Meridian/CMakeLists.txt: uncomment
    add_subdirectory(apps/bench). Also add a FetchContent_Declare for
    HDRHistogram-c (https://github.com/HdrHistogram/HdrHistogram_c.git, git
-   tag 0.11.8 released 2024-04-04). Lock the tag; update only with explicit
+   tag 0.11.8 released 2023-04-30). Lock the tag; update only with explicit
    DevOps and Code Reviewer sign-off, per the GoogleTest pinning policy.
 
 4. Verify the bench compiles and runs:

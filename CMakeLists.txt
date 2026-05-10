@@ -42,7 +42,7 @@ if(MERIDIAN_BUILD_TESTS)
 endif()
 
 # HDRHistogram-c powers the meridian-bench latency capture. Only fetched when
-# the bench is being built. Locked to v0.11.8 (released 2024-04-04). Update
+# the bench is being built. Locked to v0.11.8 (released 2023-04-30). Update
 # only with explicit DevOps and Code Reviewer sign-off, mirroring the
 # GoogleTest pinning policy above.
 if(MERIDIAN_BUILD_BENCH)
