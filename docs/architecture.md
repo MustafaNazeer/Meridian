@@ -4,7 +4,7 @@
 
 ## 1. One paragraph orientation
 
-Meridian is a price-time priority limit order book and matching engine, written in C++20, plus a live web visualization. The engine is delivered as a static library (`libmeridian.a`) plus three thin driver binaries: `meridian-bench` (zero I/O throughput and latency benchmark), `meridian-replay` (CLI ITCH replayer that streams JSON Lines), and `meridian-server` (the live demo with uWebSockets serving a React frontend hosted on Cloudflare Pages). The library and the bench binary contain zero networking code, so the headline events per second number is defensible in isolation. The matching loop is single threaded and pinned to its own core; all I/O happens on other cores via a seqlock protected top of book snapshot, so the matching loop never blocks on the network or the file system.
+Meridian is a price-time priority limit order book and matching engine, written in C++20, plus a live web visualization. The engine is delivered as a static library (`libmeridian.a`) plus three thin driver binaries: `meridian-bench` (zero I/O throughput and latency benchmark), `meridian-replay` (CLI ITCH replayer that streams JSON Lines), and `meridian-server` (the live demo, with a hand rolled `poll()`-based WebSocket server feeding a React frontend hosted on Cloudflare Pages). The library and the bench binary contain zero networking code, so the headline events per second number is defensible in isolation. The matching loop is single threaded; all I/O happens on other threads via a seqlock protected top of book snapshot, so the matching loop never blocks on the network or the file system.
 
 ## 2. High level diagram
 
@@ -29,7 +29,7 @@ This diagram is the canonical picture of the runtime topology.
 |                                                        |                         |
 |                                                        v                         |
 |                                              +--------------------+              |
-|                                              |  uWebSockets       |              |
+|                                              |  WsServer (poll)   |              |
 |                                              |  core 5, pinned    |              |
 |                                              |  serves /  + /ws   |              |
 |                                              +--------------------+              |
@@ -71,7 +71,7 @@ The CLI replayer. Streams `ExecutionReport`s as JSON Lines on stdout for piping 
 
 ### 3.4 meridian-server (apps/server)
 
-The live demo. Reads `meridian.toml` for tape path, replay speed, listen port, allowed origins, and max client count. Starts the replayer plus the matching loop on core 4, the sampler on core 6 at 30 Hz, and the uWebSockets event loop on core 5 (per the threading model in section 5). Serves three routes: `WSS /ws` (the live data stream), `GET /healthz` (a 200 OK with a one-line JSON status, used by Fly's load balancer for readiness checks), and `GET /metrics` (JSON counters). The React SPA is not served by this binary; Cloudflare Pages owns the frontend at `meridian-demo.pages.dev`. On WebSocket connect, the client receives a `snapshot` message (full L10 book plus recent trades plus performance metrics for the subscribed symbol); thereafter the sampler builds and broadcasts `delta` messages at 30 Hz. The server keeps audit events in an in-memory ring buffer only; nothing is written to disk on the live machine: the WebSocket stream is the audit log on the demo.
+The live demo. CLI: `--port N` (0 = OS-assigned; the assigned port is announced on stdout), `--rate N` (synthetic engine event rate), `--seed N`. Three threads cooperate: the engine thread runs a synthetic limit/market/cancel mix through `MatchingEngine::apply`; the sampler thread wakes at 30 Hz, reads the seqlock snapshot, and hands a JSON delta to the WS server; the main thread runs `WsServer::serve_forever()` over a `poll()` loop on the listen socket plus connected client fds. Serves three routes: `WSS /ws` (the live data stream), `GET /healthz` (a 200 OK with a one-line JSON status, used by Fly's load balancer for readiness checks), and `GET /metrics` (JSON counters: connections total, active, broadcasts total, bytes sent, handshake failures). The React SPA is not served by this binary; Cloudflare Pages owns the frontend at `meridian-demo.pages.dev`. On WebSocket connect, the client receives a `snapshot` message (today: best bid/ask only; L10 depth and recent trades are documented as follow-ups in `docs/qa/regression-checklist.md`); thereafter the sampler builds and broadcasts `delta` messages at 30 Hz. The server keeps audit events in an in-memory ring buffer only; nothing is written to disk on the live machine: the WebSocket stream is the audit log on the demo.
 
 ### 3.5 frontend (React 19 + Vite + TypeScript + Tailwind)
 
@@ -92,7 +92,7 @@ End to end, an ITCH message becomes a rendered tick on the browser through six s
 2. **Match**: the matching loop on core 4 pops the event, calls `Book::apply(event)` against the relevant symbol's book, and generates zero or more `ExecutionReport`s.
 3. **Publish**: after each event, the matching loop atomically updates the symbol's `TopOfBookSnapshot` using the seqlock writer protocol (section 5).
 4. **Sample**: the sampler thread on core 6 wakes at 30 Hz, reads all symbols' snapshots using the seqlock reader protocol with retry, and builds a JSON delta describing the changes since the last sample.
-5. **Push**: the sampler hands the delta to the uWebSockets event loop on core 5, which broadcasts it to all connected clients on the WebSocket topic for that symbol.
+5. **Push**: the sampler hands the delta to `WsServer::broadcast()`, which enqueues the payload behind a mutex and lets the main thread's `poll()` loop drain it on the next wakeup (bounded by the 33 ms poll timeout).
 6. **Render**: the frontend's WebSocket client receives the delta, applies it to the Zustand store, and React re-renders the affected panels.
 
 The matching loop never touches a socket, never serializes JSON, never holds a mutex. Its only interaction with the outside world is updating the seqlock protected snapshot and pushing execution reports onto a separate ring buffer that the audit consumer drains.
@@ -104,8 +104,8 @@ The server pins three threads to three different cores so the matching loop is n
 | Thread | Core | Responsibility |
 |---|---|---|
 | Matching loop | 4 (pinned) | Drains the event queue, applies events to books, publishes top of book via the seqlock writer protocol, pushes execution reports onto the audit ring buffer. No I/O, no mutex, no logging on the hot path. |
-| Sampler | 6 (pinned) | Wakes at 30 Hz, reads each symbol's seqlock snapshot with retry, builds a JSON delta, hands it to the uWebSockets event loop. Owns no engine state. |
-| uWebSockets event loop | 5 (pinned) | Accepts WebSocket connections, sends snapshots on connect, broadcasts deltas at 30 Hz, culls dropped clients. Never touches engine state directly. |
+| Sampler | 6 (pinned, future) | Wakes at 30 Hz, reads each symbol's seqlock snapshot with retry, builds a JSON delta, hands it to the WS server via `broadcast()`. Owns no engine state. Today the sampler runs unpinned in `meridian-server`; the explicit core pinning lands when `meridian.toml` does. |
+| WsServer event loop | 5 (pinned, future) | Accepts WebSocket connections via `poll()`, sends snapshots on connect, broadcasts deltas at 30 Hz, culls dropped clients. Never touches engine state directly. Today runs unpinned on the binary's main thread. |
 
 The seqlock protocol on `TopOfBookSnapshot` is what makes the publish step lock free. The writer increments `seq` (odd value: write in progress), writes the data fields (with `release` ordering), increments `seq` again (even value: write complete). The reader loads `seq`, reads the data, loads `seq` again, and retries if the two `seq` reads differ or if `seq` is odd. ADR 0003 documents this choice over the alternatives (raw fields plus `std::atomic_thread_fence`, RWLock, RCU, hazard pointers). Memory ordering specifics live in that ADR.
 

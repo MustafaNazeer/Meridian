@@ -205,9 +205,16 @@ relevant section above with the concrete commands.
   TSAN warnings and zero torn-read mismatches.
 * **Benchmark regression** (in force): `meridian-bench --events 1000000 --seed 42 --warmup 100000` runs in `.github/workflows/ci.yml` on every PR (clang job only) and `bench/check_regression.py` compares against the committed `bench/baseline.json`. CI fails if throughput drops more than 5 percent or if any of p50, p99, p99.9 latency percentiles rise more than 10 percent. The baseline is captured on the GitHub Actions ubuntu-24.04 runner so the comparison is apples-to-apples; regenerate it by pasting numbers from a representative CI run into `bench/baseline.json` and opening a PR. Acceptance is a one-time pass on the desktop reference machine at the documented headline targets (>= 6M evt/s, p50 <= 500 ns, p99 <= 2 us, p99.9 <= 5 us).
 * **ITCH integration** (in force, A and D subset): `tests/integration/test_itch_replay.cpp` generates a 10000-message synthetic ITCH 5.0 tape (Add Order and Order Delete only, seed 42, 30 percent cancels) at test time, runs `meridian-replay` and `tests/reference/itch_replay.py` against it, and byte-diffs the JSON Lines audit outputs. Acceptance for the broader ITCH coverage (X partial cancel, U order replace, F add-order-with-MPID, plus a 5-minute real NASDAQ tape if one becomes available without licensing constraints) lands alongside the post-only / FOK milestone, since X requires a partial-cancel API on the engine.
-* **WebSocket smoke**: `meridian-server` runs against a 60-second
-  replay; a client receives a `snapshot` followed by at least one
-  `delta`; the JSON shape matches `docs/api/websocket.md`.
+* **WebSocket smoke** (in force, L1 subset): `tests/integration/test_ws_smoke.cpp`
+  spawns `meridian-server` on port 0, parses the announced port,
+  performs the RFC 6455 upgrade handshake, decodes the first text
+  frame (must be a `snapshot`), then waits up to 500 ms for at least
+  one `delta` frame (each carries `bid_px`, `bid_qty`, `ask_px`,
+  `ask_qty`, `ts`). Three additional cases cover `/healthz`,
+  `/metrics`, and the 404 path. Wider WebSocket coverage (60-second
+  replay, L10 depth, recent trades, perf metrics in the snapshot,
+  CSP / allowed origins / max client count) lands alongside the
+  ITCH-tape input and TOML config follow-ups.
 * **Frontend audit**: `pnpm --filter frontend test` is green; Vitest
   covers every component on at least the happy path; a WCAG AA pass
   signs off; the frontend build size and Lighthouse scores meet the

@@ -28,7 +28,7 @@ Three thin driver binaries link against `libmeridian.a`:
 |---|---|---|
 | `meridian-bench` | Pure throughput and latency benchmark. The headline events per second target comes from this binary. | None. |
 | `meridian-replay` | CLI: replays an ITCH tape, streams JSON Lines (fills, cancels, top of book) to stdout. | None. |
-| `meridian-server` | Live demo: replayer plus matching loop plus 30 Hz sampler plus uWebSockets. | uWebSockets only. |
+| `meridian-server` | Live demo: replayer plus matching loop plus 30 Hz sampler plus a hand rolled `poll()`-based WebSocket server. | TCP listen socket on the configured port; `WSS /ws` plus `GET /healthz` plus `GET /metrics`. |
 
 The library and the bench binary contain zero networking code, so the headline number is defensible in isolation.
 
@@ -40,7 +40,7 @@ The library and the bench binary contain zero networking code, so the headline n
 | Build | CMake 3.25+ with Ninja |
 | Tests | GoogleTest, with hand rolled deterministic generators for property based invariants under `tests/property/` |
 | Benchmark | Google Benchmark plus a hand rolled HDR histogram latency harness |
-| WebSocket library | uWebSockets v20+ |
+| WebSocket library | Hand rolled, RFC 6455, single threaded `poll()` loop in `src/ws_server.cpp`. Server-to-client text frames only; no fragmentation, no permessage-deflate. |
 | ITCH parser | Hand rolled, single header |
 | Logging | spdlog, level filtered out of the release hot path |
 | JSON | simdjson (parse), glaze (serialize) |
@@ -69,7 +69,7 @@ The Fly machine auto stops when idle and auto starts on the first request, so th
 
 ## Status
 
-The build is sequenced into shippable milestones (foundations, single-symbol matching, multi-instrument and cancel, property tests, concurrency, the bench push, ITCH replay, the remaining order types, the WebSocket server, the frontend, the deploy, the public README rewrite). Single-symbol matching, multi-instrument and cancel, the property based invariant suite, the seqlock protected top of book (with a TSAN-instrumented concurrency test), the bench regression gate (CI fails on > 5 percent throughput drop or > 10 percent latency rise), the NASDAQ ITCH 5.0 replay (Add Order and Order Delete messages, with a `meridian-replay` driver and a byte-for-byte differential test against a Python reference), and the remaining order types (post-only and FOK, with all ten matching invariants now ticked) have landed; the live WebSocket server is next.
+The build is sequenced into shippable milestones (foundations, single-symbol matching, multi-instrument and cancel, property tests, concurrency, the bench push, ITCH replay, the remaining order types, the WebSocket server, the frontend, the deploy, the public README rewrite). Single-symbol matching, multi-instrument and cancel, the property based invariant suite, the seqlock protected top of book (with a TSAN-instrumented concurrency test), the bench regression gate (CI fails on > 5 percent throughput drop or > 10 percent latency rise), the NASDAQ ITCH 5.0 replay (Add Order and Order Delete messages, with a `meridian-replay` driver and a byte-for-byte differential test against a Python reference), the remaining order types (post-only and FOK, with all ten matching invariants now ticked), and the live `meridian-server` binary (hand rolled `poll()`-based WSS server, three threaded engine + sampler + WS, `/healthz` plus `/metrics` plus `/ws`) have landed; the React frontend is next.
 
 ## Entry points
 

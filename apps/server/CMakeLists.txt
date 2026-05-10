@@ -1,9 +1,9 @@
-# meridian-server: live demo binary with uWebSockets.
+# meridian-server: live demo binary.
 #
-# Sources land here when the WebSocket server is wired up. Until then this
-# stub is intentionally inert; the root CMakeLists.txt does not invoke
-# add_subdirectory(apps/server) yet. When main.cpp, sampler.cpp, and ws.cpp
-# land here, uncomment the corresponding add_subdirectory line in the root
-# CMakeLists.txt and add a target definition (add_executable(meridian-server
-# ...) plus the required link to libmeridian, uWebSockets, simdjson, and
-# glaze).
+# The WebSocket server lives in libmeridian.a (src/ws_server.cpp); this
+# directory wires the engine + sampler + ws threads together in a
+# single binary. Hand rolled WS server, no external networking library.
+
+add_executable(meridian-server main.cpp)
+target_link_libraries(meridian-server PRIVATE meridian Threads::Threads)
+target_compile_options(meridian-server PRIVATE -Wall -Wextra -Wpedantic -Werror)

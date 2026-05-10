@@ -54,3 +54,25 @@ target_compile_options(test_itch_replay PRIVATE
 add_dependencies(test_itch_replay meridian-replay meridian-tape-gen)
 
 gtest_discover_tests(test_itch_replay)
+
+# WebSocket server smoke test: spawns meridian-server on port 0, parses
+# the announced port, runs the WS upgrade handshake and frame decode
+# in pure C++. No Python websockets dep needed.
+add_executable(test_ws_smoke test_ws_smoke.cpp)
+
+target_compile_definitions(test_ws_smoke PRIVATE
+    MERIDIAN_SERVER_PATH="$<TARGET_FILE:meridian-server>"
+)
+
+target_link_libraries(test_ws_smoke PRIVATE
+    meridian
+    GTest::gtest_main
+)
+
+target_compile_options(test_ws_smoke PRIVATE
+    -Wall -Wextra -Wpedantic -Werror
+)
+
+add_dependencies(test_ws_smoke meridian-server)
+
+gtest_discover_tests(test_ws_smoke)
