@@ -73,7 +73,9 @@ add_subdirectory(src)
 if(MERIDIAN_BUILD_BENCH)
     add_subdirectory(apps/bench)
 endif()
-# add_subdirectory(apps/replay)
+if(MERIDIAN_BUILD_REPLAY)
+    add_subdirectory(apps/replay)
+endif()
 # add_subdirectory(apps/server)
 
 # Tests.
