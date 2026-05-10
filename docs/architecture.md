@@ -1,6 +1,6 @@
 # Meridian architecture
 
-> Audience: a developer who has never seen this project before and wants to understand it well enough to navigate the codebase in roughly 15 minutes. For the higher level project framing (what Meridian is, who it is for, what the resume bullet says) read [`README.md`](../README.md). For the engineering contract (every concrete design decision with rationale) read [`docs/superpowers/specs/2026-05-09-meridian-design.md`](superpowers/specs/2026-05-09-meridian-design.md), which is the source of truth this document summarizes. For the rolling per phase plan (which file lands when) read [`docs/plan.md`](plan.md).
+> Audience: a developer who has never seen this project before and wants to understand it well enough to navigate the codebase in roughly 15 minutes. For the higher level project framing (what Meridian is, who it is for, what the resume bullet says) read [`README.md`](../README.md). For the per-decision rationale, read the ADRs under [`docs/adr/`](adr/). For the matching invariants and worked examples, read [`docs/risk/matching-semantics.md`](risk/matching-semantics.md).
 
 ## 1. One paragraph orientation
 
@@ -8,7 +8,7 @@ Meridian is a price-time priority limit order book and matching engine, written 
 
 ## 2. High level diagram
 
-This diagram is adapted from design spec section 4. It is the canonical picture of the runtime topology.
+This diagram is the canonical picture of the runtime topology.
 
 ```
 +--------------------------- meridian-server (one binary) -------------------------+
@@ -51,7 +51,7 @@ The library `libmeridian.a` is the engine. Three thin binaries link against it (
 
 The static library that contains every line of matching logic. It is compiled once and linked into all three driver binaries. The library has no networking code, no logging on the hot path (level filtered out at compile time), and no heap allocation on the hot path. Its public headers live in `include/meridian/` and its implementation in `src/`.
 
-Core types (full schemas in design spec section 5.1):
+Core types:
 
 * **Order**: 64 byte struct, fits one cache line. Holds id, symbol, side, type, price (32 bit fixed point ticks), remaining quantity, arrival timestamp, and the intrusive linked list pointers (`prev`, `next`) used to splice into a `Level`.
 * **Level**: doubly linked list of `Order`s at a single price, owning total quantity and order count. Insertion is at the tail (FIFO).
@@ -71,7 +71,7 @@ The CLI replayer. Streams `ExecutionReport`s as JSON Lines on stdout for piping 
 
 ### 3.4 meridian-server (apps/server)
 
-The live demo. Reads `meridian.toml` for tape path, replay speed, listen port, allowed origins, and max client count. Starts the replayer plus the matching loop on core 4, the sampler on core 6 at 30 Hz, and the uWebSockets event loop on core 5 (per the threading model in section 5). Serves three routes: `WSS /ws` (the live data stream), `GET /healthz` (a 200 OK with a one-line JSON status, used by Fly's load balancer for readiness checks), and `GET /metrics` (JSON counters from the Observability Engineer). The React SPA is not served by this binary; Cloudflare Pages owns the frontend at `meridian-demo.pages.dev` per the design spec section 13 resolved decision. On WebSocket connect, the client receives a `snapshot` message (full L10 book plus recent trades plus performance metrics for the subscribed symbol); thereafter the sampler builds and broadcasts `delta` messages at 30 Hz. The server keeps audit events in an in-memory ring buffer only; nothing is written to disk on the live machine (per design spec section 13 resolved decision: WebSocket only audit log on the demo).
+The live demo. Reads `meridian.toml` for tape path, replay speed, listen port, allowed origins, and max client count. Starts the replayer plus the matching loop on core 4, the sampler on core 6 at 30 Hz, and the uWebSockets event loop on core 5 (per the threading model in section 5). Serves three routes: `WSS /ws` (the live data stream), `GET /healthz` (a 200 OK with a one-line JSON status, used by Fly's load balancer for readiness checks), and `GET /metrics` (JSON counters). The React SPA is not served by this binary; Cloudflare Pages owns the frontend at `meridian-demo.pages.dev`. On WebSocket connect, the client receives a `snapshot` message (full L10 book plus recent trades plus performance metrics for the subscribed symbol); thereafter the sampler builds and broadcasts `delta` messages at 30 Hz. The server keeps audit events in an in-memory ring buffer only; nothing is written to disk on the live machine: the WebSocket stream is the audit log on the demo.
 
 ### 3.5 frontend (React 19 + Vite + TypeScript + Tailwind)
 
@@ -82,11 +82,11 @@ The WebSocket client (`frontend/src/ws/client.ts`) implements a four state conne
 ### 3.6 deploy topology
 
 * **Frontend**: built with `pnpm build`. v1 will deploy to Cloudflare Pages at `meridian-demo.pages.dev` (default subdomain; no custom domain for v1). The deploy on `main` push will run from `.github/workflows/deploy.yml` once Phase 10 wires it up.
-* **Engine**: packaged into a multi stage Dockerfile (builder stage with the C++ toolchain, runtime stage with Debian slim and the `meridian-server` binary plus the sample ITCH tape, non root user). Deployed to a Fly.io machine described by `fly.toml` with `auto_stop_machines = true`, `auto_start_machines = true`, `min_machines_running = 0`, healthcheck against `/healthz`. Region default `iad` (Ashburn, Virginia). The Fly app name is picked at Phase 10 (likely `meridian` or `meridian-engine`); the resulting WebSocket origin `wss://<app>.fly.dev` flows into the frontend via `VITE_WS_URL` and into the frontend's CSP `connect-src`. Cold start UX (5 to 15 seconds while Fly wakes the machine) is handled by the Phase 9 `EngineWarmingUp` component on the frontend.
+* **Engine**: packaged into a multi stage Dockerfile (builder stage with the C++ toolchain, runtime stage with Debian slim and the `meridian-server` binary plus the sample ITCH tape, non root user). Deployed to a Fly.io machine described by `fly.toml` with `auto_stop_machines = true`, `auto_start_machines = true`, `min_machines_running = 0`, healthcheck against `/healthz`. Region default `iad` (Ashburn, Virginia). The Fly app name is picked at deploy time (likely `meridian` or `meridian-engine`); the resulting WebSocket origin `wss://<app>.fly.dev` flows into the frontend via `VITE_WS_URL` and into the frontend's CSP `connect-src`. Cold start UX (5 to 15 seconds while Fly wakes the machine) is handled by the `EngineWarmingUp` component on the frontend.
 
 ## 4. Data flow
 
-End to end, an ITCH message becomes a rendered tick on the browser through six stages (mirrors design spec section 6):
+End to end, an ITCH message becomes a rendered tick on the browser through six stages:
 
 1. **Ingest**: the replayer decodes the next ITCH message into an `EngineEvent` struct and pushes it onto a single producer queue.
 2. **Match**: the matching loop on core 4 pops the event, calls `Book::apply(event)` against the relevant symbol's book, and generates zero or more `ExecutionReport`s.
@@ -99,7 +99,7 @@ The matching loop never touches a socket, never serializes JSON, never holds a m
 
 ## 5. Threading model
 
-The server pins three threads to three different cores so the matching loop is never preempted by I/O work (per design spec section 4):
+The server pins three threads to three different cores so the matching loop is never preempted by I/O work:
 
 | Thread | Core | Responsibility |
 |---|---|---|
@@ -107,7 +107,7 @@ The server pins three threads to three different cores so the matching loop is n
 | Sampler | 6 (pinned) | Wakes at 30 Hz, reads each symbol's seqlock snapshot with retry, builds a JSON delta, hands it to the uWebSockets event loop. Owns no engine state. |
 | uWebSockets event loop | 5 (pinned) | Accepts WebSocket connections, sends snapshots on connect, broadcasts deltas at 30 Hz, culls dropped clients. Never touches engine state directly. |
 
-The seqlock protocol on `TopOfBookSnapshot` is what makes the publish step lock free. The writer increments `seq` (odd value: write in progress), writes the data fields (with `release` ordering), increments `seq` again (even value: write complete). The reader loads `seq`, reads the data, loads `seq` again, and retries if the two `seq` reads differ or if `seq` is odd. The ADR for this choice over the alternatives (RWLock, RCU, hazard pointers) is filed at `docs/adr/0002-seqlock-for-top-of-book.md` in Phase 4. Memory ordering specifics live in that ADR; the Concurrency Reviewer signs off on every change to this protocol.
+The seqlock protocol on `TopOfBookSnapshot` is what makes the publish step lock free. The writer increments `seq` (odd value: write in progress), writes the data fields (with `release` ordering), increments `seq` again (even value: write complete). The reader loads `seq`, reads the data, loads `seq` again, and retries if the two `seq` reads differ or if `seq` is odd. The ADR for this choice over the alternatives (RWLock, RCU, hazard pointers) will be filed alongside the seqlock implementation. Memory ordering specifics live in that ADR.
 
 ## 6. Hosting topology
 
@@ -116,27 +116,18 @@ The seqlock protocol on `TopOfBookSnapshot` is what makes the publish step lock 
 | React frontend | Cloudflare Pages (free tier, instant deploys, default subdomain) | `meridian-demo.pages.dev` (v1 will) |
 | `meridian-server` engine | Fly.io machine (free tier, Dockerfile plus `fly.toml`, auto stop on idle, auto start on first request, default region `iad`) | `wss://<fly-app>.fly.dev/ws` (v1 will) |
 
-Fly.io was picked over a VPS plus systemd because Render does not host raw C++ binaries, Fly machines do, the free tier is generous for a single small machine running an ITCH replay, and there are no servers to keep patched. The cold start (5 to 15 seconds while Fly wakes the machine after idle) is acceptable for a portfolio demo; the Phase 9 frontend renders an explicit "engine warming up" state during this window rather than appearing broken (per design spec section 5.5).
+Fly.io was picked over a VPS plus systemd because Render does not host raw C++ binaries, Fly machines do, the free tier is generous for a single small machine running an ITCH replay, and there are no servers to keep patched. The cold start (5 to 15 seconds while Fly wakes the machine after idle) is acceptable for a portfolio demo; the frontend renders an explicit "engine warming up" state during this window rather than appearing broken.
 
-CI/CD is GitHub Actions. Three workflows: `ci.yml` (build matrix on clang and gcc plus frontend build and tests, on every PR), `bench.yml` (manual trigger; runs `meridian-bench` and diffs against `bench/baseline.json`), and `deploy.yml` (deploys frontend to Cloudflare Pages and engine to Fly.io on `main` push, after Phase 10).
+CI/CD is GitHub Actions. Three workflows: `ci.yml` (build matrix on clang and gcc plus frontend build and tests, on every PR), `bench.yml` (manual trigger; runs `meridian-bench` and diffs against `bench/baseline.json`), and `deploy.yml` (deploys frontend to Cloudflare Pages and engine to Fly.io on `main` push, once the deploy is wired up).
 
 ## 7. File layout
 
-The repo's directory tree mirrors design spec section 10 and the canonical layout in `CLAUDE.md`. Headline:
-
 ```
 /home/mustafa/src/Meridian/
-|-- CLAUDE.md                  Auto loaded session brief
-|-- STATUS.md                  Single source of truth for the current phase
-|-- SPEC.md                    Full project spec
-|-- GETTING-STARTED.md         First session walkthrough
-|-- README.md                  Public facing pitch (rewritten in Phase 11 with real numbers)
-|-- future-ideas.md            Maintainer's private notes (gitignored)
-|-- agents/                    18 specialist briefs (00 PM plus 17 specialists)
+|-- README.md                  Public facing pitch
 |-- design-mockups/            5 visual direction mockups (Twilight is the chosen one)
 |-- docs/
-|   |-- plan.md                Rolling per phase implementation plan
-|   |-- setup-guide.md         Deployment walkthrough (filled in across phases, primarily Phase 10)
+|   |-- setup-guide.md         Deployment walkthrough
 |   |-- architecture.md        This document
 |   |-- design/                Canonical visual reference (canonical.html), wireframes, tokens
 |   |-- security/              Threat model, checklists, secrets reference
@@ -145,15 +136,13 @@ The repo's directory tree mirrors design spec section 10 and the canonical layou
 |   |-- observability/         Logging and metrics runbooks
 |   |-- risk/                  Matching engine correctness conventions and audit cases
 |   |-- adr/                   Architecture Decision Records (numbered)
-|   |-- audits/                Citation and Fact Auditor reports (one per phase that touches docs)
-|   |-- api/                   WebSocket protocol spec (Phase 8)
-|   `-- superpowers/specs/     Per feature design specs (e.g., 2026-05-09-meridian-design.md)
-|-- include/meridian/          Public library headers (Phase 1+)
-|-- src/                       libmeridian.a implementation (Phase 1+)
+|   `-- api/                   WebSocket protocol spec
+|-- include/meridian/          Public library headers
+|-- src/                       libmeridian.a implementation
 |-- apps/
-|   |-- bench/                 meridian-bench (Phase 1 skeleton, Phase 5 final)
-|   |-- replay/                meridian-replay (Phase 6)
-|   `-- server/                meridian-server (Phase 8)
+|   |-- bench/                 meridian-bench
+|   |-- replay/                meridian-replay
+|   `-- server/                meridian-server
 |-- tests/
 |   |-- unit/                  GoogleTest unit tests
 |   |-- property/              rapidcheck property based tests
@@ -162,17 +151,13 @@ The repo's directory tree mirrors design spec section 10 and the canonical layou
 |   `-- reference/             Python reference implementation (matching, ITCH)
 |-- bench/                     Benchmark baseline JSON for CI regression checks
 |-- third_party/               Vendored dependencies (CMake FetchContent)
-`-- frontend/                  React app (Phase 0 scaffold, Phase 9 build out)
+`-- frontend/                  React app for the live demo
 ```
-
-Always use absolute paths when referring to files in this project. `/home/mustafa/src/Meridian/...` is the canonical prefix.
 
 ## 8. Where to read next
 
-* **For the engineering contract** (every concrete design decision with rationale): `docs/superpowers/specs/2026-05-09-meridian-design.md`. This is the source of truth this document summarizes; when in conflict, that document wins.
-* **For the per phase implementation plan** (which file lands when, who owns it, how a phase exits cleanly): `docs/plan.md`.
+* **For the per-decision rationale**: `docs/adr/`. Numbered, smallest delta per file.
 * **For the visual ground truth** (every color, font size, spacing value, component anatomy): `docs/design/canonical.html`. Open it in a browser.
-* **For the agent roster** (who does what): `agents/`. Start with `agents/00-project-manager.md`.
-* **For the matching invariants and risk conventions**: `docs/risk/matching-semantics.md` (filed in Phase 1 by the Quant Domain Validator).
-* **For the latency budget and benchmark methodology**: `docs/perf/budget.md` (filed in Phase 5 by the Performance Engineer).
-* **For the deploy walkthrough**: `docs/setup-guide.md` (filled in across phases, primarily Phase 10 by the DevOps Engineer).
+* **For the matching invariants and risk conventions**: `docs/risk/matching-semantics.md`.
+* **For the latency budget and benchmark methodology**: `docs/perf/budget.md`.
+* **For the deploy walkthrough**: `docs/setup-guide.md`.

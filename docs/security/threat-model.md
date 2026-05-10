@@ -1,17 +1,16 @@
 # Meridian threat model
 
-**Version:** 0.1 (Phase 0 baseline)
+**Version:** 0.1 (foundations baseline)
 **Last updated:** 2026-05-09
-**Owner:** Security Engineer (agent 08)
 **Methodology:** STRIDE per attack surface, supplemented by deployment surface notes.
 
 ## Purpose and scope
 
 Meridian is a public, read-only portfolio demo of a price-time priority limit order book and matching engine. The live demo at `meridian-demo.pages.dev` lets any visitor watch a deterministic NASDAQ ITCH 5.0 replay against the C++ matching engine in real time over WSS. There is no authentication, no user submitted orders, no persistence, and no monetary value at stake. The threat model is sized accordingly: the goal is a demo that is hard to embarrass the author with, not a regulated trading venue.
 
-This document covers four attack surfaces that exist in the deployed system as resolved on 2026-05-09 (design spec section 13):
+This document covers four attack surfaces that exist in the deployed system as of 2026-05-09:
 
-1. The WebSocket endpoint exposed by `meridian-server` running on a Fly.io machine (default region `iad`, app name resolved at Phase 10).
+1. The WebSocket endpoint exposed by `meridian-server` running on a Fly.io machine (default region `iad`, app name resolved at deploy time).
 2. Static asset serving from Cloudflare Pages at `meridian-demo.pages.dev`, plus any static files served directly by the Fly machine.
 3. The replay tape file consumed by `meridian-replay` and `meridian-server` (trusted input, but the assumption is made explicit here).
 4. The build and deploy pipeline (GitHub Actions, Cloudflare Pages deploy hook, `flyctl` deploy), including dependency provenance for the C++ libraries pulled via CMake FetchContent.
@@ -24,18 +23,16 @@ Out of scope for this threat model:
 
 ## Component overview
 
-The components here track the design spec section 5 and section 13 resolved decisions. Numbering matches the design spec where possible.
-
 | Component | Lives at | Trust boundary | Notes |
 |---|---|---|---|
-| C5.1 `libmeridian.a` | Linked into all three driver binaries | Internal | Deterministic; no I/O of its own. |
-| C5.2 `meridian-bench` | Developer or CI hardware | Internal | No network. Out of scope for this threat model. |
-| C5.3 `meridian-replay` | Developer hardware | Internal | Reads a tape file, writes JSONL to stdout. |
-| C5.4 `meridian-server` | Fly.io machine, Dockerfile plus `fly.toml`, region default `iad` | Public network boundary | Hosts the matching loop, the seqlock-protected snapshot, the sampler, and uWebSockets. Auto-stops when idle, auto-starts on first request. |
-| C5.5 React web client | Cloudflare Pages, `meridian-demo.pages.dev` | Public network boundary | Static SPA. No backend code on Pages. |
+| `libmeridian.a` | Linked into all three driver binaries | Internal | Deterministic; no I/O of its own. |
+| `meridian-bench` | Developer or CI hardware | Internal | No network. Out of scope for this threat model. |
+| `meridian-replay` | Developer hardware | Internal | Reads a tape file, writes JSONL to stdout. |
+| `meridian-server` | Fly.io machine, Dockerfile plus `fly.toml`, region default `iad` | Public network boundary | Hosts the matching loop, the seqlock-protected snapshot, the sampler, and uWebSockets. Auto-stops when idle, auto-starts on first request. |
+| React web client | Cloudflare Pages, `meridian-demo.pages.dev` | Public network boundary | Static SPA. No backend code on Pages. |
 | Build pipeline | GitHub Actions in `MustafaNazeer/Meridian` | Mixed (public repo, private secrets) | Builds, tests, deploys. Holds `FLY_API_TOKEN` and the Cloudflare Pages API token as repo secrets. |
 
-References: design spec section 5 (components), section 13 (resolved decisions on hosting domain, backend host, demo symbol set, audit log), `SPEC.md` Phase 8 (WebSocket protocol), Phase 10 (hosting and CI/CD).
+See also `docs/architecture.md` (high-level diagram, threading model) and the WebSocket protocol document under `docs/api/`.
 
 ## Trust boundaries
 
@@ -59,7 +56,7 @@ There is no PII, no user data, no monetary value, and no proprietary algorithm a
 
 ### Surface 1: WebSocket endpoint at `wss://<fly-app>.fly.dev/ws`
 
-The endpoint is publicly reachable from any client. On connect, the client receives a `snapshot` message and thereafter `delta` messages at 30 Hz. There is no authentication. The client cannot submit orders; the protocol is read-only. References: design spec section 5.4 and 5.5, `SPEC.md` Phase 8.
+The endpoint is publicly reachable from any client. On connect, the client receives a `snapshot` message and thereafter `delta` messages at 30 Hz. There is no authentication. The client cannot submit orders; the protocol is read-only. See also `docs/architecture.md` sections 3.4 and 3.5, and the WebSocket protocol document.
 
 | STRIDE | Threat | Mitigation | Status |
 |---|---|---|---|
@@ -124,12 +121,12 @@ The pipeline includes:
 
 | STRIDE | Threat | Mitigation | Status |
 |---|---|---|---|
-| Spoofing | An attacker pushes a malicious commit and forces a deploy. | Branch protection on `main` requires PRs and required CI checks. Direct pushes to `main` are blocked; the user uses `gh pr merge --admin` only after green CI. The PR flow is enforced by branch protection plus the local pre-commit hook described in `CLAUDE.md`. | Phase 0 / Phase 10. |
-| Tampering | A FetchContent dependency is replaced upstream. | Each FetchContent declaration pins either a specific commit SHA or an immutable upstream release tag (for example, GoogleTest's `v1.15.2` release tag). Branch tags such as `main` or `master` are forbidden because they retarget. CI fetches the pinned ref, so upstream branch movement is not exploitable. SBOM generation is a Phase 10 deliverable; until it lands, manual upstream advisory checks at Phase 10 cover known issues. | Phase 0 documents the convention; Phase 10 verifies and produces an SBOM. |
-| Repudiation | A malicious workflow run modifies the deployed binary. | All deploys are tied to a commit SHA recorded by Fly's release API and Cloudflare Pages's build log. The deploy workflow logs the SHA it built from. | Phase 10 verifies the workflow logs the SHA. |
-| Information disclosure | Workflow logs leak `FLY_API_TOKEN` or the Cloudflare token. | Both are stored as encrypted repository secrets. GitHub redacts known secret values from logs automatically. The deploy step does not echo secrets. The workflow does not run `set -x`. | Phase 10 hardening checks the workflow files. |
+| Spoofing | An attacker pushes a malicious commit and forces a deploy. | Branch protection on `main` requires PRs and required CI checks. Direct pushes to `main` are blocked; merges go through `gh pr merge --admin` only after green CI. The PR flow is enforced by branch protection. | Foundations / hosting hardening. |
+| Tampering | A FetchContent dependency is replaced upstream. | Each FetchContent declaration pins either a specific commit SHA or an immutable upstream release tag (for example, GoogleTest's `v1.15.2` release tag). Branch tags such as `main` or `master` are forbidden because they retarget. CI fetches the pinned ref, so upstream branch movement is not exploitable. SBOM generation lands at hosting hardening; until then, manual upstream advisory checks cover known issues. | Foundations documents the convention; hosting hardening verifies and produces an SBOM. |
+| Repudiation | A malicious workflow run modifies the deployed binary. | All deploys are tied to a commit SHA recorded by Fly's release API and Cloudflare Pages's build log. The deploy workflow logs the SHA it built from. | Hosting hardening verifies the workflow logs the SHA. |
+| Information disclosure | Workflow logs leak `FLY_API_TOKEN` or the Cloudflare token. | Both are stored as encrypted repository secrets. GitHub redacts known secret values from logs automatically. The deploy step does not echo secrets. The workflow does not run `set -x`. | Hosting hardening checks the workflow files. |
 | Denial of service | Out of scope. | None at the pipeline level. | Accepted. |
-| Elevation of privilege | A compromised dependency runs malicious code at build time. | C++ FetchContent dependencies are pinned by commit SHA. `pnpm` uses a locked manifest. CI runs `pnpm audit` at Phase 10 and fails the build on any high or critical advisory; for C++ deps, the Phase 10 hardening checklist requires a manual upstream advisory pass against the pinned SHAs. The Docker base image for the Fly machine is a minimal Debian or Alpine image pinned by digest, not by tag. | Phase 0 documents conventions; Phase 10 verifies. |
+| Elevation of privilege | A compromised dependency runs malicious code at build time. | C++ FetchContent dependencies are pinned by commit SHA. `pnpm` uses a locked manifest. CI runs `pnpm audit` at hosting hardening and fails the build on any high or critical advisory; for C++ deps, the hardening checklist requires a manual upstream advisory pass against the pinned SHAs. The Docker base image for the Fly machine is a minimal Debian or Alpine image pinned by digest, not by tag. | Foundations documents conventions; hosting hardening verifies. |
 
 ## Cross cutting controls
 
@@ -139,16 +136,16 @@ These controls apply across all four surfaces and are tracked in `checklist.md`:
 * **No secrets in the repo.** Secrets are stored in GitHub Actions repository secrets and in Fly app secrets. The repo is public; nothing in `git ls-files` should ever match a secret pattern. `gitleaks` runs in CI as a required check.
 * **Non-root container.** The Dockerfile creates a `meridian` user with `/sbin/nologin` (or `/usr/sbin/nologin`, depending on base image), copies only the binary plus its runtime data, and runs as that user via `USER meridian`. No shell needed.
 * **No analytics, no telemetry, no third party scripts.** The frontend has no Google Analytics, no Sentry, no Plausible, no New Relic, no error tracking SaaS. The only third party origin allowed is Google Fonts (for Inter, Newsreader, JetBrains Mono), and only because the Twilight visual identity uses those typefaces. CSP enforces this.
-* **No client side IP logging.** Per design spec section 13, the audit log on the live demo is in memory only and contains only deterministic engine events. Client IPs are not collected, not displayed, not persisted.
+* **No client side IP logging.** The audit log on the live demo is in memory only and contains only deterministic engine events. Client IPs are not collected, not displayed, not persisted.
 * **Deterministic builds.** CMake build flags, FetchContent SHAs, the Docker base image digest, and the `pnpm` lockfile are all pinned; rebuilding the same commit on the same toolchain produces equivalent binaries. This is a defense in depth against supply chain compromise.
 
 ## Open assumptions and resolved citations
 
-The three `[citation needed]` markers originally placed in this section were resolved by the Citation and Fact Auditor on 2026-05-09. Each is now a footnoted assumption with a named verifying source.
+The three `[citation needed]` markers originally placed in this section were resolved on 2026-05-09. Each is now a footnoted assumption with a named verifying source.
 
-* **uWebSockets advisory history.** No known CVEs at the pinned version are cited in this document; the Phase 10 hardening pass will verify upstream advisories against the pinned SHA. Verified 2026-05-09 against the upstream GitHub Security Advisories page at `https://github.com/uNetworking/uWebSockets/security/advisories`, which reported "There aren't any published security advisories" at the time of audit. The Phase 10 audit re-verifies against the same source plus the GitHub Advisory Database before deploy. [1]
-* **Fly.io free tier behavior.** The "auto-stop when idle, auto-start on first request" semantics are documented by Fly; the exact wake latency is observed empirically (5 to 15 seconds is the figure in the design spec section 13 cold start UX, derived from the user's own observation, not from a Fly published guarantee). The auto-stop and auto-start mechanism itself is documented at `https://fly.io/docs/launch/autostop-autostart/` (the documented behaviors of `auto_stop_machines` and `auto_start_machines`); Fly does not publish a wake-latency SLA, so the 5 to 15 second figure remains a project-local empirical target rather than a vendor guarantee. [2]
-* **Cloudflare Pages security headers.** The mechanism for delivering CSP and HSTS via Cloudflare Pages is the `_headers` file convention, documented at `https://developers.cloudflare.com/pages/configuration/headers/` ("creating a plain text file called `_headers`" in the build output directory; supports `Content-Security-Policy`, `X-Frame-Options`, `Referrer-Policy`, etc.). One known limitation: `_headers` does not apply to responses generated by Pages Functions. Meridian's frontend has no Pages Functions, so the limitation does not apply. The Phase 10 hardening checklist still verifies that the deployed `_headers` file applies to all routes via `curl -I`. [3]
+* **uWebSockets advisory history.** No known CVEs at the pinned version are cited in this document; the hosting hardening pass will verify upstream advisories against the pinned SHA. Verified 2026-05-09 against the upstream GitHub Security Advisories page at `https://github.com/uNetworking/uWebSockets/security/advisories`, which reported "There aren't any published security advisories" at the time of audit. Re-verify against the same source plus the GitHub Advisory Database before deploy. [1]
+* **Fly.io free tier behavior.** The "auto-stop when idle, auto-start on first request" semantics are documented by Fly; the exact wake latency is observed empirically (5 to 15 seconds, derived from local observation, not from a Fly published guarantee). The auto-stop and auto-start mechanism itself is documented at `https://fly.io/docs/launch/autostop-autostart/` (the documented behaviors of `auto_stop_machines` and `auto_start_machines`); Fly does not publish a wake-latency SLA, so the 5 to 15 second figure remains a project-local empirical target rather than a vendor guarantee. [2]
+* **Cloudflare Pages security headers.** The mechanism for delivering CSP and HSTS via Cloudflare Pages is the `_headers` file convention, documented at `https://developers.cloudflare.com/pages/configuration/headers/` ("creating a plain text file called `_headers`" in the build output directory; supports `Content-Security-Policy`, `X-Frame-Options`, `Referrer-Policy`, etc.). One known limitation: `_headers` does not apply to responses generated by Pages Functions. Meridian's frontend has no Pages Functions, so the limitation does not apply. The hardening checklist still verifies that the deployed `_headers` file applies to all routes via `curl -I`. [3]
 
 Footnoted sources:
 
@@ -158,10 +155,10 @@ Footnoted sources:
 
 ## Severity summary
 
-No open critical or high severity findings exist as of Phase 0 (no code shipped yet). The threat model is forward looking: it lists the controls that Phase 6, Phase 8, Phase 9, and Phase 10 must implement before each respective phase can close.
+No open critical or high severity findings exist as of the foundations baseline (no production code shipped yet). The threat model is forward looking: it lists the controls that the ITCH parser, the WebSocket server, the frontend, and the hosting setup must implement before each respective milestone can close.
 
-The phase gating model in `SPEC.md` and `CLAUDE.md` already requires Security sign off before each phase advances; this threat model is the criterion document for those sign offs.
+This threat model is the criterion document for security sign-off before each milestone advances.
 
 ## Revision history
 
-* 2026-05-09: v0.1 baseline. Authored at Phase 0. Reflects the resolved deployment stack from design spec section 13 (Cloudflare Pages plus Fly.io, not VPS plus systemd). Subject to Citation and Fact Auditor review before sign off.
+* 2026-05-09: v0.1 baseline. Reflects the resolved deployment stack (Cloudflare Pages plus Fly.io, not VPS plus systemd).

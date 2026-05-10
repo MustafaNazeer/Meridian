@@ -1,6 +1,6 @@
 # tests/reference
 
-Python reference implementations used as ground truth for the Meridian C++ matching engine. Owned by the Reference Implementation Engineer (agent 18). Implements the Phase 1 contract from `docs/risk/matching-semantics.md` (single-symbol limit, market, IOC, and cancel-by-id). Phase 6 will add `itch_reference.py`; Phase 7 will extend the matching engine with PostOnly and FOK semantics.
+Python reference implementations used as ground truth for the Meridian C++ matching engine. Implements the contract from `docs/risk/matching-semantics.md` (single-symbol limit, market, IOC, and cancel-by-id, plus the multi-instrument extension). The ITCH reference (`itch_reference.py`) and the PostOnly / FOK semantics will land alongside their respective milestones.
 
 ## Files
 
@@ -40,7 +40,7 @@ python3 run_reference.py < input.jsonl > output.jsonl
 diff -u expected.jsonl output.jsonl
 ```
 
-The Phase 1 integration test (`tests/integration/test_engine_vs_reference.cpp`, written by the QA Engineer in Task 15 of the Phase 1 plan) writes the same JSON Lines input file, runs both the C++ engine and `run_reference.py`, and asserts the two output streams match line by line.
+The integration test (`tests/integration/test_engine_vs_reference.cpp`) writes the same JSON Lines input file, runs both the C++ engine and `run_reference.py`, and asserts the two output streams match line by line.
 
 ### Wire format
 
@@ -69,23 +69,23 @@ The `reject_reason` field is emitted on every report (not only on rejects) so th
 
 ### Cancel report timestamps
 
-The companion plan's Task 14 step 1 sketch of `run_reference.py` calls `engine.cancel(order_id)` with no timestamp. The reference here calls `engine.cancel_at(order_id, ts)` instead so the emitted `Cancel` (or `Reject NotFound`) report's `ts` matches the C++ engine's output. This is a small enhancement of the sketch; the wire format adds a `ts` to the cancel event JSON for parity with the new-order events.
+`run_reference.py` calls `engine.cancel_at(order_id, ts)` so the emitted `Cancel` (or `Reject NotFound`) report's `ts` matches the C++ engine's output. The cancel event JSON carries a `ts` for parity with the new-order events.
 
 ## Design rationale: obvious over fast
 
-The reference is intentionally slow and intentionally simple. From the agent brief (`agents/18-reference-implementation-engineer.md`, "Design constraints"):
+The reference is intentionally slow and intentionally simple:
 
 > **Obvious over fast.** The reference uses dicts, lists, and integer prices. No micro-optimization. If the reference takes 100x as long as the C++ engine, that is fine; the integration test runs on a small sample tape.
 
 Concretely:
 
-* The bid and ask sides are plain `dict[Price, _Level]` and the matching loop walks them via `min(...)` and `max(...)` on each iteration. The C++ engine uses `std::map<Price, Level*>` for O(log n) ordered traversal; the reference does not bother. For a Phase 1 integration test corpus of a few thousand events, the cost is negligible.
+* The bid and ask sides are plain `dict[Price, _Level]` and the matching loop walks them via `min(...)` and `max(...)` on each iteration. The C++ engine uses `std::map<Price, Level*>` for O(log n) ordered traversal; the reference does not bother. For an integration test corpus of a few thousand events, the cost is negligible.
 * Each `_Level` holds an `OrderedDict[OrderId, _RestingOrder]` for the FIFO queue at that price. Insertion appends to the tail; `next(iter(...))` returns the front (oldest resting order). This is the literal reading of the price-time priority rule (matching-semantics.md section 2.2).
 * Every report serializes via `dataclasses.asdict`-style `to_dict()` and `json.dumps(..., sort_keys=True)`. No custom serializer, no streaming. Determinism is enforced by stdlib alone.
-* No threads, no atomics, no concurrency. The reference is single-threaded by construction; the C++ engine's seqlock-protected publication path lands in Phase 4 and is reviewed against the reference's "what should the matching loop have produced?" output, not against an in-process Python reader.
+* No threads, no atomics, no concurrency. The reference is single-threaded by construction; the C++ engine's seqlock-protected publication path is reviewed against the reference's "what should the matching loop have produced?" output, not against an in-process Python reader.
 * No exceptions on the matching loop path beyond `ValueError` for invalid input quantities; the reference treats `qty <= 0` as a programming error rather than a runtime reject. The C++ side guards on submission boundary; the reference matches.
 
-When the reference and the C++ engine disagree, the reference is presumed correct unless the disagreement is a known reference bug (`agents/18-reference-implementation-engineer.md`, "Mission"). The Risk and Financial Correctness Reviewer adjudicates persistent disagreements.
+When the reference and the C++ engine disagree, the reference is presumed correct unless the disagreement is a known reference bug. Persistent disagreements are resolved by hand-auditing the divergence against `docs/risk/matching-semantics.md`.
 
 ## Spec-section citations
 
@@ -104,17 +104,16 @@ Two convention choices were ratified in `matching-semantics.md` section 8 and ar
 * **Section 8.1**: market against empty book emits a single `Reject` with no preceding `Acknowledge`. Implemented in `submit_market`.
 * **Section 8.2**: cancel of an unknown id emits a `Reject` with sentinel side `Side.BUY` and price `0`. Implemented in `cancel_at`.
 
-If the PM later overrides either of these, the relevant unit tests in `test_reference.py` and the matching code in `matching_reference.py` need to be updated together; both this README and the matching-semantics worked examples have to move at the same time.
+If either of these is ever overridden, the relevant unit tests in `test_reference.py` and the matching code in `matching_reference.py` need to be updated together; both this README and the matching-semantics worked examples have to move at the same time.
 
-## What's not in the reference (Phase 1 scope discipline)
+## What's not in the reference yet
 
-* `OrderType.POSTONLY` and `OrderType.FOK` are declared in the enum for parity with the C++ side but are not implemented; calling `submit_*` for them is not a code path. Phase 7 adds these.
-* No multi-symbol dispatch. `MatchingReference(symbol=int)` ignores the symbol argument in Phase 1; Phase 2 adds a `BookRegistry`-equivalent.
-* No ITCH parsing. Phase 6 adds `tests/reference/itch_reference.py`.
-* No property-based tests. Phase 3 wires `rapidcheck` into the C++ build and pairs the generated corpus against the reference; the reference itself does not need to import any property-testing library because the C++ harness produces the events.
+* `OrderType.POSTONLY` and `OrderType.FOK` are declared in the enum for parity with the C++ side but are not implemented; calling `submit_*` for them is not a code path. They land alongside the post-only / FOK milestone.
+* No ITCH parsing. `tests/reference/itch_reference.py` lands with the ITCH replay milestone.
+* No property-based tests. The C++ build wires `rapidcheck` and pairs the generated corpus against the reference; the reference itself does not need to import any property-testing library because the C++ harness produces the events.
 
-## Handoffs
+## Cross-references
 
-* The C++ test integration (`tests/integration/test_engine_vs_reference.cpp`) is the QA Engineer's deliverable in Task 15 of the Phase 1 plan. It calls `run_reference.py` via subprocess and diffs.
-* Disagreements between the reference and the C++ engine are escalated to the Risk and Financial Correctness Reviewer (agent 16), who hand-audits the disagreement against `docs/risk/matching-semantics.md` and decides which side has the bug.
-* Semantic-correctness questions (e.g., "should an IOC at a non-crossing price emit zero fills or a Reject?") go to the Quant Domain Validator (agent 01), who owns `docs/risk/matching-semantics.md`.
+* The C++ test integration (`tests/integration/test_engine_vs_reference.cpp`) calls `run_reference.py` via subprocess and diffs the byte stream.
+* Disagreements between the reference and the C++ engine are resolved by hand-auditing the divergence against `docs/risk/matching-semantics.md`.
+* Semantic-correctness questions (e.g., "should an IOC at a non-crossing price emit zero fills or a Reject?") are documented in `docs/risk/matching-semantics.md`.

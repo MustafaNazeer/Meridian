@@ -2,7 +2,7 @@
 
 A price-time priority limit order book and matching engine in C++20, with a live web visualization.
 
-> **Status**: under construction. Project scaffolded 2026-05-09; Phase 0 foundations in progress, with the engine's first line of code landing in Phase 1. Every concrete metric and URL on this page is labeled "target" or "v1 will" until measured or deployed. The Documentation Engineer rewrites this README in Phase 11 with real numbers and a real demo link.
+> **Status**: under construction. Project scaffolded 2026-05-09; foundations in progress, with the engine's first line of code following in the next milestone. Every concrete metric and URL on this page is labeled "target" or "v1 will" until measured or deployed. This README will be rewritten with real numbers and a real demo link once the live deploy lands.
 
 ## What this is
 
@@ -12,7 +12,7 @@ The engine implements strict price-time priority (FIFO within each price level) 
 
 ## v1 targets
 
-Every number in this section is a **target, not yet measured**. Real numbers replace these in Phase 11 once `meridian-bench` runs on the user's desktop with the final binary.
+Every number in this section is a **target, not yet measured**. Real numbers replace these once `meridian-bench` runs on a fixed reference machine with the final binary.
 
 * **Throughput target**: 6M events per second, single threaded.
 * **Latency target**: p50 under 500 ns, p99 under 2 us, p99.9 under 5 us per event.
@@ -63,28 +63,23 @@ Twilight was chosen on 2026-05-09 from a field of five candidate directions. The
 
 ## Live demo
 
-v1 will deploy the frontend to **`meridian-demo.pages.dev`** (Cloudflare Pages default subdomain; no custom domain for v1) and the engine to a Fly.io machine reachable at `wss://<fly-app>.fly.dev/ws`. The Fly app name and region are picked at Phase 10. Neither URL is live yet; this section will link to a working demo once Phase 10 ships.
+v1 will deploy the frontend to **`meridian-demo.pages.dev`** (Cloudflare Pages default subdomain; no custom domain for v1) and the engine to a Fly.io machine reachable at `wss://<fly-app>.fly.dev/ws`. The Fly app name and region are picked at deploy time. Neither URL is live yet; this section will link to a working demo once the deploy ships.
 
-The Fly machine auto stops when idle and auto starts on the first request, so the first WebSocket connection after a quiet period takes roughly 5 to 15 seconds while Fly wakes the machine. The Phase 9 frontend renders an explicit "engine warming up" state during this window rather than appearing broken.
+The Fly machine auto stops when idle and auto starts on the first request, so the first WebSocket connection after a quiet period takes roughly 5 to 15 seconds while Fly wakes the machine. The frontend renders an explicit "engine warming up" state during this window rather than appearing broken.
 
 ## Status
 
-Phased build, 12 phases (0 through 11). Phase 0 (foundations) is in progress as of 2026-05-09. The single source of truth for which phase is current is [`STATUS.md`](STATUS.md); the per phase implementation plan is [`docs/plan.md`](docs/plan.md).
+The build is sequenced into shippable milestones (foundations, single-symbol matching, multi-instrument and cancel, property tests, concurrency, the bench push, ITCH replay, the remaining order types, the WebSocket server, the frontend, the deploy, the public README rewrite). Single-symbol matching and multi-instrument/cancel have landed; property-based invariants are next.
 
 ## Entry points
 
-* [`SPEC.md`](SPEC.md): the full project spec, agent roster, and 12 phase build plan.
-* [`CLAUDE.md`](CLAUDE.md): the auto loaded brief for any Claude Code session opened in this directory.
-* [`STATUS.md`](STATUS.md): single source of truth for which phase is in flight.
-* [`GETTING-STARTED.md`](GETTING-STARTED.md): the first session walkthrough.
-* [`docs/superpowers/specs/2026-05-09-meridian-design.md`](docs/superpowers/specs/2026-05-09-meridian-design.md): the deep technical design (the engineering contract).
-* [`docs/plan.md`](docs/plan.md): the per phase implementation plan, written by the Project Manager in Phase 0.
 * [`docs/architecture.md`](docs/architecture.md): a 15 minute orientation for a developer new to the codebase.
-* [`agents/`](agents/): 18 specialist agent briefs (00 PM plus 17 specialists).
+* [`docs/risk/matching-semantics.md`](docs/risk/matching-semantics.md): the matching invariants and the worked-example catalogue the integration tests are built around.
+* [`docs/adr/`](docs/adr/): architecture decision records (numbered; start with 0001 for the library + drivers split).
+* [`docs/security/threat-model.md`](docs/security/threat-model.md): the threat model and hardening posture for the live deploy.
+* [`tests/reference/`](tests/reference/): the Python reference matching engine that the C++ engine is diffed against in CI.
 
 ## Repository layout
-
-See `CLAUDE.md` for the canonical directory tree. Headline:
 
 ```
 include/meridian/             public library headers
@@ -93,10 +88,9 @@ apps/{bench,replay,server}/   three driver binaries
 tests/                        unit, property, integration, concurrency, reference
 bench/                        CI benchmark baseline JSON
 frontend/                     React app for the live demo
-docs/                         specs, design, security, perf, risk, ADRs, audits
-agents/                       18 specialist briefs
+docs/                         design, security, perf, risk, ADRs
 ```
 
 ## License
 
-MIT. The `LICENSE` file lands in Phase 0 as part of the DevOps Engineer's repo bootstrap.
+MIT. A `LICENSE` file will land alongside the public deploy.

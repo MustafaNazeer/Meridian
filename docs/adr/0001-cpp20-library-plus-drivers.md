@@ -2,8 +2,6 @@
 
 **Date**: 2026-05-09
 **Status**: Accepted
-**Deciders**: Project Manager, Engine Developer, Performance Engineer
-**Source**: design spec section 4 (`docs/superpowers/specs/2026-05-09-meridian-design.md`)
 
 ## Context
 
@@ -35,13 +33,13 @@ The library lives in `include/meridian/` (public headers) and `src/` (implementa
 * **Each driver can be reasoned about in isolation.** The bench binary's failure modes are bench failure modes; the server's failure modes are server failure modes. There is no shared `--mode` switch path that has to handle both.
 * **Build artifact size stays honest.** The bench binary does not pay for uWebSockets symbols; the replayer does not pay for them either. The server pays for what it uses.
 * **CI gets cheaper.** The bench and the integration tests can build the library plus the bench binary without ever pulling uWebSockets, so PRs that do not touch networking finish faster.
-* **The library is reusable.** A future strategy gateway, a future shared memory ring buffer process per symbol architecture (design spec section 12 lists these as out of scope future directions), or a future C++ to Rust port comparison can all link the same library.
+* **The library is reusable.** A future strategy gateway, a future shared memory ring buffer process per symbol architecture, or a future C++ to Rust port comparison can all link the same library.
 
 ### Negative
 
 * **Three CMake targets to maintain instead of one.** Mitigated by the per directory `CMakeLists.txt` pattern under `apps/` so each driver's build description lives next to its source.
 * **Slightly more boilerplate in the test setup.** Tests link against the library directly, not against any driver. This is the right shape, but it is one more CMake `target_link_libraries` line per test target.
-* **Slightly more build configuration surface to keep clean.** PGO has to be configured per driver; the bench binary's PGO profile is the one that matters for the headline number, and the server's PGO profile is the one that matters for the live demo. The Performance Engineer owns this in Phase 5.
+* **Slightly more build configuration surface to keep clean.** PGO has to be configured per driver; the bench binary's PGO profile is the one that matters for the headline number, and the server's PGO profile is the one that matters for the live demo.
 
 ### Neutral
 
@@ -54,6 +52,5 @@ The library lives in `include/meridian/` (public headers) and `src/` (implementa
 
 ## References
 
-* Design spec section 4 (high level architecture): `docs/superpowers/specs/2026-05-09-meridian-design.md`.
-* SPEC.md "Project summary" paragraph: "The library and the bench binary contain zero networking code, so the headline 6M events per second target will be defensible in isolation once measured in Phase 5."
-* Repo layout: design spec section 10, plus `CLAUDE.md` "Directory layout" section.
+* Architecture overview (high level diagram, threading model, file layout): `docs/architecture.md`.
+* README.md "How it ships" table: the three driver binaries and what each one links.

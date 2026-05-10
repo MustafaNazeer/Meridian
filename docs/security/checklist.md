@@ -1,53 +1,52 @@
 # Meridian security checklist
 
-**Owner:** Security Engineer (agent 08)
-**Last updated:** 2026-05-09 (Phase 0 stub)
+**Last updated:** 2026-05-09
 **Companion documents:** `threat-model.md`, `secrets.md`.
 
 ## How to use this file
 
-Each phase below has its own checklist section. Items are filled in as the phase opens (the Security Engineer reviews scope and adds items the threat model requires) and checked off before the phase can close. A phase does not close while any of its security checklist items remain unchecked.
+Each milestone below has its own checklist section. Items are filled in as the milestone opens (review scope and add items the threat model requires) and checked off before the milestone closes. A milestone does not close while any of its security checklist items remain unchecked.
 
-The Phase 10 section is the project's master hardening list and is filled in here at Phase 0 verbatim from the agent brief, since those items are the ones we already know we will need at the end. Earlier phases are stubs that the Security Engineer expands when each phase opens.
+The Hosting and CI/CD section is the project's master hardening list and is filled in up front, since those items are the ones already known to be needed at the end. Earlier sections are stubs that get expanded when the relevant work opens.
 
-Checkbox key: `[ ]` open, `[x]` complete, `[~]` not applicable for this phase (with a one line justification).
+Checkbox key: `[ ]` open, `[x]` complete, `[~]` not applicable for this milestone (with a one line justification).
 
-## Phase 0: Foundations
+## Foundations
 
 * [x] Threat model authored at `docs/security/threat-model.md`.
-* [x] Per-phase checklist authored at `docs/security/checklist.md`.
+* [x] Per-milestone checklist authored at `docs/security/checklist.md`.
 * [x] Secrets reference authored at `docs/security/secrets.md`.
-* [ ] Citation and Fact Auditor sign off on the three security documents.
+* [ ] Fact-check pass on the three security documents.
 
-## Phase 1: Core data structures and single-symbol matching
+## Single-symbol matching
 
-Phase 1 is engine internals only; no networking, no untrusted input. Most security items are not applicable until a later phase introduces a surface.
+This is engine internals only; no networking, no untrusted input. Most security items are not applicable until a later milestone introduces a surface.
 
-* [ ] Confirm the matching loop has no `new` or `malloc` (verified by the debug allocator override the Engine Developer wires up).
+* [ ] Confirm the matching loop has no `new` or `malloc` (verified by the debug allocator override).
 * [ ] Confirm no exceptions on the hot path; setup paths only.
-* [~] No network surface in this phase. Not applicable.
-* [~] No user input in this phase. Not applicable.
+* [~] No network surface yet. Not applicable.
+* [~] No user input yet. Not applicable.
 
-## Phase 2: Multi-instrument and cancel-by-id
+## Multi-instrument and cancel-by-id
 
-* [ ] Confirm symbol lookup uses a fixed allow list at engine init (no dynamic symbol creation from external input until ITCH replay lands in Phase 6).
-* [~] No network surface in this phase. Not applicable.
+* [ ] Confirm symbol lookup uses a fixed allow list at engine init (no dynamic symbol creation from external input until ITCH replay lands).
+* [~] No network surface yet. Not applicable.
 
-## Phase 3: Property-based tests for matching invariants
+## Property-based tests for matching invariants
 
 * [~] No new attack surface introduced. Property tests only. Security review limited to confirming the test harness does not import unsafe libraries or open network sockets.
 
-## Phase 4: Seqlock-protected top-of-book and sampler
+## Seqlock-protected top-of-book and sampler
 
 * [ ] Confirm the seqlock writer protocol does not introduce a torn read that a future WebSocket reader could observe and forward to the client unchecked.
 * [ ] Confirm the sampler thread does not allocate on the hot path.
 
-## Phase 5: Benchmark hits 6M events per second
+## Benchmark hits 6M events per second
 
 * [~] No network surface. The bench binary is offline.
 * [ ] Confirm the bench binary writes output only to stdout and to the configured CI artifact path, not to arbitrary user supplied paths.
 
-## Phase 6: NASDAQ ITCH 5.0 replay
+## NASDAQ ITCH 5.0 replay
 
 * [ ] ITCH parser uses bounds checked reads everywhere; no raw `memcpy` past validated lengths.
 * [ ] ITCH parser rejects truncated frames and unknown message types loudly (not silently).
@@ -55,12 +54,12 @@ Phase 1 is engine internals only; no networking, no untrusted input. Most securi
 * [ ] Tape file integrity: the SHA-256 of every ITCH tape used in CI and the live demo is recorded in a tape manifest (e.g., `bench/tape-manifest.json`) and verified before use.
 * [ ] Confirm the parser produces only POD `EngineEvent` structs; no callbacks, no virtual dispatch into untrusted code.
 
-## Phase 7: Post-only and FOK order types
+## Post-only and FOK order types
 
 * [~] No new network surface. Engine internals only.
 * [ ] Confirm post-only and FOK rejection paths do not leak distinguishing information (this is theoretical for a public read-only demo, but worth a one line review).
 
-## Phase 8: WebSocket server and protocol
+## WebSocket server and protocol
 
 * [ ] Origin header is checked against the allow list (`https://meridian-demo.pages.dev` plus `http://localhost:5173` for dev). Anything else closes the socket before upgrade completes.
 * [ ] Max inbound payload size is set to 64 KB. Frames exceeding the cap close the socket.
@@ -68,12 +67,12 @@ Phase 1 is engine internals only; no networking, no untrusted input. Most securi
 * [ ] Per IP connection rate limit on handshake attempts (e.g., 10 per minute) is implemented in code, not only in documentation.
 * [ ] Inbound subscribe payload is parsed with simdjson into a strict schema; any deviation closes the socket.
 * [ ] The symbol field on a subscribe message is matched against the compile time five symbol allow list before any book lookup.
-* [ ] No `eval`, no dynamic dispatch, no symbol lookup that creates a new book on demand.
+* [ ] No `eval`, no runtime symbol lookup that creates a new book on demand.
 * [ ] Server side audit ring buffer is bounded; once full, the oldest entries are overwritten in place. No file I/O on the hot path.
 * [ ] Confirm the server emits no client IP, no headers, no PII to the audit ring buffer or to any log sink.
-* [ ] Citation and Fact Auditor sign off on `docs/api/websocket.md`.
+* [ ] Fact-check pass on `docs/api/websocket.md`.
 
-## Phase 9: React frontend
+## React frontend
 
 * [ ] CSP `connect-src` allows only `'self'` plus the resolved Fly origin (`wss://<fly-app>.fly.dev`). Confirmed in the deployed `_headers` file.
 * [ ] CSP `script-src` is `'self'`. No inline scripts, no `eval`. Confirmed in the deployed `_headers` file.
@@ -82,11 +81,11 @@ Phase 1 is engine internals only; no networking, no untrusted input. Most securi
 * [ ] Production build does not emit source maps (`build.sourcemap` is false in `vite.config.ts`); CI verifies the build artifact contains no `.map` files.
 * [ ] No third party analytics, no error tracking SaaS, no telemetry script in the bundle. Verified by inspecting the production bundle output.
 * [ ] No use of the React unsafe innerHTML escape hatch and no direct `innerHTML` writes anywhere in `frontend/src/`.
-* [ ] Citation and Fact Auditor sign off on any frontend documentation produced in this phase.
+* [ ] Fact-check pass on any frontend documentation produced.
 
-## Phase 10: Hosting and CI/CD
+## Hosting and CI/CD
 
-This is the master hardening phase. Items here are filled in verbatim from the Security Engineer agent brief.
+This is the master hardening list, captured up front so it does not have to be reconstructed at deploy time.
 
 ### TLS and headers
 
@@ -103,7 +102,7 @@ This is the master hardening phase. Items here are filled in verbatim from the S
 
 ### Audit log posture
 
-* [ ] The audit log is in-memory only on the live demo (per design spec section 13); confirm no client IPs are persisted to disk.
+* [ ] The audit log is in-memory only on the live demo; confirm no client IPs are persisted to disk.
 * [ ] Confirm `meridian-server` does not write any file under `/var/log` or any other persistent path on the Fly volume; only stdout / stderr and the in-memory ring buffer are used.
 
 ### Dependency audit
@@ -131,12 +130,12 @@ This is the master hardening phase. Items here are filled in verbatim from the S
 
 * [ ] Visit `https://meridian-demo.pages.dev` from a clean browser profile. Confirm the page loads, the WebSocket connects to the Fly origin, and no third party origins appear in DevTools' Network tab.
 * [ ] Run an SSL Labs (or equivalent) check on the Fly origin and on the Pages origin; both report a clean TLS configuration. [citation needed for the specific tool used]
-* [ ] Confirm the cold start UX renders the "engine warming up" hero per design spec section 13 when the Fly machine has been idle.
+* [ ] Confirm the cold start UX renders the "engine warming up" hero when the Fly machine has been idle.
 
-## Phase 11: Polish, README, and benchmark report
+## Polish, README, and benchmark report
 
 * [ ] Confirm no new third party scripts, fonts, or analytics were introduced in the polish pass.
 * [ ] Re-run the dependency audit (`pnpm audit` plus the manual C++ pass) one final time before publishing the README headline.
-* [ ] Re-run the live demo smoke test from Phase 10 once more on the final hosted environment.
-* [ ] Citation and Fact Auditor sign off on the final README and benchmark report.
+* [ ] Re-run the live demo smoke test from the hosting section once more on the final hosted environment.
+* [ ] Fact-check pass on the final README and benchmark report.
 * [ ] Confirm `docs/security/threat-model.md` and this checklist are accurate as of the shipping commit; bump the version line in the threat model if anything changed.

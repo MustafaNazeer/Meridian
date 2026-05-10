@@ -1,9 +1,9 @@
-// Phase 1 integration corpus: 60 scenarios driving the C++ matching engine
-// and the Python reference (tests/reference/) over the same input event
-// stream and diffing their JSON Lines output line by line. The scenarios
-// are split across six instantiations:
+// Single-symbol integration corpus: 60 scenarios driving the C++ matching
+// engine and the Python reference (tests/reference/) over the same input
+// event stream and diffing their JSON Lines output line by line. The
+// scenarios are split across six instantiations:
 //
-//   * HandCrafted          (15) - the bootstrap scenarios from Task 14.
+//   * HandCrafted          (15) - the original bootstrap scenarios.
 //   * LimitWorkedExamples  (7)  - LIM-1..LIM-7 from matching-semantics.md.
 //   * MarketWorkedExamples (6)  - MKT-1..MKT-6 from matching-semantics.md.
 //   * IocWorkedExamples    (7)  - IOC-1..IOC-7 from matching-semantics.md.
@@ -11,10 +11,10 @@
 //   * CompoundScenarios    (9)  - chained event sequences exercising
 //                                 multiple worked-example transitions in
 //                                 one run.
-//   * CornerCases          (10) - the Phase 1 plan Task 15 corner-case
-//                                 list; documented inline near each
-//                                 scenario where a policy choice is
-//                                 load-bearing (self-trade, id reuse).
+//   * CornerCases          (10) - the corner-case list; documented inline
+//                                 near each scenario where a policy
+//                                 choice is load-bearing (self-trade,
+//                                 id reuse).
 //
 // Total: 15 + 7 + 6 + 7 + 6 + 9 + 10 = 60.
 //
@@ -137,7 +137,7 @@ EngineEvent to_engine_event(const ScenarioEvent& e) {
 std::vector<std::string> run_cpp(const std::vector<ScenarioEvent>& events) {
     // The 1000-order corner case needs more than 1024 pool slots for the
     // worst case where most orders rest before the sweep. 4096 covers
-    // every Phase 1 scenario with comfortable headroom.
+    // every single-symbol scenario with comfortable headroom.
     OrderPool pool(4096);
     BookRegistry registry{1, 2, 3, 4, 5};  // demo symbol set
     OrderIndex index;
@@ -437,8 +437,8 @@ INSTANTIATE_TEST_SUITE_P(
 
 // =====================================================================
 // CancelWorkedExamples: CXL-1..CXL-6 from
-// docs/risk/matching-semantics.md section 6. Phase 1 cancel-by-id with
-// Reject reason NotFound for unknown ids. The unknown-id Reject carries
+// docs/risk/matching-semantics.md section 6. Cancel-by-id with Reject
+// reason NotFound for unknown ids. The unknown-id Reject carries
 // sentinel side Buy and price 0 per the convention in section 8.2.
 //
 // CXL-2 and CXL-5 require a partial-fill or full-fill prefix to set up
@@ -500,7 +500,7 @@ INSTANTIATE_TEST_SUITE_P(
 // CompoundScenarios: chained sequences exercising more than one worked
 // example transition in a single run. These are deliberately small so a
 // failure points at one specific boundary; they are not "stress tests"
-// (those land in Phase 3 with rapidcheck).
+// (those live in the property-based test suite under tests/property/).
 // =====================================================================
 
 INSTANTIATE_TEST_SUITE_P(
@@ -588,23 +588,22 @@ INSTANTIATE_TEST_SUITE_P(
     scenario_name);
 
 // =====================================================================
-// CornerCases: the Phase 1 plan Task 15 step 1 list, ten scenarios.
-// Each item below names the (a..j) bullet from the brief next to the
-// scenario name. Two items document a Phase 1 policy choice inline:
+// CornerCases: ten scenarios. Each item below names the (a..j) bullet
+// next to the scenario name. Two items document a current policy choice
+// inline:
 //
-//   * (g) self-trade: Phase 1 has no trader_id field on EngineEvent;
-//     the orders carry only OrderId. The "self-trade" corner case is
+//   * (g) self-trade: there is no trader_id field on EngineEvent;
+//     orders carry only OrderId. The "self-trade" corner case is
 //     therefore expressed as two distinct OrderIds whose lifecycle is
 //     intended to be the same logical entity. The engine matches them
-//     like any other cross. A future agent file may add a trader_id
-//     and a self-match-prevention reject; for Phase 1 we accept the
-//     match.
+//     like any other cross. Self-match prevention (which would require
+//     a trader_id on the wire) is a future change; for now the match
+//     is accepted.
 //
-//   * (h) id reuse after cancel: Phase 1 allows reusing an OrderId
-//     after the prior order with that id has been cancelled or fully
-//     filled. The id_index_ map removes the old binding at cancel/
-//     fill time, so the second add succeeds. A future agent file may
-//     add an "id reuse" reject.
+//   * (h) id reuse after cancel: an OrderId may be reused after the
+//     prior order with that id has been cancelled or fully filled. The
+//     id_index_ map removes the old binding at cancel/fill time, so the
+//     second add succeeds. An "id reuse" reject is a future change.
 //
 // The 10th item (j) generates a 1000-order random book. The seed is
 // fixed so the input is byte-identical across runs and the diff is
@@ -716,16 +715,17 @@ INSTANTIATE_TEST_SUITE_P(
             {"new_order", "limit", 3, "sell", 100, 9, 3},
             {"new_order", "limit", 4, "buy", 100, 21, 4},
         }},
-        // (g) Self-trade. Phase 1 has no trader_id; this corner case is
-        // expressed as two distinct OrderIds whose lifecycle is
-        // intended to be the same logical entity. The engine matches
-        // them like any other cross. Documented in the section banner
-        // above. A future agent file may add self-match prevention.
+        // (g) Self-trade. There is no trader_id on EngineEvent; this
+        // corner case is expressed as two distinct OrderIds whose
+        // lifecycle is intended to be the same logical entity. The
+        // engine matches them like any other cross. Documented in the
+        // section banner above. Self-match prevention is a future
+        // change.
         NamedScenario{"corner_g_self_trade_allowed", {
             {"new_order", "limit", 1, "buy", 100, 10, 1},
             {"new_order", "limit", 2, "sell", 100, 10, 2},
         }},
-        // (h) Id reuse after cancel. Phase 1 policy: id is freed at
+        // (h) Id reuse after cancel. Current policy: id is freed at
         // cancel time and may be reused. Documented in the section
         // banner above.
         NamedScenario{"corner_h_id_reuse_after_cancel", {

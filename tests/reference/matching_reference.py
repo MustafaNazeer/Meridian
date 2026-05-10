@@ -1,23 +1,14 @@
-"""Python reference matching engine for Meridian (multi-symbol, Phase 2).
+"""Python reference matching engine for Meridian (multi-symbol).
 
 This module is the canonical answer for "what should the C++ engine have
-produced?" for any input event sequence in the Phase 1 and Phase 2 scope.
-It is owned by the Reference Implementation Engineer (agent 18). It is
-intentionally slow and obviously correct: pure stdlib, integer math, dict
-and list data structures. The C++ engine is diffed against this reference
-byte for byte on every Phase 1 and Phase 2 integration test.
+produced?" for any input event sequence. It is intentionally slow and
+obviously correct: pure stdlib, integer math, dict and list data
+structures. The C++ engine is diffed against this reference byte for
+byte on every integration test.
 
-Spec sources:
+Source: docs/risk/matching-semantics.md (the worked-example contract).
 
-* docs/risk/matching-semantics.md (the worked-example contract).
-* docs/superpowers/specs/2026-05-09-meridian-design.md section 8.2
-  (matching invariants).
-* docs/superpowers/plans/2026-05-09-phase-1-single-symbol-matching.md
-  "Key decisions captured for Phase 1" (type widths, naming).
-* docs/superpowers/plans/2026-05-09-phase-2-multi-instrument-and-cancel.md
-  (Phase 2 multi-symbol dispatch and cross-symbol cancel-by-id).
-
-Design constraints (see agents/18-reference-implementation-engineer.md):
+Design constraints:
 
 * Python 3.11 stdlib only. No numpy, no pandas, no pydantic.
 * dataclasses and enum.
@@ -26,16 +17,16 @@ Design constraints (see agents/18-reference-implementation-engineer.md):
   serialized via ``ExecutionReport.to_dict()`` and ``json.dumps(..., sort_keys=True)``.
 * Optimize for obvious correctness, not performance.
 
-Phase 1 scope:
+Single-symbol scope:
 
 * Order types: ``LIMIT``, ``MARKET``, ``IOC``. ``POSTONLY`` and ``FOK`` are
   declared in the enum but raise ``NotImplementedError`` on submission;
-  they land in Phase 7.
+  they land alongside the post-only / FOK milestone.
 * Cancel-by-id with ``Reject`` ``NotFound`` for unknown ids.
 * Single symbol per ``MatchingReference`` instance (legacy form,
   ``MatchingReference(symbol=1)``).
 
-Phase 2 scope additions:
+Multi-symbol additions:
 
 * Multi-symbol dispatch. ``MatchingReference(symbols=[1, 2, 3, 4, 5])``
   registers a fixed set of symbols at construction; ``submit_*`` accept
@@ -77,8 +68,8 @@ class OrderType(Enum):
     """Order type. See matching-semantics.md section 1.
 
     ``POSTONLY`` and ``FOK`` are declared for parity with the C++
-    ``OrderType`` enum (companion plan key decision 5) but are not
-    implemented in Phase 1; they land in Phase 7.
+    ``OrderType`` enum but are not implemented yet; they land alongside
+    the post-only / FOK milestone.
     """
 
     LIMIT = "limit"
@@ -93,7 +84,7 @@ class ReportKind(Enum):
 
     Wire form is the lowercase short name. ``ACK`` serializes as
     ``"ack"`` (not ``"acknowledge"``) to match the C++ engine's
-    JSON field convention (companion plan Task 14 step 2).
+    JSON field convention.
     """
 
     ACK = "ack"
@@ -105,17 +96,16 @@ class ReportKind(Enum):
 class RejectReason(Enum):
     """Reject reason. See matching-semantics.md section 1.
 
-    Phase 1 uses ``EMPTY_BOOK`` (market against empty side) and
-    ``NOT_FOUND`` (cancel of unknown id). Phase 2 adds
-    ``UNKNOWN_SYMBOL`` (NewOrder against an unregistered symbol;
-    Phase 2 plan Task 1 and key decision 3). The remaining values
-    are declared for parity with the C++ enum and are reserved for
-    Phase 7 and later.
+    Single-symbol matching uses ``EMPTY_BOOK`` (market against empty
+    side) and ``NOT_FOUND`` (cancel of unknown id). The multi-symbol
+    extension adds ``UNKNOWN_SYMBOL`` (NewOrder against an
+    unregistered symbol). The remaining values are declared for
+    parity with the C++ enum and are reserved for the post-only / FOK
+    work and beyond.
 
     ``NONE`` is the default value when the report is not a reject;
     it serializes as ``"none"`` and is always present on every
-    report so the JSON shape is uniform across kinds (companion
-    plan Task 14 step 2).
+    report so the JSON shape is uniform across kinds.
 
     Wire-format mapping (must match C++ ``RejectReason``):
 
@@ -126,7 +116,7 @@ class RejectReason(Enum):
       (reserved, C++ id 3)
     * ``WOULD_CROSS`` -> ``"would_cross"`` (reserved, C++ id 4)
     * ``UNKNOWN_SYMBOL`` -> ``"unknown_symbol"``
-      (C++ ``RejectReason::UnknownSymbol = 5``; Phase 2 plan Task 1)
+      (C++ ``RejectReason::UnknownSymbol = 5``)
     """
 
     NONE = "none"
@@ -146,8 +136,8 @@ class RejectReason(Enum):
 class ExecutionReport:
     """One execution report emitted by the matching engine.
 
-    Field set matches the C++ engine's ``ExecutionReport`` (companion
-    plan Task 14 step 2, ``report_to_jsonl``):
+    Field set matches the C++ engine's ``ExecutionReport`` (see
+    ``report_to_jsonl`` in src/):
 
     * ``kind``: which lifecycle event this report describes.
     * ``order_id``: the id of the order this report is about. For a
@@ -194,7 +184,7 @@ class ExecutionReport:
         the C++ ``report_to_jsonl`` exactly:
         ``kind``, ``order_id``, ``price``, ``qty``, ``reject_reason``,
         ``side``, ``ts``. Values are lowercase short names from the enums
-        above (companion plan Task 14 step 2).
+        above.
         """
 
         return {
@@ -264,26 +254,26 @@ class _SingleSymbolBook:
     This is the per-symbol matching primitive. The public
     ``MatchingReference`` class owns one of these per registered symbol
     and routes new-order and cancel events to the correct book. The
-    Phase 1 worked examples in matching-semantics.md operate at this
-    layer (one book, one symbol).
+    single-symbol worked examples in matching-semantics.md operate at
+    this layer (one book, one symbol).
 
-    Internal state mirrors the C++ ``Book`` (companion plan Task 4):
+    Internal state mirrors the C++ ``Book``:
 
     * ``_bids``: ``dict[Price, _Level]``, sorted on demand by walking
       the keys with ``sorted(..., reverse=True)`` for "best bid first"
-      (highest price). The companion plan locks the C++ side to
-      ``std::map<Price, Level*>`` for O(log n) ordered traversal; the
-      reference uses a plain ``dict`` plus ``sorted`` because the
-      reference is the obvious-over-fast implementation.
+      (highest price). The C++ side uses ``std::map<Price, Level*>``
+      for O(log n) ordered traversal; the reference uses a plain
+      ``dict`` plus ``sorted`` because it is the obvious-over-fast
+      implementation.
     * ``_asks``: same shape, sorted with default ``sorted(...)`` for
       "best ask first" (lowest price).
     * ``_orders``: ``dict[OrderId, _RestingOrder]``. The per-symbol
-      lookup map for cancel-by-id (companion plan key decision 4 and
-      matching-semantics.md section 6). In Phase 2 there is also a
-      cross-symbol id-to-symbol map at the ``MatchingReference`` level;
-      the per-symbol map remains because the matching loop already
-      uses it for fully-filled-maker cleanup (Phase 2 plan key
-      decision 4 documents the dual-index choice).
+      lookup map for cancel-by-id (matching-semantics.md section 6).
+      In multi-symbol mode there is also a cross-symbol id-to-symbol
+      map at the ``MatchingReference`` level; the per-symbol map
+      remains because the matching loop already uses it for
+      fully-filled-maker cleanup (the dual-index choice is documented
+      in ADR 0002).
     """
 
     def __init__(self, symbol: int):
@@ -536,8 +526,8 @@ class _SingleSymbolBook:
 
         # ``taker_type`` is currently used only for documentation
         # clarity; the limit-vs-market distinction is encoded in
-        # ``taker_limit`` (None for market). Phase 7 will branch on it
-        # for PostOnly and FOK without changing callers.
+        # ``taker_limit`` (None for market). PostOnly and FOK will
+        # branch on it without changing callers.
         del taker_type
         return remaining
 
@@ -599,8 +589,8 @@ def _price_satisfies_limit(
 
 
 def _require_valid_qty(qty: int) -> None:
-    """Reject zero or negative quantities. Phase 1 worked examples all
-    use positive quantities; the engine treats ``qty <= 0`` as a
+    """Reject zero or negative quantities. The worked examples all use
+    positive quantities; the engine treats ``qty <= 0`` as a
     programming error rather than a runtime reject. The C++ engine
     guards on submission boundary; the reference matches.
     """
@@ -619,17 +609,17 @@ class MatchingReference:
 
     Public API:
 
-    * Single-symbol mode (Phase 1, backward compatible)::
+    * Single-symbol mode (legacy, backward compatible)::
 
           engine = MatchingReference(symbol=1)
           engine.submit_limit(101, Side.BUY, 10000, 50, 1)
           engine.cancel_at(101, ts=21)
 
       The ``symbol`` keyword on ``submit_*`` defaults to the single
-      registered symbol when only one is configured, so every Phase 1
+      registered symbol when only one is configured, so every legacy
       call site continues to work unchanged.
 
-    * Multi-symbol mode (Phase 2)::
+    * Multi-symbol mode::
 
           engine = MatchingReference(symbols=[1, 2, 3, 4, 5])
           engine.submit_limit(101, Side.BUY, 10000, 50, 1, symbol=1)
@@ -638,8 +628,8 @@ class MatchingReference:
 
       ``cancel`` and ``cancel_at`` route to the correct per-symbol book
       via an internal id-to-symbol map. A cancel for an order that was
-      placed on symbol X never affects symbol Y (Phase 2 plan key
-      decision 4: dual-index design).
+      placed on symbol X never affects symbol Y (the dual-index design
+      is documented in ADR 0002).
 
     * Unknown-symbol reject::
 
@@ -648,8 +638,8 @@ class MatchingReference:
 
       A ``NewOrder`` whose ``symbol`` is not in the registered set
       produces a single ``Reject UNKNOWN_SYMBOL`` with no preceding
-      ``Acknowledge`` (Phase 2 plan Task 1; mirrors the EMPTY_BOOK
-      shape from matching-semantics.md section 4).
+      ``Acknowledge`` (mirrors the EMPTY_BOOK shape from
+      matching-semantics.md section 4).
 
     Constructor forms:
 
@@ -670,9 +660,8 @@ class MatchingReference:
       lookup that the cancel path consults to find which book owns
       a given order id. Updated on every successful rest (insert),
       every fully-filled-maker cleanup (remove), and every cancel
-      (remove). The C++ side calls this ``OrderIndex`` (Phase 2 plan
-      Task 3); the reference uses a single dict for obvious
-      correctness.
+      (remove). The C++ side calls this ``OrderIndex``; the reference
+      uses a single dict for obvious correctness.
     """
 
     def __init__(
@@ -716,7 +705,7 @@ class MatchingReference:
     ) -> list[ExecutionReport]:
         """Submit a ``LIMIT`` order. See matching-semantics.md section 3."""
 
-        return self._dispatch_new_order(
+        return self._route_new_order(
             "limit", order_id, side, price, qty, ts, symbol
         )
 
@@ -736,7 +725,7 @@ class MatchingReference:
         ``Acknowledge`` price for market orders.
         """
 
-        return self._dispatch_new_order(
+        return self._route_new_order(
             "market", order_id, side, 0, qty, ts, symbol
         )
 
@@ -752,7 +741,7 @@ class MatchingReference:
     ) -> list[ExecutionReport]:
         """Submit an ``IOC`` order. See matching-semantics.md section 5."""
 
-        return self._dispatch_new_order(
+        return self._route_new_order(
             "ioc", order_id, side, price, qty, ts, symbol
         )
 
@@ -760,10 +749,10 @@ class MatchingReference:
         """Cancel a resting order by id. See matching-semantics.md section 6.
 
         Cross-symbol: looks up which book owns ``order_id`` via the
-        internal id-to-symbol map; dispatches to that book's cancel.
+        internal id-to-symbol map; routes to that book's cancel.
         Unknown ids produce ``Reject NOT_FOUND``. Equivalent to
         ``cancel_at(order_id, ts=0)``; preserved for backward
-        compatibility with the Phase 1 wire-format driver.
+        compatibility with the legacy single-symbol wire-format driver.
         """
 
         return self.cancel_at(order_id, 0)
@@ -808,8 +797,8 @@ class MatchingReference:
         for one symbol.
 
         Single-symbol callers can omit ``symbol`` and the engine returns
-        the only registered book's top-of-book; this preserves Phase 1
-        call shapes. Multi-symbol callers must pass ``symbol``.
+        the only registered book's top-of-book; this preserves the
+        legacy call shapes. Multi-symbol callers must pass ``symbol``.
         """
 
         sym = self._resolve_symbol(symbol)
@@ -830,7 +819,7 @@ class MatchingReference:
     def _orders(self) -> dict[int, _RestingOrder]:
         """Backward-compatible flat view across all per-symbol books.
 
-        The Phase 1 conservation-law tests in test_reference.py read
+        The conservation-law tests in test_reference.py read
         ``engine._orders`` to assert that an aggressor (market/IOC)
         does not rest. In multi-symbol mode this property aggregates
         the per-symbol books' ``_orders`` maps so the existing tests
@@ -848,7 +837,7 @@ class MatchingReference:
         """Resolve an optional ``symbol`` argument to a concrete id.
 
         If a single symbol is registered, ``symbol=None`` is allowed
-        and resolves to that symbol (Phase 1 backward compatibility).
+        and resolves to that symbol (legacy backward compatibility).
         Otherwise ``symbol`` must be passed explicitly.
         """
 
@@ -861,7 +850,7 @@ class MatchingReference:
             )
         return int(symbol)
 
-    def _dispatch_new_order(
+    def _route_new_order(
         self,
         otype: str,
         order_id: int,

@@ -26,7 +26,7 @@ option(MERIDIAN_BUILD_SERVER "Build meridian-server" ON)
 include(FetchContent)
 
 # GoogleTest is pulled in early so dependent targets across phases can use it.
-# Locked to v1.15.2 (released 2024-07-31). Update only with explicit DevOps and Code Reviewer sign-off.
+# Locked to v1.15.2 (released 2024-07-31). Bump deliberately, not casually.
 FetchContent_Declare(
     googletest
     GIT_REPOSITORY https://github.com/google/googletest.git
@@ -42,9 +42,8 @@ if(MERIDIAN_BUILD_TESTS)
 endif()
 
 # HDRHistogram-c powers the meridian-bench latency capture. Only fetched when
-# the bench is being built. Locked to v0.11.8 (released 2023-04-30). Update
-# only with explicit DevOps and Code Reviewer sign-off, mirroring the
-# GoogleTest pinning policy above.
+# the bench is being built. Locked to v0.11.8 (released 2023-04-30). Bump
+# deliberately, not casually, mirroring the GoogleTest pinning policy above.
 if(MERIDIAN_BUILD_BENCH)
     FetchContent_Declare(
         hdr_histogram
@@ -63,14 +62,13 @@ endif()
 # libmeridian.a: the engine library lives under src/ and include/meridian/.
 add_subdirectory(src)
 
-# Driver binaries (apps/). Each subdirectory's CMakeLists.txt is a stub today; the
-# add_subdirectory lines are intentionally commented out until each binary's main.cpp lands
-# in the phase noted next to it. When the sources land, the dispatched agent uncomments
-# the matching line.
+# Driver binaries (apps/). Each subdirectory's CMakeLists.txt is a stub
+# until that binary's main.cpp lands; uncomment the matching
+# add_subdirectory line when its source ships.
 #
-# apps/bench:    Phase 1 skeleton, Phase 5 full benchmark (Performance Engineer)
-# apps/replay:   Phase 6 (Engine Developer)
-# apps/server:   Phase 8 (Engine Developer)
+# apps/bench:    benchmark (skeleton in place; full bench follows later)
+# apps/replay:   ITCH replayer (not yet wired)
+# apps/server:   live demo WebSocket server (not yet wired)
 #
 if(MERIDIAN_BUILD_BENCH)
     add_subdirectory(apps/bench)
@@ -78,7 +76,7 @@ endif()
 # add_subdirectory(apps/replay)
 # add_subdirectory(apps/server)
 
-# Tests (Phase 1 onward).
+# Tests.
 if(MERIDIAN_BUILD_TESTS)
     add_subdirectory(tests)
 endif()

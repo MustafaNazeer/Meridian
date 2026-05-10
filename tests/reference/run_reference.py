@@ -1,6 +1,6 @@
 """Drive the matching reference from a JSON Lines event stream on stdin.
 
-The Phase 1 integration test (``tests/integration/test_engine_vs_reference.cpp``)
+The integration test (``tests/integration/test_engine_vs_reference.cpp``)
 writes a JSON Lines event file, runs the C++ engine, runs this script
 on the same input, and byte-diffs the two output streams. Both outputs
 are JSON Lines, one ``ExecutionReport`` per line, with object keys
@@ -16,12 +16,11 @@ Input (one JSON object per line). New-order events:
      "price": <int>, "qty": <int>, "ts": <int>,
      "symbol": <int>}
 
-The ``symbol`` field is optional in Phase 1 scenarios (which all use
-symbol id 1 implicitly). When absent, the driver defaults the new-order
-event to ``symbol=1`` so the Phase 1 integration corpus continues to
-diff cleanly. Phase 2 scenarios that drive multiple symbols always
-populate ``symbol`` explicitly. Phase 2 plan Task 2 step 4 pins this
-default behavior.
+The ``symbol`` field is optional in single-symbol scenarios (which all
+use symbol id 1 implicitly). When absent, the driver defaults the
+new-order event to ``symbol=1`` so the single-symbol integration corpus
+continues to diff cleanly. Multi-symbol scenarios that drive several
+symbols always populate ``symbol`` explicitly.
 
 Cancel events:
 
@@ -72,15 +71,15 @@ from matching_reference import MatchingReference, Side
 
 _SIDE_MAP = {"buy": Side.BUY, "sell": Side.SELL}
 
-# Phase 2 demo symbol set: AAPL=1, SPY=2, NVDA=3, TSLA=4, GOOG=5
-# (matches `BookRegistry` initializer in the C++ Phase 2 fixture, per
-# the Phase 2 plan Task 5 dispatch flow). Phase 1 corpora that omit
-# the ``symbol`` field default to symbol=1, which is in this set.
+# Demo symbol set: AAPL=1, SPY=2, NVDA=3, TSLA=4, GOOG=5
+# (matches the `BookRegistry` initializer in the C++ multi-instrument
+# fixture). Single-symbol corpora that omit the ``symbol`` field default
+# to symbol=1, which is in this set.
 _DEFAULT_SYMBOLS: tuple[int, ...] = (1, 2, 3, 4, 5)
 
 
 def _process_event(engine: MatchingReference, event: dict) -> list:
-    """Dispatch one decoded event to the engine and return its reports."""
+    """Route one decoded event to the engine and return its reports."""
 
     kind = event["kind"]
     if kind == "new_order":
@@ -90,8 +89,8 @@ def _process_event(engine: MatchingReference, event: dict) -> list:
         price = event["price"]
         qty = event["qty"]
         ts = event["ts"]
-        # Phase 2: symbol is optional; default to 1 for Phase 1 backward
-        # compatibility. The integration corpus from Phase 1 omits it.
+        # Symbol is optional; defaults to 1 for backward compatibility
+        # with the single-symbol integration corpus, which omits it.
         symbol = event.get("symbol", 1)
         if otype == "limit":
             return engine.submit_limit(
@@ -109,7 +108,7 @@ def _process_event(engine: MatchingReference, event: dict) -> list:
     if kind == "cancel":
         # Cancel is cross-symbol: the engine routes via its
         # id-to-symbol map. The wire format does not carry symbol on
-        # cancel events (Phase 2 plan Task 2 step 4).
+        # cancel events.
         return engine.cancel_at(event["order_id"], ts=event["ts"])
     raise ValueError(f"unknown event kind {kind!r}")
 

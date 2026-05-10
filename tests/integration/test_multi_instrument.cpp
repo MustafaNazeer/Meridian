@@ -1,4 +1,4 @@
-// Phase 2 multi-instrument integration test. Drives 5 demo symbols
+// Multi-instrument integration test. Drives 5 demo symbols
 // (AAPL=1, SPY=2, NVDA=3, TSLA=4, GOOG=5) through both the C++ engine
 // and the Python reference, byte-diffing the report streams.
 
@@ -226,10 +226,10 @@ NamedScenario id_reuse_after_cancel_different_symbol() {
 }
 
 NamedScenario cancel_after_fully_filled_multi_symbol() {
-    // Phase 2 audit case 2: cancel an OrderId that was already fully
-    // filled, in a multi-symbol setting. The cross-symbol OrderIndex
-    // should miss the lookup and emit Reject NotFound, leaving every
-    // book on every symbol unchanged. Mirrors CXL-5 from Phase 1 but
+    // Audit case: cancel an OrderId that was already fully filled, in
+    // a multi-symbol setting. The cross-symbol OrderIndex should miss
+    // the lookup and emit Reject NotFound, leaving every book on every
+    // symbol unchanged. Mirrors CXL-5 from the single-symbol set but
     // routes through BookRegistry plus OrderIndex.
     return {"cancel_after_fully_filled_multi_symbol", {
         // Symbol 2 maker rests, then is fully consumed by a crossing taker.
