@@ -149,38 +149,41 @@ of engine code.
    Performance Engineer, and Observability Engineer. Committed locally
    on branch `phase-0-brainstorm-cascade` at `1ad71f3`.
 3. **Done.** Write this plan at `docs/plan.md`.
-4. **Pending.** Dispatch four Phase 0 specialists in parallel (single
-   message with four `Task` invocations) per
-   `superpowers:dispatching-parallel-agents`:
-   * UI/UX Designer (05): produces `docs/design/wireframes.md` and
-     `docs/design/tokens.md` derived from `docs/design/canonical.html`.
-   * Security Engineer (08): produces `docs/security/threat-model.md`,
-     stubs `docs/security/checklist.md` and `docs/security/secrets.md`.
-   * DevOps Engineer (09): finalizes `.gitignore`, scaffolds CMake
-     project skeleton (no sources yet, build exits 0), runs
-     `pnpm create vite frontend --template react-ts` and applies the
-     tokens from the UI/UX Designer's output, wires
-     `.github/workflows/ci.yml` with build matrix on clang and gcc plus
-     frontend build and tests, configures branch protection on `main`.
-   * Documentation Engineer (15): writes the Phase 0 stub `README.md`
-     and `docs/architecture.md`. The README explicitly marks the
-     benchmark headline number and demo URL as "target, not yet
-     achieved" so the Citation auditor does not flag them.
-5. **Pending.** Verify branch `phase-0-brainstorm-cascade` is pushed and
-   merged via the standard push protocol once the user authorizes it.
-6. **Pending.** Sequentially dispatch Citation and Fact Auditor (17)
-   only after the Documentation Engineer returns drafts of `README.md`
-   and `docs/architecture.md`. The auditor reads SPEC.md, the design
-   spec, this plan, the threat model, the README, and the architecture
-   doc, and files its initial audit at
-   `docs/audits/citation-audit-2026-05-09.md`. Any criticals it flags
-   block phase close until resolved.
-7. **Pending.** Phase 0 closeout: confirm Security has no open
-   criticals, confirm Citation auditor signed off, confirm DevOps
-   reports `cmake --build .` exits 0 and `pnpm dev` boots a blank Vite
-   page, confirm `.github/workflows/ci.yml` is green on a no-op PR,
-   flip Phase 0 to `completed` in `STATUS.md`, set Next phase to Phase
-   1, run the mandatory check-in protocol.
+4. **Done.** Dispatched UI/UX Designer (05), Security Engineer (08),
+   DevOps Engineer (09), Documentation Engineer (15) in parallel.
+   Outputs landed in commit `23ed376`: `docs/design/{tokens,wireframes}.md`,
+   `docs/security/{threat-model,checklist,secrets}.md`, root
+   `CMakeLists.txt` plus stubs, `.github/workflows/ci.yml`, full Vite
+   scaffold under `frontend/` with Twilight Tailwind config applied,
+   `.gitignore` updated, `docs/setup-guide.md` skeleton with section
+   12.1 documenting branch protection, `README.md` rewritten as a
+   Phase 0 stub, `docs/architecture.md`, ADR `0001-cpp20-library-plus-drivers.md`.
+   Plus PM reconciliation: React 18 became React 19 throughout and
+   design spec section 5.4 was corrected (Fly serves only WSS plus
+   `/healthz` plus `/metrics`, not the static React app).
+5. **Done.** Verified `origin` points at
+   `https://github.com/MustafaNazeer/Meridian.git`. CMake skeleton
+   configures cleanly on the dispatch machine (DevOps reported `cmake
+   -B build -S . -G Ninja` succeeded). `pnpm dev` boots Vite cleanly.
+6. **Done.** Citation and Fact Auditor (17) ran and filed
+   `docs/audits/citation-audit-2026-05-09.md` (53 verified, 2
+   unverified, 2 wrong out of 57 claims audited). The auditor resolved
+   the three `[citation needed]` markers in `docs/security/threat-model.md`
+   in place (uWebSockets advisory history, Fly free-tier wake latency,
+   Cloudflare Pages `_headers` mechanism). The PM resolved the four
+   close-blocker findings (F1 through F4) in commit `60a9e89`:
+   property-test case-count divergence, the "6.2M events per second"
+   claim asserted as fact in `SPEC.md` and quoted in ADR 0001, the
+   GoogleTest pinning policy, and the design spec section 10 repo
+   layout that named the frontend `web/` instead of `frontend/`.
+7. **Pending.** Phase 0 closeout merge gate: user authorizes "push",
+   PM runs the standard push protocol (push branch, `gh pr create`,
+   watch required CI checks for the first run of the workflow, admin
+   merge once green, sync local `main`). Then flip Phase 0 to
+   `completed` in `STATUS.md`, set Next phase to Phase 1, and run the
+   mandatory check-in protocol. The check-in itself runs at the same
+   time as this message; the user's continue / pause / stop answer
+   is captured in `STATUS.md` Resume notes.
 
 ### Exit criteria
 

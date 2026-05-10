@@ -2,11 +2,11 @@
 
 Single source of truth for which phase is next. Read this file when the user says "work on the next phase" or any equivalent. Update this file when a phase changes state. The Project Manager session owns it.
 
-**Last updated**: 2026-05-09 (Phase 0 opened; PM brainstorming the open questions in SPEC.md section 13 before writing `docs/plan.md`).
+**Last updated**: 2026-05-09 (Phase 0 deliverables produced and committed locally; awaiting user authorization to push, run CI, and merge the PR before the phase fully closes).
 
 ## Next phase
 
-**Phase 0: Foundations.** Status: `in progress`. Owner: Project Manager session.
+**Phase 0: Foundations.** Status: `in progress` (deliverables produced; merge gated on user signal). Owner: Project Manager session.
 
 ## Phase status table
 
@@ -29,7 +29,13 @@ Status values: `not started`, `in progress`, `completed`, `bundled with phase N`
 
 ## Resume notes
 
-(none yet; will be populated when the first phase pauses mid window)
+### Phase 0 (paused at end of deliverables, 2026-05-09)
+
+* Branch `phase-0-brainstorm-cascade` at HEAD `60a9e89` holds all Phase 0 work in four logical commits: brainstorm cascade (`1ad71f3`), implementation plan (`8862eab`), parallel-specialist dispatch outputs plus React 19 / Fly-serves reconciliation (`23ed376`), and Citation auditor follow-ups F1 through F4 plus the audit report (`60a9e89`).
+* All Phase 0 PM tasks are checked off in `docs/plan.md` except the push-and-merge gate. Citation and Fact Auditor signed off after F1 through F4 landed.
+* **Next concrete task**: user authorizes "push", PM runs the standard push protocol (push branch, `gh pr create`, watch required CI checks, admin merge once green, sync local `main`). This will be the first run of `.github/workflows/ci.yml`; expect to debug any first-run flakiness. Once the PR merges, flip Phase 0 to `completed` here, run the check-in, then open Phase 1.
+* **Branch protection on `main`**: not yet flipped via the GitHub web UI. `docs/setup-guide.md` section 12.1 documents the exact required-check names. Toggle this after the first PR run so the check names are registered with GitHub.
+* No Code Reviewer dispatch yet for Phase 0; the PR is the natural hook.
 
 ## Design sync log
 
