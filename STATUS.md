@@ -2,11 +2,11 @@
 
 Single source of truth for which phase is next. Read this file when the user says "work on the next phase" or any equivalent. Update this file when a phase changes state. The Project Manager session owns it.
 
-**Last updated**: 2026-05-09 (Phase 0 fully closed: PR #3 squash-merged to `main` at `3c744ed`. Awaiting user check-in answer on whether to open Phase 1 in this window, pause, or stop.).
+**Last updated**: 2026-05-09 (Phase 1 opened. User confirmed at check-in: 4 percent usage, 4.75 hours until reset, "get started". PM is writing the Phase 1 companion plan and will dispatch Quant Domain Validator (01) first.).
 
 ## Next phase
 
-**Phase 1: Core data structures and single-symbol matching.** Status: `not started`. Owner: Project Manager session, dispatching Quant Domain Validator (01), Reference Implementation Engineer (18), Engine Developer (03), Market Microstructure Engineer (02), QA Engineer (10), Performance Engineer (12), Risk and Financial Correctness Reviewer (16), and Code Reviewer (11). Window cost: ~95 percent. See `docs/plan.md` Phase 1 section for the detailed deliverable list.
+**Phase 1: Core data structures and single-symbol matching.** Status: `in progress`. Owner: Project Manager session, dispatching Quant Domain Validator (01), Reference Implementation Engineer (18), Engine Developer (03), Market Microstructure Engineer (02), QA Engineer (10), Performance Engineer (12), Risk and Financial Correctness Reviewer (16), and Code Reviewer (11). Window cost: ~95 percent. See `docs/plan.md` Phase 1 section for the detailed deliverable list and `docs/superpowers/plans/2026-05-09-phase-1-single-symbol-matching.md` for the bite-sized step plan once written.
 
 ## Phase status table
 
@@ -15,7 +15,7 @@ Status values: `not started`, `in progress`, `completed`, `bundled with phase N`
 | # | Phase | Status | Completed on | Window cost | Notes |
 |---|---|---|---|---|---|
 | 0 | Foundations | completed | 2026-05-09 | ~95% | scaffolds, plan, threat model, design tokens, ADRs land here |
-| 1 | Core data structures and single-symbol matching | not started | | ~95% | Order, Level, Book, OrderPool, limit + market + IOC matching, FIFO at price levels |
+| 1 | Core data structures and single-symbol matching | in progress | | ~95% | Order, Level, Book, OrderPool, limit + market + IOC matching, FIFO at price levels |
 | 2 | Multi-instrument and cancel-by-id | not started | | ~50% alone or bundled with Phase 3 | BookRegistry symbol dispatch, O(1) cancel via order ID map |
 | 3 | Property-based tests for matching invariants | not started | | ~50% alone or bundled with Phase 2 | rapidcheck wired up, 10 invariants verified |
 | 4 | Seqlock-protected top-of-book and sampler | not started | | ~85% | seqlock writer/reader protocol, 30 Hz sampler, TSAN clean |

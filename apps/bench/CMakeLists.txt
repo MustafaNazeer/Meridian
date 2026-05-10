@@ -1,8 +1,20 @@
 # meridian-bench: zero-I/O throughput and latency benchmark.
 #
-# Sources land here in Phase 5 (Performance Engineer). Until then this stub is
-# intentionally inert; the root CMakeLists.txt does not invoke add_subdirectory(apps/bench)
-# yet. When the Phase 5 dispatch lands main.cpp here, the dispatched agent uncomments
-# the corresponding add_subdirectory line in the root CMakeLists.txt and adds a target
-# definition (add_executable(meridian-bench main.cpp) plus the required link to
-# libmeridian and Google Benchmark).
+# Phase 1 ships a working harness that compiles and runs end to end against
+# libmeridian.a. The Markdown summary it prints is informational; the headline
+# 6M events/sec target is enforced in Phase 5 via bench/baseline.json.
+#
+# HDRHistogram-c is wired in the root CMakeLists.txt (FetchContent) inside
+# the MERIDIAN_BUILD_BENCH guard, so hdr_histogram_static is only available
+# when the bench is being built.
+
+add_executable(meridian-bench main.cpp)
+
+target_link_libraries(meridian-bench PRIVATE
+    meridian
+    hdr_histogram_static
+)
+
+target_compile_options(meridian-bench PRIVATE
+    -Wall -Wextra -Wpedantic -Werror
+)

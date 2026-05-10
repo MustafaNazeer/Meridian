@@ -139,7 +139,7 @@ struct Order {
 Doubly linked list of Orders at a single price. Owns total qty and order count. Insertion at tail (FIFO).
 
 **Book**
-One side (bid or ask) of one symbol's order book. Sorted map of Levels by price (red-black tree initially via std::map; consider a flat skip list later). Plus an `unordered_map<OrderId, Order*>` for O(1) cancel.
+Full L3 book for one symbol: holds both bid and ask sides. Each side is a `std::map<Price, Level*>` ordered by price (red-black tree initially via `std::map`; consider a flat skip list later). Bids are walked in descending price order; asks in ascending price order. Plus an `unordered_map<OrderId, Order*>` for O(1) cancel within this symbol.
 
 **OrderPool**
 Free-list allocator with a fixed pre-allocated arena. The matching loop never calls operator new. Verified by an allocator override in debug builds that aborts on any heap allocation during the hot path.
