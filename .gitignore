@@ -47,6 +47,12 @@ bench/output/
 bench/*.csv
 bench/*.png
 
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
 # Frontend
 node_modules/
 dist/
