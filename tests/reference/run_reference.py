@@ -88,13 +88,17 @@ def _process_event(engine: MatchingReference, event: dict) -> list:
 def main() -> int:
     engine = MatchingReference(symbol=1)
     out = sys.stdout
+    # Compact JSON (no spaces around separators) so the byte-diff against
+    # the C++ engine's hand-rolled JSON output is exact. Sort keys so the
+    # field order matches the C++ side's alphabetical emission.
     for raw in sys.stdin:
         raw = raw.strip()
         if not raw:
             continue
         event = json.loads(raw)
         for report in _process_event(engine, event):
-            out.write(json.dumps(report.to_dict(), sort_keys=True))
+            out.write(json.dumps(report.to_dict(), sort_keys=True,
+                                 separators=(",", ":")))
             out.write("\n")
     return 0
 
