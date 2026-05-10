@@ -353,9 +353,22 @@ Phase 1 opens. The Engine Developer follows that document.
 
 ## Phase 2: Multi-instrument and cancel-by-id
 
-**Status:** not started.
+**Status:** completed 2026-05-10 (PR #9 squash-merged to `main` at `8130599`; CI green; Risk Reviewer signed off all 5 Phase 2 audit cases).
 
-**Window cost:** ~50 percent alone, or bundle into the Phase 3 window.
+**Window cost:** ~50 percent of one Claude Max window. Actual: opened at 32 percent usage; closed inside the same window without bundling Phase 3.
+
+### Phase 2 close summary
+
+`BookRegistry` and `OrderIndex` ship the cross-symbol layer. The
+matching engine routes `NewOrder` by `event.symbol`, emitting
+`Reject UnknownSymbol` for unregistered symbols. The cancel path
+consults the cross-symbol `OrderIndex` and routes to the right `Book`
+via the order's own `symbol` field; the per-`Book` id index from
+Phase 1 stays in place per ADR 0002. Python reference extends to
+multi-symbol with the same shape; the integration test suite ships 7
+multi-symbol scenarios in addition to the 60 inherited from Phase 1.
+118 ctest tests passing in Debug and Release; 40 Python reference
+tests passing. Risk Reviewer signed off all 5 Phase 2 audit cases.
 
 **Goal:** Ship multi-instrument support (`BookRegistry` dispatch by
 symbol) plus O(1) cancel-by-id. Demonstrates the engine handles the
