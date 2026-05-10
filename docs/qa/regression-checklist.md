@@ -113,7 +113,7 @@ Single-symbol baseline is 97 percent.
 #### Acceptable gaps
 
 The following lines may legitimately appear as uncovered without
-blocking phase close:
+blocking the milestone:
 
 * `src/order_pool.cpp` lines for the debug allocator's `fprintf` plus
   `abort()` and the `throw std::bad_alloc{}` in the `operator new`
