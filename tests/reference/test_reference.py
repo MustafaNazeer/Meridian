@@ -685,6 +685,261 @@ class ConservationLawTests(_BaseRefTest):
 
 
 # ---------------------------------------------------------------------------
+# Phase 2: multi-symbol dispatch and cross-symbol cancel
+# ---------------------------------------------------------------------------
+
+
+class MultiSymbolTests(unittest.TestCase):
+    """Phase 2 plan task 5 cases: 5-symbol dispatch, cross-symbol cancel
+    isolation, cross-symbol cancel by id, and unknown-symbol reject.
+
+    The chosen design is option (a) from the Phase 2 dispatch prompt:
+    ``MatchingReference`` accepts a list of symbols at construction.
+    The single-symbol form ``MatchingReference(symbol=1)`` continues to
+    work; every Phase 1 worked-example test exercises it. The
+    multi-symbol form ``MatchingReference(symbols=[1, 2, 3, 4, 5])``
+    registers a fixed set of per-symbol books and routes ``submit_*``
+    by an explicit ``symbol=`` keyword. Cancel is cross-symbol: it
+    consults a top-level id-to-symbol map and dispatches to the right
+    book without the caller naming the symbol.
+    """
+
+    DEMO_SYMBOLS = (1, 2, 3, 4, 5)
+
+    def setUp(self) -> None:
+        self.engine = MatchingReference(symbols=self.DEMO_SYMBOLS)
+
+    def test_five_symbol_dispatch_no_leakage(self) -> None:
+        """One limit order per symbol; verify each rests on its own
+        book without leaking into another symbol's book."""
+
+        # Submit one buy limit on each demo symbol, all at distinct
+        # prices and quantities so a leak would be observable.
+        plan = [
+            (101, 1, 10000, 50),
+            (201, 2, 20000, 30),
+            (301, 3, 30000, 70),
+            (401, 4, 40000, 20),
+            (501, 5, 50000, 90),
+        ]
+        for ts, (oid, sym, price, qty) in enumerate(plan, start=1):
+            reports = self.engine.submit_limit(
+                oid, Side.BUY, price, qty, ts, symbol=sym
+            )
+            self.assertEqual(
+                _to_dicts(reports),
+                [_ack(oid, Side.BUY, price, qty, ts)],
+                f"symbol {sym} should ack and rest only",
+            )
+
+        # Each symbol's book holds exactly its own resting buy and
+        # nothing else.
+        for oid, sym, price, qty in plan:
+            self.assertEqual(
+                self.engine.top_of_book(symbol=sym),
+                (price, qty, None, 0),
+                f"symbol {sym}: bid {price}x{qty}, ask empty",
+            )
+
+        # The cross-symbol id-to-symbol map carries every resting id.
+        self.assertEqual(
+            self.engine._id_to_symbol,
+            {oid: sym for oid, sym, _, _ in plan},
+        )
+
+    def test_cross_symbol_cancel_isolation(self) -> None:
+        """Cancel on symbol 1 must not affect symbol 2's book."""
+
+        # Place a buy on symbol 1 and a buy on symbol 2.
+        self.engine.submit_limit(101, Side.BUY, 10000, 50, 1, symbol=1)
+        self.engine.submit_limit(202, Side.BUY, 20000, 30, 2, symbol=2)
+
+        # Cancel the symbol-1 buy via the cross-symbol cancel API
+        # (the caller does not name symbol 1).
+        reports = self.engine.cancel_at(101, ts=21)
+        self.assertEqual(
+            _to_dicts(reports),
+            [_cancel(101, Side.BUY, 10000, 50, 21)],
+        )
+
+        # Symbol 1's book is now empty.
+        self.assertEqual(
+            self.engine.top_of_book(symbol=1), (None, 0, None, 0)
+        )
+        # Symbol 2's book is unchanged.
+        self.assertEqual(
+            self.engine.top_of_book(symbol=2), (20000, 30, None, 0)
+        )
+        # Cross-symbol map: 101 gone, 202 still routes to symbol 2.
+        self.assertEqual(self.engine._id_to_symbol, {202: 2})
+
+    def test_cross_symbol_cancel_by_id_routes_correctly(self) -> None:
+        """Cancel an order on symbol 5 without naming the symbol;
+        the engine routes correctly via its id-to-symbol map."""
+
+        # Seed orders on symbols 1, 3, and 5 so a wrong route would
+        # be observable on either neighbor.
+        self.engine.submit_limit(11, Side.BUY, 10000, 50, 1, symbol=1)
+        self.engine.submit_limit(33, Side.BUY, 30000, 40, 2, symbol=3)
+        self.engine.submit_limit(55, Side.SELL, 50500, 25, 3, symbol=5)
+
+        # Cancel the symbol-5 sell with no symbol argument.
+        reports = self.engine.cancel_at(55, ts=42)
+        self.assertEqual(
+            _to_dicts(reports),
+            [_cancel(55, Side.SELL, 50500, 25, 42)],
+        )
+
+        # Symbols 1 and 3 untouched.
+        self.assertEqual(
+            self.engine.top_of_book(symbol=1), (10000, 50, None, 0)
+        )
+        self.assertEqual(
+            self.engine.top_of_book(symbol=3), (30000, 40, None, 0)
+        )
+        # Symbol 5's ask is now empty.
+        self.assertEqual(
+            self.engine.top_of_book(symbol=5), (None, 0, None, 0)
+        )
+
+    def test_unknown_symbol_reject_no_preceding_ack(self) -> None:
+        """NewOrder with symbol=99 (unregistered) emits a single
+        ``Reject UNKNOWN_SYMBOL`` with no preceding ``Acknowledge``,
+        matching the EmptyBook reject pattern from MKT-4."""
+
+        reports = self.engine.submit_limit(
+            999, Side.BUY, 12345, 10, 7, symbol=99
+        )
+        self.assertEqual(
+            _to_dicts(reports),
+            [
+                _reject(
+                    999, Side.BUY, 12345, 10, 7, RejectReason.UNKNOWN_SYMBOL
+                )
+            ],
+        )
+        # No book state was created or mutated for symbol 99; the
+        # registered books are untouched.
+        for sym in self.DEMO_SYMBOLS:
+            self.assertEqual(
+                self.engine.top_of_book(symbol=sym), (None, 0, None, 0)
+            )
+        # And the unknown-symbol order id is not in the cross-symbol
+        # map (the reject happens before any state mutation).
+        self.assertNotIn(999, self.engine._id_to_symbol)
+
+    def test_unknown_symbol_reject_market_uses_zero_price(self) -> None:
+        """Market NewOrder with an unknown symbol emits ``Reject
+        UNKNOWN_SYMBOL`` with ``price=0`` (the same convention market
+        orders use for ``Acknowledge``)."""
+
+        reports = self.engine.submit_market(
+            888, Side.SELL, 50, 9, symbol=42
+        )
+        self.assertEqual(
+            _to_dicts(reports),
+            [
+                _reject(
+                    888, Side.SELL, 0, 50, 9, RejectReason.UNKNOWN_SYMBOL
+                )
+            ],
+        )
+
+    def test_cross_symbol_cancel_unknown_id_rejects_not_found(self) -> None:
+        """Cancel of an id that was never submitted on any symbol is a
+        ``Reject NOT_FOUND``. CXL-4 generalized to multi-symbol mode."""
+
+        self.engine.submit_limit(101, Side.BUY, 10000, 50, 1, symbol=1)
+        reports = self.engine.cancel_at(424242, ts=11)
+        self.assertEqual(
+            _to_dicts(reports),
+            [_reject(424242, Side.BUY, 0, 0, 11, RejectReason.NOT_FOUND)],
+        )
+        # Symbol 1's book unchanged.
+        self.assertEqual(
+            self.engine.top_of_book(symbol=1), (10000, 50, None, 0)
+        )
+
+    def test_same_id_can_be_reused_on_different_symbol_after_cancel(
+        self,
+    ) -> None:
+        """After 101 is cancelled on symbol 1, the id is free again
+        and can be assigned to a fresh order on symbol 2.
+
+        This is a Phase 2 invariant the C++ side gets via the
+        ``OrderIndex::erase`` path; the reference must agree.
+        """
+
+        self.engine.submit_limit(101, Side.BUY, 10000, 50, 1, symbol=1)
+        self.engine.cancel_at(101, ts=2)
+        # Re-use 101 on symbol 2.
+        self.engine.submit_limit(101, Side.BUY, 20000, 30, 3, symbol=2)
+        # Now cancel via the cross-symbol API; routes to symbol 2.
+        reports = self.engine.cancel_at(101, ts=4)
+        self.assertEqual(
+            _to_dicts(reports),
+            [_cancel(101, Side.BUY, 20000, 30, 4)],
+        )
+
+    def test_per_symbol_books_match_independently(self) -> None:
+        """Run a small mixed corpus on symbol 1 and symbol 2 in
+        interleaved order; the per-symbol final book states match what
+        each symbol would have produced in isolation.
+
+        This pins the "no cross-symbol leakage" invariant from the
+        Phase 2 plan Task 6 scenario list (item 1: independent
+        activity per symbol)."""
+
+        # Symbol 1: a buy at 10000 partial-filled by a 30 sell.
+        self.engine.submit_limit(11, Side.BUY, 10000, 50, 1, symbol=1)
+        self.engine.submit_limit(12, Side.SELL, 10000, 30, 2, symbol=1)
+        # Interleave a symbol-2 sell.
+        self.engine.submit_limit(21, Side.SELL, 20000, 40, 3, symbol=2)
+        # Continue symbol 1 with a fresh buy that rests behind 11.
+        self.engine.submit_limit(13, Side.BUY, 9999, 25, 4, symbol=1)
+        # Continue symbol 2 with a buy that crosses 21 in full.
+        self.engine.submit_limit(22, Side.BUY, 20000, 40, 5, symbol=2)
+
+        # Symbol 1 final state: 11 has 20 remaining at 10000 (front),
+        # 13 has 25 at 9999. Asks empty.
+        self.assertEqual(
+            self.engine.top_of_book(symbol=1), (10000, 20, None, 0)
+        )
+        # Symbol 2 final state: both sides empty (21 and 22 fully
+        # crossed at 20000).
+        self.assertEqual(
+            self.engine.top_of_book(symbol=2), (None, 0, None, 0)
+        )
+
+    def test_legacy_single_symbol_constructor_still_works(self) -> None:
+        """Backward compatibility: ``MatchingReference(symbol=1)``
+        keeps the Phase 1 single-symbol API. ``submit_*`` and
+        ``cancel_at`` work without a ``symbol=`` keyword."""
+
+        legacy = MatchingReference(symbol=1)
+        legacy.submit_limit(101, Side.BUY, 10000, 50, 1)
+        reports = legacy.cancel_at(101, ts=2)
+        self.assertEqual(
+            _to_dicts(reports),
+            [_cancel(101, Side.BUY, 10000, 50, 2)],
+        )
+        self.assertEqual(legacy.top_of_book(), (None, 0, None, 0))
+
+    def test_constructor_rejects_both_symbol_and_symbols(self) -> None:
+        """Programmer-error guard: passing both forms is a ValueError."""
+
+        with self.assertRaises(ValueError):
+            MatchingReference(symbol=1, symbols=[1, 2])
+
+    def test_multi_symbol_requires_explicit_symbol_on_submit(self) -> None:
+        """In multi-symbol mode, omitting ``symbol=`` on a
+        ``submit_*`` is a programmer error (ValueError)."""
+
+        with self.assertRaises(ValueError):
+            self.engine.submit_limit(1, Side.BUY, 10000, 10, 1)
+
+
+# ---------------------------------------------------------------------------
 # Determinism: byte-identical JSON across runs
 # ---------------------------------------------------------------------------
 

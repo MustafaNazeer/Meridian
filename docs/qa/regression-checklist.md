@@ -16,7 +16,7 @@ and in dedicated phases. This checklist is the human-loop sanity pass.
 
 ---
 
-## Phase 1 set
+## Phase 1 set (extended in Phase 2)
 
 Run from a clean checkout of the repo at the commit being closed.
 
@@ -175,6 +175,17 @@ Items below are not run for Phase 1 close. They land with their
 respective phase. When you add an item here, also extend the relevant
 section above with the concrete commands.
 
+* **Phase 2, multi-symbol diff** (now part of the Phase 1 set above for any
+  Phase 2 close): the multi-instrument integration test
+  `tests/integration/test_multi_instrument.cpp` passes 6 scenarios driving
+  5 symbols (AAPL=1, SPY=2, NVDA=3, TSLA=4, GOOG=5) against the Python
+  reference: independent activity per symbol, cross-symbol cancel
+  isolation, cross-symbol cancel routing by id, unknown-symbol reject,
+  id reuse after cancel on a different symbol, and a 50-event mixed-
+  symbol corpus with a deterministic seed. The Python reference suite
+  must also pass with the multi-symbol extension landed
+  (`python3 -m unittest discover tests/reference -v` reports at least
+  40 tests passing).
 * **Phase 3, property-based tests**: `rapidcheck` is wired up; ten
   matching invariants run at least 1000 generated cases per CI run.
   Phase 3 acceptance is a one-time pass at 10000 generated sequences

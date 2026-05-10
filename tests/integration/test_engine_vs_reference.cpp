@@ -23,7 +23,9 @@
 // HandCrafted/EngineVsReferenceTest.ProducesIdenticalReports/lim_3_buy_full_cross).
 
 #include "meridian/book.hpp"
+#include "meridian/book_registry.hpp"
 #include "meridian/matching.hpp"
+#include "meridian/order_index.hpp"
 #include "meridian/order_pool.hpp"
 #include "meridian/types.hpp"
 
@@ -96,6 +98,7 @@ std::string report_to_jsonl(const ExecutionReport& r) {
         case RejectReason::NotFound:              reason = "not_found"; break;
         case RejectReason::InsufficientLiquidity: reason = "insufficient_liquidity"; break;
         case RejectReason::WouldCross:            reason = "would_cross"; break;
+        case RejectReason::UnknownSymbol:         reason = "unknown_symbol"; break;
     }
     // Alphabetical key order to match json.dumps(sort_keys=True) on the
     // Python reference side.
@@ -136,8 +139,9 @@ std::vector<std::string> run_cpp(const std::vector<ScenarioEvent>& events) {
     // worst case where most orders rest before the sweep. 4096 covers
     // every Phase 1 scenario with comfortable headroom.
     OrderPool pool(4096);
-    Book book{1};
-    MatchingEngine engine{pool, book};
+    BookRegistry registry{1, 2, 3, 4, 5};  // demo symbol set
+    OrderIndex index;
+    MatchingEngine engine{pool, registry, index};
     std::vector<std::string> lines;
     for (const auto& e : events) {
         auto reports = engine.apply(to_engine_event(e));

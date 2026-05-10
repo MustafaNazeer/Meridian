@@ -1,5 +1,7 @@
 #include "meridian/book.hpp"
+#include "meridian/book_registry.hpp"
 #include "meridian/matching.hpp"
+#include "meridian/order_index.hpp"
 #include "meridian/order_pool.hpp"
 #include "meridian/types.hpp"
 
@@ -12,8 +14,10 @@ namespace {
 class MatchingTest : public ::testing::Test {
 protected:
     OrderPool pool{1024};
-    Book book{1};
-    MatchingEngine engine{pool, book};
+    BookRegistry registry{1};
+    OrderIndex index;
+    Book& book = *registry.book(1);
+    MatchingEngine engine{pool, registry, index};
 
     EngineEvent new_limit(OrderId id, Side side, Price px, Quantity qty,
                           Timestamp ts = 0) {
