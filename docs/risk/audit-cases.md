@@ -162,7 +162,7 @@ Source: `docs/risk/matching-semantics.md` section 3.5.
 
 ### Status: PASS
 
-C++ and Python streams are byte-identical. Both honor FIFO within the price level: order 201 (front) fills first for 20, then order 202 (next) fills for 15, exhausting the aggressor's 35-share quantity. Order 203 (back of queue) is never touched, exactly per the worked example. This is the price-time priority invariant in its purest form (matching-semantics.md section 7 invariant 1).
+C++ and Python streams are byte-identical. Both honor FIFO within the price level: order 201 (front) fills first for 20, then order 202 (next) fills for 15, exhausting the aggressor's 35-share quantity. Order 203 (back of queue) is never touched, exactly per the worked example. This is the price-time priority invariant in its purest form (matching-semantics.md section 9 invariant 1).
 
 ---
 
@@ -205,7 +205,7 @@ The book has only 30 shares of liquidity. The market buy takes them all; the 70-
 
 ### Status: PASS
 
-C++ and Python streams are byte-identical. Both match the worked example: the market order's ack carries `price=0` (the sentinel for unused price field), `qty=100` (submitted qty, not filled qty), and the maker fill plus taker fill both carry the maker's price (10001) and 30 shares each. No fourth report appears for the 70-share residual: the residual is implicitly cancelled exactly as the worked example mandates. Conservation law check: 100 = 30 filled + 0 resting + 70 cancelled (matches matching-semantics.md section 7.1 worked walkthrough).
+C++ and Python streams are byte-identical. Both match the worked example: the market order's ack carries `price=0` (the sentinel for unused price field), `qty=100` (submitted qty, not filled qty), and the maker fill plus taker fill both carry the maker's price (10001) and 30 shares each. No fourth report appears for the 70-share residual: the residual is implicitly cancelled exactly as the worked example mandates. Conservation law check: 100 = 30 filled + 0 resting + 70 cancelled (matches matching-semantics.md section 9.1 worked walkthrough).
 
 ---
 
@@ -323,7 +323,7 @@ C++ and Python streams are byte-identical. Both implementations correctly distin
 
 ## Case 8, CXL-1: cancel a fully resting order (success branch)
 
-Source: `docs/risk/matching-semantics.md` section 6.1.
+Source: `docs/risk/matching-semantics.md` section 8.1.
 
 ### Input event sequence
 
@@ -353,13 +353,13 @@ Source: `docs/risk/matching-semantics.md` section 6.1.
 
 ### Status: PASS
 
-C++ and Python streams are byte-identical. Both implementations honor the section 6.1 success-branch contract: the Cancel report carries the cancelled order's resting `side` (buy), `price` (10000), `qty` (50), and the cancel event's `ts` (21). Order 102 remains unaffected at the back of the now-shortened queue, consistent with the post-event book in the worked example.
+C++ and Python streams are byte-identical. Both implementations honor the section 8.1 success-branch contract: the Cancel report carries the cancelled order's resting `side` (buy), `price` (10000), `qty` (50), and the cancel event's `ts` (21). Order 102 remains unaffected at the back of the now-shortened queue, consistent with the post-event book in the worked example.
 
 ---
 
 ## Case 9, CXL-4: cancel an unknown OrderId (Reject NotFound)
 
-Source: `docs/risk/matching-semantics.md` section 6.4. This is one of the two NotFound branches required by the brief.
+Source: `docs/risk/matching-semantics.md` section 8.4. This is one of the two NotFound branches required by the brief.
 
 ### Input event sequence
 
@@ -396,7 +396,7 @@ C++ and Python streams are byte-identical. Both implementations honor the sectio
 
 ## Case 10, CXL-5: cancel an OrderId that was already fully filled (Reject NotFound)
 
-Source: `docs/risk/matching-semantics.md` section 6.5. This is the second NotFound branch required by the brief: cancel-after-fully-filled is structurally identical to cancel-of-unknown.
+Source: `docs/risk/matching-semantics.md` section 8.5. This is the second NotFound branch required by the brief: cancel-after-fully-filled is structurally identical to cancel-of-unknown.
 
 ### Input event sequence
 
@@ -432,7 +432,7 @@ By the time the cancel arrives, order 201 has been fully filled and is no longer
 
 ### Status: PASS
 
-C++ and Python streams are byte-identical. Both implementations correctly produce the cancel-after-fully-filled Reject NotFound. The cancel-after-fully-filled case is structurally identical to the cancel-of-unknown case (CXL-4): the lookup miss is the only signal the engine has. Both implementations emit the same Reject report regardless of why the id is missing, satisfying the cancel-idempotence convention from matching-semantics.md section 6.
+C++ and Python streams are byte-identical. Both implementations correctly produce the cancel-after-fully-filled Reject NotFound. The cancel-after-fully-filled case is structurally identical to the cancel-of-unknown case (CXL-4): the lookup miss is the only signal the engine has. Both implementations emit the same Reject report regardless of why the id is missing, satisfying the cancel-idempotence convention from matching-semantics.md section 8.
 
 ---
 
@@ -547,7 +547,7 @@ The captured streams contain every report the engines emit, including the acknow
 
 ## Multi-instrument Case 1, cross-symbol cancel isolation
 
-Source: audit case 1 ("cancel resting order on symbol X, success, no effect on Y"). Cross-references `docs/risk/matching-semantics.md` section 6.1 (the success branch of cancel-by-id) for the per-symbol contract, and ADR 0002 for the cross-symbol routing.
+Source: audit case 1 ("cancel resting order on symbol X, success, no effect on Y"). Cross-references `docs/risk/matching-semantics.md` section 8.1 (the success branch of cancel-by-id) for the per-symbol contract, and ADR 0002 for the cross-symbol routing.
 
 ### Input event sequence
 
@@ -556,11 +556,11 @@ Source: audit case 1 ("cancel resting order on symbol X, success, no effect on Y
 * Event 3: `Cancel { order_id=100, ts=3 }` (no symbol on the wire; engine routes via `OrderIndex`)
 * Event 4: `NewOrder { id=201, symbol=2, side=S, type=LIM, price=100, qty=10, ts=4 }` (sanity-touch on symbol 2: should fully cross order 200, which must still be resting if the cancel of 100 stayed on symbol 1)
 
-### Expected output (per matching-semantics.md section 6.1 plus ADR 0002 cross-symbol routing)
+### Expected output (per matching-semantics.md section 8.1 plus ADR 0002 cross-symbol routing)
 
 1. Ack for the resting buy on symbol 1 (id=100).
 2. Ack for the resting buy on symbol 2 (id=200).
-3. Cancel for id=100 carrying its resting `side=buy`, `price=100`, `qty=10`, and the cancel's `ts=3`. (Per matching-semantics.md section 6.1, the Cancel report carries the cancelled order's resting fields, not sentinels.)
+3. Cancel for id=100 carrying its resting `side=buy`, `price=100`, `qty=10`, and the cancel's `ts=3`. (Per matching-semantics.md section 8.1, the Cancel report carries the cancelled order's resting fields, not sentinels.)
 4. Ack for the symbol-2 sell (id=201) at `price=100, qty=10`.
 5. Maker fill on order 200 at `price=100, qty=10, ts=4`.
 6. Taker fill on order 201 at `price=100, qty=10, ts=4`.
@@ -597,7 +597,7 @@ C++ and Python streams are byte-identical. Both implementations route the cancel
 
 ## Multi-instrument Case 2, cancel after fully filled (multi-symbol setting)
 
-Source: audit case 2 ("cancel after fully filled, Reject NotFound"). Cross-references `docs/risk/matching-semantics.md` section 6.5 (CXL-5, the cancel-after-fully-filled NotFound branch) for the per-symbol contract; the new wrinkle in the multi-instrument design is that the lookup happens through the cross-symbol `OrderIndex`, not a per-`Book` map.
+Source: audit case 2 ("cancel after fully filled, Reject NotFound"). Cross-references `docs/risk/matching-semantics.md` section 8.5 (CXL-5, the cancel-after-fully-filled NotFound branch) for the per-symbol contract; the new wrinkle in the multi-instrument design is that the lookup happens through the cross-symbol `OrderIndex`, not a per-`Book` map.
 
 ### Input event sequence
 
@@ -607,14 +607,14 @@ Source: audit case 2 ("cancel after fully filled, Reject NotFound"). Cross-refer
 * Event 4: `Cancel { order_id=201, ts=4 }` (id 201 was fully filled at ts=2; lookup must miss)
 * Event 5: `NewOrder { id=402, symbol=4, side=S, type=IOC, price=9000, qty=15, ts=5 }` (sanity-touch on symbol 4: should fully cross order 401, proving symbol 4 was untouched by the failed cancel)
 
-### Expected output (per matching-semantics.md section 6.5 plus ADR 0002 dual-index design)
+### Expected output (per matching-semantics.md section 8.5 plus ADR 0002 dual-index design)
 
 1. Ack for the symbol-2 sell (id=201).
 2. Ack for the symbol-2 buy (id=301).
 3. Maker fill on order 201 at `price=10001, qty=30, ts=2`. (Order 201 is fully consumed; both `OrderIndex` and the per-`Book` id index erase it.)
 4. Taker fill on order 301 at `price=10001, qty=30, ts=2`.
 5. Ack for the symbol-4 buy (id=401).
-6. Reject for the cancel of id=201 with sentinel `side=buy`, `price=0`, `qty=0`, `reject_reason=not_found`, `ts=4`. (Per matching-semantics.md section 6.4 sentinel convention; ADR 0002 confirms the lookup happens through `OrderIndex`, which has already erased 201 in step 3.)
+6. Reject for the cancel of id=201 with sentinel `side=buy`, `price=0`, `qty=0`, `reject_reason=not_found`, `ts=4`. (Per matching-semantics.md section 8.4 sentinel convention; ADR 0002 confirms the lookup happens through `OrderIndex`, which has already erased 201 in step 3.)
 7. Ack for the symbol-4 IOC sell (id=402).
 8. Maker fill on order 401 at `price=9000, qty=15, ts=5`.
 9. Taker fill on order 402 at `price=9000, qty=15, ts=5`.
@@ -651,7 +651,7 @@ If the dual-index design had a coherence bug (the per-`Book` index erased on ful
 
 ### Status: PASS
 
-C++ and Python streams are byte-identical. Both implementations correctly handle the cancel-after-fully-filled case in the multi-symbol setting: the cross-symbol lookup misses (because the maker was erased from `OrderIndex` when it fully filled at ts=2), the engine emits Reject NotFound with the section 8.2 sentinels, and symbol 4's unrelated bid is unaffected. The follow-on IOC at ts=5 fully crosses order 401, confirming symbol 4's book was never touched. This case is the multi-symbol generalization of CXL-5 and is the regression test for the dual-index coherence invariant called out in ADR 0002 ("the two indexes must never disagree"). It is encoded in `tests/integration/test_multi_instrument.cpp::cancel_after_fully_filled_multi_symbol`, added during the multi-instrument review.
+C++ and Python streams are byte-identical. Both implementations correctly handle the cancel-after-fully-filled case in the multi-symbol setting: the cross-symbol lookup misses (because the maker was erased from `OrderIndex` when it fully filled at ts=2), the engine emits Reject NotFound with the section 10.2 sentinels, and symbol 4's unrelated bid is unaffected. The follow-on IOC at ts=5 fully crosses order 401, confirming symbol 4's book was never touched. This case is the multi-symbol generalization of CXL-5 and is the regression test for the dual-index coherence invariant called out in ADR 0002 ("the two indexes must never disagree"). It is encoded in `tests/integration/test_multi_instrument.cpp::cancel_after_fully_filled_multi_symbol`, added during the multi-instrument review.
 
 ---
 
@@ -931,10 +931,10 @@ The Python reference and the C++ engine agree on:
 * New-order dispatch by `symbol` field through `BookRegistry::book` (C++) / `_books[sym]` (reference).
 * Cross-symbol cancel routing through `OrderIndex::find` (C++) / `_id_to_symbol` (reference); cancel for id placed on any symbol routes to the correct per-symbol book without the wire format naming the symbol.
 * Cross-symbol cancel isolation: a cancel on symbol X never touches symbol Y's book (multi-instrument Case 1 and Case 5 demonstrate this directly).
-* Cancel-after-fully-filled in the multi-symbol setting: Reject NotFound with the matching-semantics.md section 8.2 sentinels (`side=buy`, `price=0`, `qty=0`), confirming the dual-index design from ADR 0002 is coherent (per-`Book` index and `OrderIndex` both erase on full fill).
+* Cancel-after-fully-filled in the multi-symbol setting: Reject NotFound with the matching-semantics.md section 10.2 sentinels (`side=buy`, `price=0`, `qty=0`), confirming the dual-index design from ADR 0002 is coherent (per-`Book` index and `OrderIndex` both erase on full fill).
 * Unknown-symbol reject: single Reject with `reject_reason=unknown_symbol` and no preceding Acknowledge, mirroring the EmptyBook reject convention from matching-semantics.md section 4.1.
 * Independent multi-symbol activity: 5 books run side by side without any cross-symbol leakage; per-symbol fill patterns match the single-symbol contract from matching-semantics.md sections 3 and 4.
-* Sentinel and ts conventions inherited from the single-symbol design carry through unchanged: Cancel reports carry the cancelled order's resting `side`, `price`, and remaining `qty`; Reject NotFound carries section 8.2 sentinels; Reject UnknownSymbol carries the submitted `side`, `price`, and `qty`.
+* Sentinel and ts conventions inherited from the single-symbol design carry through unchanged: Cancel reports carry the cancelled order's resting `side`, `price`, and remaining `qty`; Reject NotFound carries section 10.2 sentinels; Reject UnknownSymbol carries the submitted `side`, `price`, and `qty`.
 
 Open follow-up items for later milestones, recorded for context:
 

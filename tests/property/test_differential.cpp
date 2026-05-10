@@ -39,8 +39,10 @@ std::string event_to_jsonl(const EngineEvent& e) {
            << "}";
     } else {
         const char* type = "limit";
-        if (e.type == OrderType::Market) type = "market";
-        else if (e.type == OrderType::IOC) type = "ioc";
+        if (e.type == OrderType::Market)        type = "market";
+        else if (e.type == OrderType::IOC)      type = "ioc";
+        else if (e.type == OrderType::PostOnly) type = "postonly";
+        else if (e.type == OrderType::FOK)      type = "fok";
         const char* side = (e.side == Side::Buy) ? "buy" : "sell";
         ss << "{"
            << "\"kind\":\"new_order\","

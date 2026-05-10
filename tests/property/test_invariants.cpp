@@ -13,7 +13,7 @@
 // can be reproduced by hardcoding that seed in a one-off scenario.
 //
 // The five invariants below are the in-scope set from
-// docs/risk/matching-semantics.md section 7.
+// docs/risk/matching-semantics.md section 9.
 
 #include "harness.hpp"
 #include "meridian/seqlock_snapshot.hpp"
@@ -276,17 +276,29 @@ TEST(MatchingInvariants, PriceTimePriority) {
                 // Acknowledge / Reject have no effect on the FIFO queue.
             }
 
-            // After this event's reports, if the event was a Limit
-            // NewOrder and there is residual, append the id to its
-            // (symbol, side, price) FIFO queue.
+            // After this event's reports, if the event was a Limit or
+            // PostOnly NewOrder that came to rest, append the id to
+            // its (symbol, side, price) FIFO queue. PostOnly never
+            // crosses, so its residual equals its submitted qty
+            // whenever it acks; a rejected PostOnly emits no Ack so
+            // aggressor_filled stays zero.
             if (ev.kind == EventKind::NewOrder &&
-                ev.type == OrderType::Limit) {
+                (ev.type == OrderType::Limit ||
+                 ev.type == OrderType::PostOnly)) {
                 const Quantity residual = ev.qty - aggressor_filled;
                 if (residual > 0) {
-                    Level key{ev.symbol, ev.side, ev.price};
-                    queues[key].push_back(ev.order_id);
-                    resting[ev.order_id] = RestingState{
-                        ev.symbol, ev.side, ev.price, residual};
+                    // Skip ids that the engine rejected outright (no
+                    // ack, no fills, no rest). The shadow flags those
+                    // via rejected_at_submission.
+                    auto sit = run.shadow.orders().find(ev.order_id);
+                    const bool rejected = (sit != run.shadow.orders().end() &&
+                                           sit->second.rejected_at_submission);
+                    if (!rejected) {
+                        Level key{ev.symbol, ev.side, ev.price};
+                        queues[key].push_back(ev.order_id);
+                        resting[ev.order_id] = RestingState{
+                            ev.symbol, ev.side, ev.price, residual};
+                    }
                 }
             }
         }
@@ -299,6 +311,72 @@ TEST(MatchingInvariants, PriceTimePriority) {
             ASSERT_TRUE(resting.contains(id))
                 << "engine reports id " << id
                 << " resting; shadow does not";
+        }
+    }
+}
+
+// Invariant 8 (formerly deferred to the post-only / FOK milestone):
+// no PostOnly order crosses at submission. The check is per-event:
+// for every PostOnly NewOrder event, the report block produced by that
+// event must contain zero Fill reports. (A PostOnly that rests can
+// later be hit by an aggressor and get fills attributed to it as a
+// maker; that is fine and is the intended outcome of post-only as a
+// resting strategy. The invariant only cares about the submission
+// event.)
+TEST(MatchingInvariants, PostOnlyNeverCrosses) {
+    for (int i = 0; i < kCases; ++i) {
+        const std::uint64_t seed = kSeedBase + static_cast<std::uint64_t>(i);
+        SCOPED_TRACE(::testing::Message() << "seed=" << seed);
+        auto events = EventGenerator(seed).generate();
+        auto run = run_engine(events);
+        std::size_t report_idx = 0;
+        for (std::size_t ei = 0; ei < events.size(); ++ei) {
+            const EngineEvent& ev = events[ei].ev;
+            const std::size_t n = run.report_count_per_event[ei];
+            if (ev.kind == EventKind::NewOrder &&
+                ev.type == OrderType::PostOnly) {
+                int fills_this_event = 0;
+                for (std::size_t ri = 0; ri < n; ++ri) {
+                    if (run.reports[report_idx + ri].kind == ReportKind::Fill) {
+                        ++fills_this_event;
+                    }
+                }
+                EXPECT_EQ(fills_this_event, 0)
+                    << "PostOnly id " << ev.order_id << " produced "
+                    << fills_this_event
+                    << " fills at submission; PostOnly never crosses";
+            }
+            report_idx += n;
+        }
+    }
+}
+
+// Invariant 9 (formerly deferred to the post-only / FOK milestone):
+// every FOK order is all-or-nothing. For every submitted FOK id,
+// either qty_filled equals qty_submitted (full fill) or the order was
+// rejected at submission with reason InsufficientLiquidity (zero
+// fills). Anything in between is a violation.
+TEST(MatchingInvariants, FokAllOrNothing) {
+    for (int i = 0; i < kCases; ++i) {
+        const std::uint64_t seed = kSeedBase + static_cast<std::uint64_t>(i);
+        SCOPED_TRACE(::testing::Message() << "seed=" << seed);
+        auto events = EventGenerator(seed).generate();
+        auto run = run_engine(events);
+        for (const auto& [id, s] : run.shadow.orders()) {
+            if (!s.submitted) continue;
+            if (s.type != OrderType::FOK) continue;
+            const bool fully_filled = (s.qty_filled == s.qty_submitted);
+            const bool rejected = s.rejected_at_submission;
+            EXPECT_TRUE(fully_filled || rejected)
+                << "FOK order id " << id
+                << " has qty_submitted=" << s.qty_submitted
+                << " qty_filled=" << s.qty_filled
+                << " rejected_at_submission=" << rejected;
+            // FOK never rests on the book and never partially cancels.
+            EXPECT_FALSE(s.currently_resting)
+                << "FOK order id " << id << " is resting; FOK never rests";
+            EXPECT_FALSE(s.cancelled)
+                << "FOK order id " << id << " has a cancel report; FOK never cancels";
         }
     }
 }

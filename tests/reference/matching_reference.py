@@ -268,7 +268,7 @@ class _SingleSymbolBook:
     * ``_asks``: same shape, sorted with default ``sorted(...)`` for
       "best ask first" (lowest price).
     * ``_orders``: ``dict[OrderId, _RestingOrder]``. The per-symbol
-      lookup map for cancel-by-id (matching-semantics.md section 6).
+      lookup map for cancel-by-id (matching-semantics.md section 8).
       In multi-symbol mode there is also a cross-symbol id-to-symbol
       map at the ``MatchingReference`` level; the per-symbol map
       remains because the matching loop already uses it for
@@ -387,6 +387,108 @@ class _SingleSymbolBook:
         # Residual implicitly cancelled; no further report.
         return reports, fully_filled
 
+    def submit_post_only(
+        self, order_id: int, side: Side, price: int, qty: int, ts: int
+    ) -> tuple[list[ExecutionReport], list[int]]:
+        """Submit a ``POSTONLY`` (post-only) order to this book.
+
+        See matching-semantics.md section 6. A post-only order must
+        rest; if on arrival it would cross (best ask <= buy limit, or
+        best bid >= sell limit), the engine emits a single ``Reject``
+        with reason ``WOULD_CROSS`` and no preceding ``Acknowledge``.
+        Otherwise it acks and rests like a non-crossing limit.
+        """
+
+        _require_valid_qty(qty)
+        opposite = self._asks if side == Side.BUY else self._bids
+        if opposite:
+            best = (
+                min(opposite.keys()) if side == Side.BUY else max(opposite.keys())
+            )
+            if _price_satisfies_limit(side, price, best):
+                return [
+                    ExecutionReport(
+                        kind=ReportKind.REJECT,
+                        order_id=order_id,
+                        side=side,
+                        price=price,
+                        qty=qty,
+                        ts=ts,
+                        reject_reason=RejectReason.WOULD_CROSS,
+                    )
+                ], []
+        # No cross. Ack and rest. The matching loop is bypassed
+        # entirely; nothing to sweep against by construction.
+        reports: list[ExecutionReport] = [
+            ExecutionReport(
+                kind=ReportKind.ACK,
+                order_id=order_id,
+                side=side,
+                price=price,
+                qty=qty,
+                ts=ts,
+            )
+        ]
+        self._rest(order_id, side, price, qty, qty, ts)
+        return reports, []
+
+    def submit_fok(
+        self, order_id: int, side: Side, price: int, qty: int, ts: int
+    ) -> tuple[list[ExecutionReport], list[int]]:
+        """Submit a ``FOK`` (fill-or-kill) order to this book.
+
+        See matching-semantics.md section 7. Inspects opposite-side
+        liquidity at acceptable prices. If less than ``qty`` is
+        available, emits a single ``Reject`` with reason
+        ``INSUFFICIENT_LIQUIDITY`` and no preceding ``Acknowledge``.
+        Otherwise acks and fills in full via the matching loop.
+        """
+
+        _require_valid_qty(qty)
+        opposite = self._asks if side == Side.BUY else self._bids
+        sorted_prices = (
+            sorted(opposite.keys())
+            if side == Side.BUY
+            else sorted(opposite.keys(), reverse=True)
+        )
+        available = 0
+        for p in sorted_prices:
+            if not _price_satisfies_limit(side, price, p):
+                break
+            available += opposite[p].total_qty()
+            if available >= qty:
+                break
+        if available < qty:
+            return [
+                ExecutionReport(
+                    kind=ReportKind.REJECT,
+                    order_id=order_id,
+                    side=side,
+                    price=price,
+                    qty=qty,
+                    ts=ts,
+                    reject_reason=RejectReason.INSUFFICIENT_LIQUIDITY,
+                )
+            ], []
+        # Sufficient liquidity. Ack and fully fill via the matching
+        # loop. FOK never rests: by construction the sweep consumes
+        # exactly ``qty`` here and leaves zero residual.
+        reports: list[ExecutionReport] = [
+            ExecutionReport(
+                kind=ReportKind.ACK,
+                order_id=order_id,
+                side=side,
+                price=price,
+                qty=qty,
+                ts=ts,
+            )
+        ]
+        fully_filled: list[int] = []
+        self._match(
+            reports, fully_filled, order_id, side, price, qty, ts, OrderType.FOK
+        )
+        return reports, fully_filled
+
     def cancel_at(
         self, order_id: int, ts: int
     ) -> list[ExecutionReport]:
@@ -399,7 +501,7 @@ class _SingleSymbolBook:
         routes correctly), the method emits the same
         ``Reject NOT_FOUND`` shape as the public API for safety.
 
-        See matching-semantics.md section 6.
+        See matching-semantics.md section 8.
         """
 
         order = self._orders.get(order_id)
@@ -745,6 +847,38 @@ class MatchingReference:
             "ioc", order_id, side, price, qty, ts, symbol
         )
 
+    def submit_post_only(
+        self,
+        order_id: int,
+        side: Side,
+        price: int,
+        qty: int,
+        ts: int,
+        *,
+        symbol: Optional[int] = None,
+    ) -> list[ExecutionReport]:
+        """Submit a ``POSTONLY`` order. See matching-semantics.md section 6."""
+
+        return self._route_new_order(
+            "postonly", order_id, side, price, qty, ts, symbol
+        )
+
+    def submit_fok(
+        self,
+        order_id: int,
+        side: Side,
+        price: int,
+        qty: int,
+        ts: int,
+        *,
+        symbol: Optional[int] = None,
+    ) -> list[ExecutionReport]:
+        """Submit a ``FOK`` order. See matching-semantics.md section 7."""
+
+        return self._route_new_order(
+            "fok", order_id, side, price, qty, ts, symbol
+        )
+
     def cancel(self, order_id: int) -> list[ExecutionReport]:
         """Cancel a resting order by id. See matching-semantics.md section 6.
 
@@ -890,6 +1024,10 @@ class MatchingReference:
             reports, fully_filled = book.submit_market(order_id, side, qty, ts)
         elif otype == "ioc":
             reports, fully_filled = book.submit_ioc(order_id, side, price, qty, ts)
+        elif otype == "postonly":
+            reports, fully_filled = book.submit_post_only(order_id, side, price, qty, ts)
+        elif otype == "fok":
+            reports, fully_filled = book.submit_fok(order_id, side, price, qty, ts)
         else:
             raise ValueError(f"unknown order type {otype!r}")
 

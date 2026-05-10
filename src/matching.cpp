@@ -47,21 +47,11 @@ void MatchingEngine::apply(const EngineEvent& event,
             return;
         }
         switch (event.type) {
-            case OrderType::Limit:  apply_limit(event,  *book, out); break;
-            case OrderType::Market: apply_market(event, *book, out); break;
-            case OrderType::IOC:    apply_ioc(event,    *book, out); break;
-            case OrderType::PostOnly:
-            case OrderType::FOK:
-                out.push_back(ExecutionReport{
-                    .kind = ReportKind::Reject,
-                    .order_id = event.order_id,
-                    .side = event.side,
-                    .price = event.price,
-                    .qty = event.qty,
-                    .ts = event.ts,
-                    .reject_reason = RejectReason::None,
-                });
-                break;
+            case OrderType::Limit:    apply_limit(event,     *book, out); break;
+            case OrderType::Market:   apply_market(event,    *book, out); break;
+            case OrderType::IOC:      apply_ioc(event,       *book, out); break;
+            case OrderType::PostOnly: apply_post_only(event, *book, out); break;
+            case OrderType::FOK:      apply_fok(event,       *book, out); break;
         }
         // Publish post-event top of book for any path that reached an
         // accepted book. PostOnly / FOK reject without touching the
@@ -197,6 +187,102 @@ void MatchingEngine::apply_market(const EngineEvent& event, Book& book,
 
 void MatchingEngine::apply_ioc(const EngineEvent& event, Book& book,
                                std::vector<ExecutionReport>& out) {
+    out.push_back(ExecutionReport{
+        .kind = ReportKind::Acknowledge,
+        .order_id = event.order_id,
+        .side = event.side,
+        .price = event.price,
+        .qty = event.qty,
+        .ts = event.ts,
+        .reject_reason = RejectReason::None,
+    });
+    sweep(book, event.side, event.price, event.order_id, event.qty, event.ts, out);
+}
+
+void MatchingEngine::apply_post_only(const EngineEvent& event, Book& book,
+                                     std::vector<ExecutionReport>& out) {
+    // Would the order cross? Buy at price >= best ask, or sell at price
+    // <= best bid. Per matching-semantics.md section 6.1, a would-cross
+    // post-only order is rejected with reason WouldCross and no
+    // preceding Acknowledge (mirroring the Market-against-empty
+    // convention from section 4.1).
+    Level* opposite = (event.side == Side::Buy) ? book.best_ask() : book.best_bid();
+    if (opposite != nullptr && crosses(event.side, event.price, opposite->price())) {
+        out.push_back(ExecutionReport{
+            .kind = ReportKind::Reject,
+            .order_id = event.order_id,
+            .side = event.side,
+            .price = event.price,
+            .qty = event.qty,
+            .ts = event.ts,
+            .reject_reason = RejectReason::WouldCross,
+        });
+        return;
+    }
+    // No cross. Ack and rest at the limit price, like a Limit that
+    // doesn't cross (the matching loop is bypassed entirely; nothing to
+    // sweep against).
+    out.push_back(ExecutionReport{
+        .kind = ReportKind::Acknowledge,
+        .order_id = event.order_id,
+        .side = event.side,
+        .price = event.price,
+        .qty = event.qty,
+        .ts = event.ts,
+        .reject_reason = RejectReason::None,
+    });
+    Order* resting = pool_.acquire();
+    resting->id = event.order_id;
+    resting->symbol = event.symbol;
+    resting->side = event.side;
+    resting->type = event.type;
+    resting->price = event.price;
+    resting->qty_remaining = event.qty;
+    resting->ts_arrival = event.ts;
+    book.add(resting);
+    index_.insert(event.order_id, resting);
+}
+
+void MatchingEngine::apply_fok(const EngineEvent& event, Book& book,
+                               std::vector<ExecutionReport>& out) {
+    // FOK: fill in full, or reject. Per matching-semantics.md section
+    // 7.1, an unfillable FOK is rejected with reason
+    // InsufficientLiquidity and no preceding Acknowledge.
+    //
+    // Liquidity scan walks opposite-side levels in price order, summing
+    // total_qty() at each crossing level until it reaches the requested
+    // quantity or runs out of crossing levels. The scan does not mutate
+    // the book; books_ / asks_ access is via the MatchingEngine friend
+    // declaration on Book.
+    Quantity available = 0;
+    if (event.side == Side::Buy) {
+        for (const auto& [price, level] : book.asks_) {
+            if (price > event.price) break;
+            available += level->total_qty();
+            if (available >= event.qty) break;
+        }
+    } else {
+        for (const auto& [price, level] : book.bids_) {
+            if (price < event.price) break;
+            available += level->total_qty();
+            if (available >= event.qty) break;
+        }
+    }
+    if (available < event.qty) {
+        out.push_back(ExecutionReport{
+            .kind = ReportKind::Reject,
+            .order_id = event.order_id,
+            .side = event.side,
+            .price = event.price,
+            .qty = event.qty,
+            .ts = event.ts,
+            .reject_reason = RejectReason::InsufficientLiquidity,
+        });
+        return;
+    }
+    // Sufficient liquidity. Ack and fully fill via the matching loop.
+    // FOK never rests: by construction, the sweep consumes exactly
+    // event.qty here and leaves zero residual.
     out.push_back(ExecutionReport{
         .kind = ReportKind::Acknowledge,
         .order_id = event.order_id,

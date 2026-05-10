@@ -96,9 +96,11 @@ EngineEvent to_engine_event(const ScenarioEvent& e) {
         ev.kind = EventKind::Cancel;
     } else {
         ev.kind = EventKind::NewOrder;
-        if (e.type == "limit")       ev.type = OrderType::Limit;
-        else if (e.type == "market") ev.type = OrderType::Market;
-        else if (e.type == "ioc")    ev.type = OrderType::IOC;
+        if (e.type == "limit")          ev.type = OrderType::Limit;
+        else if (e.type == "market")    ev.type = OrderType::Market;
+        else if (e.type == "ioc")       ev.type = OrderType::IOC;
+        else if (e.type == "postonly")  ev.type = OrderType::PostOnly;
+        else if (e.type == "fok")       ev.type = OrderType::FOK;
         ev.price = e.price;
         ev.qty = e.qty;
     }

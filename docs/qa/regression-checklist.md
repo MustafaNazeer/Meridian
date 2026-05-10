@@ -145,7 +145,9 @@ ctest --test-dir build --output-on-failure -R EngineVsReferenceTest
   `docs/risk/matching-semantics.md` section 3.
 * `MarketWorkedExamples` (6): MKT-1..MKT-6 from section 4.
 * `IocWorkedExamples` (7): IOC-1..IOC-7 from section 5.
-* `CancelWorkedExamples` (6): CXL-1..CXL-6 from section 6.
+* `CancelWorkedExamples` (6): CXL-1..CXL-6 from section 8.
+* `PostOnlyWorkedExamples` (6): POSTONLY-1..POSTONLY-6 from section 6.
+* `FokWorkedExamples` (5): FOK-1..FOK-5 from section 7.
 * `CompoundScenarios` (9): chained sequences exercising more than one
   worked-example transition per scenario.
 * `CornerCases` (9) plus `CornerCasesRandom` (1): the corner-case list.
