@@ -58,15 +58,28 @@ When the project ships, the README's headline number cites the desktop benchmark
 
 ## Phase 1 baseline (informational, not enforced)
 
-This subsection is populated by the follow-up dispatch that scaffolds `apps/bench/main.cpp` after `libmeridian.a` is linkable (Phase 1 plan, Task 4 Step 2). The numbers recorded here are explicitly informational and are not treated as targets; the Citation and Fact Auditor is expected to verify the labeling of this section so the numbers are not later mistaken for the headline.
+These numbers are the output of `meridian-bench --events 1000000 --seed 42` against the Phase 1 matching engine, with no PGO and no LTO, on the user's development machine. They are explicitly informational. Phase 1 ships the bench skeleton; Phase 5 is where these numbers must be defended against the headline targets in section 2.3 of the design spec. The Citation and Fact Auditor is asked to verify the labeling of this section so the numbers are not later mistaken for the headline benchmark.
+
+Reproduction:
+
+```bash
+cmake -B build -S . -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake --build build --target meridian-bench
+./build/apps/bench/meridian-bench --events 1000000 --seed 42
+```
+
+The bench also writes `bench/last-run.json` as a sidecar; the file is informational in Phase 1 and is not yet the CI baseline (`bench/baseline.json` lands in Phase 5).
 
 | Metric | Phase 1 baseline | Notes |
 |---|---|---|
-| Throughput (events/sec) | _to be filled by bench scaffold dispatch_ | Synthetic limit orders, deterministic seed, single symbol, single thread, no PGO, no LTO. Not the headline benchmark. |
-| Matching event p50  | _to be filled_ | |
-| Matching event p99  | _to be filled_ | |
-| Matching event p99.9| _to be filled_ | |
-| Heap allocations during hot path | _to be filled_ | Must be 0 (design spec section 5.1 OrderPool requirement and section 5.2 bench output). |
+| Throughput | 5.7 M events/sec | Synthetic limit orders, deterministic seed=42, single symbol, single thread, no PGO, no LTO. Not the headline benchmark. The 6M events/sec target in design spec section 2.3 is a Phase 5 deliverable, measured after the optimization passes the Performance Engineer drives in Phase 5. |
+| Wall clock | 176.4 ms | For 1,000,000 synthetic events. |
+| Matching event p50   | 125 ns  | Well within the spec's <= 500 ns target, but the Phase 1 measurement includes the `std::vector<ExecutionReport>` allocation inside `MatchingEngine::apply` (a known Phase 1 cost; see Task 16 "Document the known allocations" in the Phase 1 plan). The Phase 5 measurement is the one that defends the spec target. |
+| Matching event p90   | 231 ns  | |
+| Matching event p99   | 444 ns  | Within the spec's <= 2 us target on this run; Phase 5 measurement is authoritative. |
+| Matching event p99.9 | 1108 ns | Within the spec's <= 5 us target on this run; Phase 5 measurement is authoritative. |
+| Matching event max   | 4308991 ns | Single tail outlier, likely a kernel preempt or page fault. Phase 5 will use a pinned-CPU, isolated-core methodology that suppresses these; in Phase 1 the bench is unpinned and the tail is left in the histogram for honesty. |
+| Heap allocations during hot path | not yet measured | Must be 0 in Phase 5 (design spec section 5.1 OrderPool requirement and section 5.2 bench output). The Phase 1 `apply()` returns a freshly constructed `std::vector<ExecutionReport>` per call; the Engine Developer's Task 16 documents this. The bench in Phase 5 is the one that will assert the zero-allocation invariant on the hot path. |
 
 ## Out-of-scope budgets (deferred to later phases)
 
@@ -89,3 +102,4 @@ The following items are flagged for the Phase 1 audit pass:
 | Date | Author | Change |
 |---|---|---|
 | 2026-05-09 | Performance Engineer (Phase 1, Task 4 Step 1) | Initial publication. Matching event, top-of-book, sampler tick budgets set. Phase 1 baseline subsection placeholder added; populated by bench scaffold dispatch. |
+| 2026-05-09 | Performance Engineer (Phase 1, Task 4 Step 2) | Phase 1 baseline subsection populated from `meridian-bench --events 1000000 --seed 42`. Throughput 5.7 M evt/s; latency p50/p90/p99/p99.9/max = 125 / 231 / 444 / 1108 / 4308991 ns. Numbers labeled informational, not targets. The bench skeleton (`apps/bench/main.cpp`) and the HDRHistogram-c FetchContent wiring (root `CMakeLists.txt`, pinned to v0.11.8) ship with this revision. |

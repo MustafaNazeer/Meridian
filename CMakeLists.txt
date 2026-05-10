@@ -41,6 +41,25 @@ if(MERIDIAN_BUILD_TESTS)
     include(GoogleTest)
 endif()
 
+# HDRHistogram-c powers the meridian-bench latency capture. Only fetched when
+# the bench is being built. Locked to v0.11.8 (released 2024-04-04). Update
+# only with explicit DevOps and Code Reviewer sign-off, mirroring the
+# GoogleTest pinning policy above.
+if(MERIDIAN_BUILD_BENCH)
+    FetchContent_Declare(
+        hdr_histogram
+        GIT_REPOSITORY https://github.com/HdrHistogram/HdrHistogram_c.git
+        GIT_TAG 0.11.8
+        GIT_SHALLOW TRUE
+    )
+    set(HDR_HISTOGRAM_BUILD_PROGRAMS OFF CACHE BOOL "" FORCE)
+    set(HDR_HISTOGRAM_BUILD_SHARED OFF CACHE BOOL "" FORCE)
+    set(HDR_HISTOGRAM_INSTALL_SHARED OFF CACHE BOOL "" FORCE)
+    set(HDR_HISTOGRAM_INSTALL_STATIC OFF CACHE BOOL "" FORCE)
+    set(HDR_HISTOGRAM_BUILD_STATIC ON CACHE BOOL "" FORCE)
+    FetchContent_MakeAvailable(hdr_histogram)
+endif()
+
 # libmeridian.a: the engine library lives under src/ and include/meridian/.
 add_subdirectory(src)
 
@@ -53,7 +72,9 @@ add_subdirectory(src)
 # apps/replay:   Phase 6 (Engine Developer)
 # apps/server:   Phase 8 (Engine Developer)
 #
-# add_subdirectory(apps/bench)
+if(MERIDIAN_BUILD_BENCH)
+    add_subdirectory(apps/bench)
+endif()
 # add_subdirectory(apps/replay)
 # add_subdirectory(apps/server)
 

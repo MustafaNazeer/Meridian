@@ -1,0 +1,15 @@
+{
+  "phase": 1,
+  "informational": true,
+  "events": 100000,
+  "seed": 42,
+  "wall_clock_ms": 39.0378,
+  "throughput_mevents_per_sec": 2.56162,
+  "latency_ns": {
+    "p50": 250,
+    "p90": 585,
+    "p99": 1217,
+    "p99_9": 2675,
+    "max": 428543
+  }
+}
