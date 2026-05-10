@@ -76,7 +76,10 @@ endif()
 if(MERIDIAN_BUILD_REPLAY)
     add_subdirectory(apps/replay)
 endif()
-# add_subdirectory(apps/server)
+if(MERIDIAN_BUILD_SERVER)
+    find_package(Threads REQUIRED)
+    add_subdirectory(apps/server)
+endif()
 
 # Tests.
 if(MERIDIAN_BUILD_TESTS)

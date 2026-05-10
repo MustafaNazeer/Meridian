@@ -5,6 +5,7 @@ add_library(meridian STATIC
     book_registry.cpp
     order_index.cpp
     matching.cpp
+    ws_server.cpp
 )
 
 target_include_directories(meridian PUBLIC

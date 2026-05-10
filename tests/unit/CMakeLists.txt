@@ -37,3 +37,8 @@ add_executable(test_itch test_itch.cpp)
 target_link_libraries(test_itch PRIVATE meridian GTest::gtest_main)
 target_compile_options(test_itch PRIVATE -Wall -Wextra -Wpedantic -Werror)
 gtest_discover_tests(test_itch)
+
+add_executable(test_ws_handshake test_ws_handshake.cpp)
+target_link_libraries(test_ws_handshake PRIVATE meridian GTest::gtest_main)
+target_compile_options(test_ws_handshake PRIVATE -Wall -Wextra -Wpedantic -Werror)
+gtest_discover_tests(test_ws_handshake)
