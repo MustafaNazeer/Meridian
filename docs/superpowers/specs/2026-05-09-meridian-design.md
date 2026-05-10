@@ -37,7 +37,7 @@ It is the venue half of a two-project quant systems narrative on the resume: Veg
 * Throughput target: meridian-bench reports ≥6M events per second single-threaded on a modern x86_64 desktop (the resume bullet number).
 * Latency target: p50 ≤ 500 ns, p99 ≤ 2 μs, p99.9 ≤ 5 μs on the same hardware.
 * Correctness: 100% of property-based test invariants hold across at least 10,000 generated event sequences.
-* Demo: the live web visualization at meridian.{domain} renders top of book at a steady 30 Hz with the engine replaying a real ITCH tape.
+* Demo: the live web visualization at `meridian-demo.pages.dev` renders top of book at a steady 30 Hz with the engine replaying a real ITCH tape.
 * Repo health: README with benchmark report, design doc, build instructions, and a one-line "what is this" hook a recruiter can read in 30 seconds.
 
 ## 3. Tech stack and identity
@@ -51,9 +51,9 @@ It is the venue half of a two-project quant systems narrative on the resume: Veg
 | Benchmark | Google Benchmark | Standard for microbenchmarks |
 | WebSocket | uWebSockets v20+ | Single-process WS server with low overhead |
 | ITCH parsing | Hand-rolled (one header file) | Format is small and stable; a parser library is overkill |
-| Front end | React 18 + Vite + TypeScript + Tailwind | Mirrors Vega's tooling so the constellation has one front-end story |
+| Front end | React 19 + Vite + TypeScript + Tailwind | Vite default as of 2026-05-09. Vega's frontend is on React 18; matching majors is a non-goal. |
 | Front-end host | Cloudflare Pages | Same as Vega; free tier; instant deploys |
-| Back-end host | Small VPS (Hetzner CX22 or Fly.io) | Render does not host raw C++ binaries comfortably; need a real Linux box |
+| Back-end host | Fly.io machine, free tier, auto-stop on idle and auto-start on first request | Render does not host raw C++ binaries; Fly machines do, with a free allowance, Dockerfile + `fly.toml` deployment, and no servers to keep patched. Region resolved at Phase 10 (default `iad`). Cold-start UX handled in section 5.5. |
 | License | MIT | Industry default for portfolio C++ projects |
 | Repo | Public on GitHub (github.com/MustafaNazeer/Meridian) | Maximum recruiter visibility |
 
@@ -103,7 +103,7 @@ This visual identity must be distinct from Vega's "Oxblood" theme. No oxblood re
                                                        │ WSS
                                                        ▼
                               ┌────────────────────────────────────┐
-                              │  React 18 + Vite + TS + Tailwind   │
+                              │  React 19 + Vite + TS + Tailwind   │
                               │  Cloudflare Pages                  │
                               │  Twilight visual identity          │
                               └────────────────────────────────────┘
@@ -162,7 +162,7 @@ Seqlock-protected struct: `{best_bid_px, best_bid_qty, best_ask_px, best_ask_qty
 
 ### 5.3 meridian-replay
 
-* `meridian-replay --tape itch-2024-06-13.bin --speed 1.0 --symbols AAPL,SPY`
+* `meridian-replay --tape itch-2024-06-13.bin --speed 1.0 --symbols AAPL,SPY,NVDA,TSLA,GOOG`
 * Streams `ExecutionReport`s as JSON Lines on stdout
 * Optional `--audit out.jsonl` writes a deterministic audit log for diffing against a reference implementation
 
@@ -173,16 +173,27 @@ Seqlock-protected struct: `{best_bid_px, best_bid_qty, best_ask_px, best_ask_qty
 * Starts sampler on core 6 (30 Hz)
 * Starts uWebSockets event loop on core 5
 * Serves:
-  * `GET /` → static React app (built into the binary or mounted from disk)
-  * `WSS /ws` → top-of-book delta stream
+  * `WSS /ws`: top-of-book delta stream (the live demo's only first-class endpoint)
+  * `GET /healthz`: returns 200 with a one-line JSON status; Fly's load balancer hits this for readiness checks
+  * `GET /metrics`: returns the JSON counters defined by the Observability Engineer (events ingested, trades emitted, clients connected, messages broadcast)
+* Does NOT serve the React SPA. Cloudflare Pages owns the SPA at `meridian-demo.pages.dev`; the resolved decision in section 13 puts the frontend on Cloudflare Pages, not on the Fly machine. The earlier draft of this section that mentioned `GET /` returning a static React app is superseded.
 * Graceful shutdown on SIGTERM
 
 ### 5.5 Web client
 
-React 18 SPA. WebSocket client subscribes to a symbol topic on connect; receives:
+React 19 SPA. WebSocket client subscribes to a symbol topic on connect; receives:
 
 * `snapshot`: full book L10 + recent trades + perf metrics (on connect)
 * `delta`: per-tick top-of-book changes, new trades, perf updates (30 Hz)
+
+Connection states (Fly cold start: see section 13):
+
+* `connecting`: initial state. The client renders an explicit "Engine warming up" hero with a determinate progress dot and a copy line that names the cold start as expected (rather than appearing broken). Resolves when the first `snapshot` arrives.
+* `live`: snapshot received, deltas streaming. Default rendered state.
+* `stalled`: no delta in 1 second. Header dot turns amber; the rest of the UI continues showing the last good state.
+* `disconnected`: socket closed. Reconnection uses exponential backoff (500 ms initial, doubling, cap 8 s). Returns to `connecting` while the next attempt is in flight.
+
+Symbol switching: the Header exposes a five-symbol selector (AAPL, SPY, NVDA, TSLA, GOOG) wired to a Zustand `selectedSymbol` slice; on change, the client unsubscribes from the previous topic, subscribes to the new one, and re-enters `connecting` until the new `snapshot` arrives.
 
 Rendered panels (Twilight visual):
 
@@ -244,7 +255,7 @@ Target: ≥40 unit tests, ≥85% line coverage on `libmeridian.a`.
 9. **Post-only never crosses**: a post-only order that would cross is rejected before any matching
 10. **Top-of-book monotonicity within a tick**: between event N and event N+1, top-of-book changes are atomic from the reader's perspective (no torn reads)
 
-Each property runs ≥1000 generated cases per CI run.
+Each property runs at least 1000 generated cases per CI run as the continuous regression discipline. Phase 3 acceptance is stricter: each invariant must pass a one-time validation pass at 10,000 generated sequences with zero failures before Phase 3 can close (per section 2.3 success criteria).
 
 ### 8.3 Integration tests (Catch2 BDD style)
 * Replay a 5-minute ITCH 5.0 sample, compare final book state against a reference Python implementation
@@ -270,7 +281,7 @@ Each property runs ≥1000 generated cases per CI run.
 | 7. Post-only + FOK | 0.5 | Two more order types, property tests updated |
 | 8. WebSocket server | 0.5 | uWebSockets wired, meridian-server binary, smoke test |
 | 9. Web front end | 2 | React + Vite + TS + Tailwind app, Twilight visual, all panels |
-| 10. Hosting + benchmark report | 1 | Cloudflare Pages, VPS, domain, CI/CD, benchmark report PDF |
+| 10. Hosting + benchmark report | 1 | Cloudflare Pages, Fly.io machine (Dockerfile + `fly.toml`), CI/CD, benchmark report PDF |
 | 11. Polish + README | 1 | Docs, README, demo URL, final test pass |
 
 Total: 14 weeks at the leisurely end, 10 weeks if Phases 6 and 9 go fast.
@@ -311,15 +322,15 @@ Meridian/
 │   ├── property/...
 │   └── integration/...
 ├── third_party/                    # Vendored dependencies (CMake FetchContent)
-└── web/                            # React + Vite app
+└── frontend/                       # React + Vite app
     ├── package.json
     ├── vite.config.ts
     ├── tailwind.config.ts
     ├── src/
     │   ├── App.tsx
-    │   ├── components/{Ladder,DepthChart,Tape,Perf,Header}.tsx
-    │   ├── store/useBookStore.ts   # Zustand
-    │   └── ws/client.ts
+    │   ├── components/{Header,Hero,Ladder,DepthChart,Tape,PerfPanel,Footer,EngineWarmingUp}.tsx
+    │   ├── store/index.ts          # Zustand
+    │   └── ws/client.ts            # connection state machine (connecting / live / stalled / disconnected)
     └── public/
 ```
 
@@ -330,7 +341,8 @@ Meridian/
 | 6M evt/s target not hit on user's hardware | Medium | Acceptance criterion is "matches the headline within 20% on equivalent hardware"; document the test machine in the report. PGO + LTO before declaring failure. |
 | ITCH parser eats the schedule | Medium | Cap at 2 weeks; fall back to LOBSTER CSV if ITCH binary parsing stalls. LOBSTER is text and trivial to parse. |
 | uWebSockets has bugs at our use case | Low | Fallback to Boost.Beast or a hand-rolled WebSocket. Beast adds dependency weight but is well-tested. |
-| VPS hosting costs creep | Low | Hetzner CX22 is €4/mo. Acceptable. |
+| Fly.io free tier exceeded | Low | Free allowance is generous for a single small machine running an ITCH replay. If exceeded, a paid Fly machine at roughly $5 per month is acceptable. |
+| Cold start hurts demo UX | Medium | Frontend renders an explicit "engine warming up" state during the 5 to 15 second wake window (section 5.5). Acceptable for a portfolio demo. |
 | Twilight visual feels too editorial for HFT | Low | Mockup already approved by user; Vega contrast is the explicit goal. |
 | Project drags past 14 weeks | High | Defer Phase 11 polish first if needed; demo can ship without a benchmark PDF. |
 
@@ -345,11 +357,15 @@ These are explicitly NOT in v1 but are valuable to mention in the README for "wh
 * Snapshot-and-replay disaster recovery
 * C++ to Rust port comparison writeup
 
-## 13. Open questions for user review
+## 13. Resolved decisions (2026-05-09)
 
-* **Hosting domain**: do you want `meridian.{your-domain}` if you own one, or is `meridian-demo.pages.dev` (Cloudflare's default) acceptable for v1?
-* **VPS provider**: Hetzner CX22 (€4/mo, EU-based), Fly.io ($0 free tier with cold starts, US-based), or other?
-* **Symbol set for the demo replay**: AAPL alone is enough to show the engine, or include 3 to 5 symbols (AAPL, SPY, NVDA, TSLA, GOOG) so the multi-instrument story is visible on the demo?
-* **Audit log on demo**: do you want the audit log written to disk on the VPS (cheap, useful for debugging) or only available via the WebSocket?
+The four open questions originally listed here were resolved on 2026-05-09 during Phase 0 brainstorming. Sections 2.3, 3, 5.3, 5.5, 9, and 11 above have been updated to reflect these decisions.
 
-These can be resolved during the implementation plan; flagging here so they aren't lost.
+* **Hosting domain**: `meridian-demo.pages.dev` (Cloudflare Pages default subdomain). No custom domain for v1.
+* **Backend host**: Fly.io free tier. Machines auto-stop when idle and auto-start on first request. Region picked at Phase 10 from Fly's currently available free-tier regions, defaulting to `iad` (Ashburn, Virginia) if available. The Phase 10 deploy stack is therefore Dockerfile plus `fly.toml`, not VPS plus systemd. The Fly app name is also picked at Phase 10 (likely `meridian` or `meridian-engine`); the resulting WebSocket origin `wss://<app>.fly.dev` flows into the frontend's CSP `connect-src`.
+* **Demo symbol set**: AAPL, SPY, NVDA, TSLA, GOOG. Phase 6 ITCH replay extracts these five symbols from a NASDAQ ITCH 5.0 sample file; the Phase 9 frontend ships a symbol switcher in the Header.
+* **Audit log on demo**: WebSocket-only. The live `meridian-server` keeps audit events in an in-memory ring buffer and streams them to connected clients; events are not persisted to disk on the Fly machine. Crash means recent events are lost, which is acceptable because the ITCH replay is deterministic and reproducible. The `meridian-replay --audit out.jsonl` CLI flag in section 5.3 is unaffected; that flag is for offline diffing against the Python reference and runs on the developer's machine, not on the demo.
+
+### Cold-start UX
+
+Fly.io's free machines sleep when idle. The first WebSocket connection after an idle period takes roughly 5 to 15 seconds while Fly wakes the machine. The Phase 9 frontend must render an explicit "engine warming up" state during this window rather than appearing broken. The connection state machine in section 5.5 covers this requirement.

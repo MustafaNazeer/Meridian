@@ -4,7 +4,7 @@
 
 A price-time priority limit order book and matching engine, written in C++20, with a live web visualization. Meridian is built as a portfolio piece for trading firms and high-frequency-finance roles, and the venue half of a two-project quant systems narrative on the resume (Vega is the pricing half).
 
-The engine is delivered as a static library (`libmeridian.a`) plus three thin driver binaries: `meridian-bench` (zero-I/O throughput and latency benchmark), `meridian-replay` (CLI ITCH replayer that streams JSON Lines), and `meridian-server` (live demo with uWebSockets serving a React frontend). The library and the bench binary contain zero networking code, so the headline 6.2M events per second number is defensible in isolation.
+The engine is delivered as a static library (`libmeridian.a`) plus three thin driver binaries: `meridian-bench` (zero-I/O throughput and latency benchmark), `meridian-replay` (CLI ITCH replayer that streams JSON Lines), and `meridian-server` (live demo with uWebSockets streaming top-of-book deltas to the Cloudflare-Pages-hosted React frontend over WSS). The library and the bench binary contain zero networking code, so the headline 6M events per second target will be defensible in isolation once measured in Phase 5.
 
 GitHub repository: https://github.com/MustafaNazeer/Meridian
 
@@ -79,11 +79,11 @@ The files in `agents/` are not just documentation. Each one is a self contained 
 | ITCH parser | Hand-rolled (one header file) | The 5.0 format is small and stable; a parser library is overkill. |
 | Logging | spdlog | De facto standard, level filtered out of release hot path. |
 | JSON | simdjson (parse), glaze (serialize) | Both are fast and modern. |
-| Frontend framework | React 18 + Vite + TypeScript | Mirrors Vega's tooling so the constellation has one frontend story. |
+| Frontend framework | React 19 + Vite + TypeScript | Vite default as of 2026-05-09. The frontend story is shared in spirit with Vega; matching exact major versions is a non-goal. |
 | Frontend styling | Tailwind CSS | Locked in for v1. Tokens come from the canonical Twilight HTML at `docs/design/canonical.html`. |
 | Visual theme | Twilight (dark) | Background `#0E1126`, accent `#D4A24C`, fonts Inter (UI), Newsreader italic (display), JetBrains Mono (numerics). Source: `docs/design/canonical.html`. |
 | Frontend hosting | Cloudflare Pages | Same as Vega; free tier; instant deploys. |
-| Backend hosting | Hetzner CX22 VPS (~€4/mo) or Fly.io | Render does not host raw C++ binaries comfortably; need a real Linux box. Fly.io is alternative. |
+| Backend hosting | Fly.io machine, free tier, auto-stop on idle and auto-start on first request | Render does not host raw C++ binaries; Fly machines do, with a free allowance, Dockerfile plus `fly.toml` deploys, and no servers to keep patched. Region resolved at Phase 10 (default `iad`, Ashburn VA). Cold start UX handled by the frontend's connection state machine (see design spec section 5.5). |
 | State management (frontend) | Zustand | Small, ergonomic, no Redux ceremony. |
 | Charts | Hand-rolled SVG | Data is small (≤20 levels per side, ≤50 trades); a chart library is overkill. |
 | WebSocket protocol | JSON over WSS | Simple, debuggable in browser DevTools. Binary protocol can come later if measured to matter. |
@@ -126,7 +126,7 @@ Engine Developer adds `BookRegistry` (`unordered_map<Symbol, Book>`) for multi-i
 ### Phase 3: Property-based tests for matching invariants
 **Window cost: ~50 percent alone, or ~95 percent when bundled with Phase 2.**
 
-Engine Developer plus QA Engineer wire `rapidcheck` into the test build and implement the ten matching invariants listed in the technical design spec (price-time priority, quantity conservation, no double fill, no lost orders, spread non-negative, cancel idempotence, IOC never rests, FOK is all-or-nothing, post-only never crosses, top-of-book monotonicity within a tick). Each invariant runs ≥1000 generated cases per CI run. Reference Implementation Engineer runs the same generated case corpus against the Python reference; both engines must produce identical execution report sequences for any generated input. Disagreement is signal, and the reference is presumed correct unless this agent identifies the disagreement as a known reference bug. Risk and Financial Correctness Reviewer adjudicates any persistent disagreement and signs off.
+Engine Developer plus QA Engineer wire `rapidcheck` into the test build and implement the ten matching invariants listed in the technical design spec (price-time priority, quantity conservation, no double fill, no lost orders, spread non-negative, cancel idempotence, IOC never rests, FOK is all-or-nothing, post-only never crosses, top-of-book monotonicity within a tick). Phase 3 closes only after each invariant passes a one-time validation pass at 10,000 generated sequences with zero failures (per design spec section 2.3 success criteria); thereafter every CI build runs at least 1000 cases per invariant as the continuous regression discipline. Reference Implementation Engineer runs the same generated case corpus against the Python reference; both engines must produce identical execution report sequences for any generated input. Disagreement is signal, and the reference is presumed correct unless this agent identifies the disagreement as a known reference bug. Risk and Financial Correctness Reviewer adjudicates any persistent disagreement and signs off.
 
 **End of phase**: run the check-in protocol.
 
@@ -173,9 +173,9 @@ Frontend Developer builds the React plus Vite app following the Twilight visual 
 **End of phase**: run the check-in protocol.
 
 ### Phase 10: Hosting and CI/CD
-**Window cost: ~85 percent of one window.** Deployment requires the user to log in and click through two dashboards (Cloudflare, Hetzner or Fly.io), so expect back and forth with the user during this phase.
+**Window cost: ~75 percent of one window.** Deployment requires the user to log in and click through two dashboards (Cloudflare, Fly.io), so expect back and forth with the user during this phase. Slightly cheaper than the original VPS estimate because Fly removes the SSH, systemd, fail2ban, and log rotation work.
 
-DevOps Engineer deploys the frontend to Cloudflare Pages, sets up the C++ binary on the chosen VPS (systemd service, log rotation, restart policy), and configures the WebSocket URL via `VITE_WS_URL`. Sets up the custom subdomain if the user wants one. Security Engineer runs the final hardening checklist (HTTPS, HSTS, CSP, dependency scan via `pip-audit` for any Python in tests/ and `pnpm audit` for the frontend). Documentation Engineer finalizes `docs/setup-guide.md`.
+DevOps Engineer deploys the frontend to Cloudflare Pages (no custom domain for v1; the demo lives at `meridian-demo.pages.dev`), packages `meridian-server` into a Dockerfile, writes the `fly.toml` machine config (auto-stop on idle, auto-start on connect), deploys to Fly.io, and configures the WebSocket URL via `VITE_WS_URL` pointing at `wss://<fly-app>.fly.dev/ws`. Picks the Fly app name and region (default `iad` if available) at the start of the phase. Security Engineer runs the final hardening checklist (HTTPS via Fly's edge, HSTS, CSP with the Fly app origin in `connect-src`, dependency scan via `pip-audit` for any Python in `tests/` and `pnpm audit` for the frontend). Documentation Engineer finalizes `docs/setup-guide.md`.
 
 **End of phase**: run the check-in protocol.
 
@@ -199,7 +199,7 @@ Each link points to a file in `agents/`. Numbers 06 (Data Engineer) and 07 (Data
 | 04 | [Frontend Developer](agents/04-frontend-developer.md) | Builds the React app, depth chart, trade tape, and WebSocket client. |
 | 05 | [UI/UX Designer](agents/05-ui-ux-designer.md) | Wireframes, design tokens, interaction design, Twilight visual stewardship. |
 | 08 | [Security Engineer](agents/08-security-engineer.md) | Threat model, hardening, WebSocket origin and rate limit policy, dependency scanning. |
-| 09 | [DevOps Engineer](agents/09-devops-engineer.md) | CMake, CI/CD, VPS provisioning, Cloudflare Pages deployment, systemd service. |
+| 09 | [DevOps Engineer](agents/09-devops-engineer.md) | CMake, CI/CD, Fly.io machine deploys (Dockerfile plus `fly.toml`), Cloudflare Pages deployment. |
 | 10 | [QA Engineer](agents/10-qa-engineer.md) | Test plan, unit tests, property-based tests, integration tests, regression suite. |
 | 11 | [Code Reviewer](agents/11-code-reviewer.md) | Reviews every PR for code quality, hot-path discipline, and idiom. |
 | 12 | [Performance Engineer](agents/12-performance-engineer.md) | Profiles the matching loop, drives the 6M events per second benchmark, owns the latency budget. |

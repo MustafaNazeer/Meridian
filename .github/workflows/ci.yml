@@ -1,0 +1,116 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  engine:
+    name: engine (${{ matrix.toolchain }})
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        toolchain: [clang, gcc]
+        include:
+          - toolchain: clang
+            cc: clang
+            cxx: clang++
+            apt_packages: clang
+          - toolchain: gcc
+            cc: gcc
+            cxx: g++
+            apt_packages: gcc g++
+    env:
+      CC: ${{ matrix.cc }}
+      CXX: ${{ matrix.cxx }}
+      CMAKE_GENERATOR: Ninja
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            cmake \
+            ninja-build \
+            ${{ matrix.apt_packages }}
+
+      - name: Compute source hash for cache key
+        id: srchash
+        run: |
+          HASH=$(find . -type f \
+            \( -name 'CMakeLists.txt' -o -name '*.cmake' -o -name '*.cpp' -o -name '*.h' -o -name '*.hpp' \) \
+            -not -path './build/*' \
+            -not -path './frontend/*' \
+            -not -path './.git/*' \
+            -print0 | sort -z | xargs -0 sha256sum | sha256sum | cut -d' ' -f1)
+          echo "hash=${HASH}" >> "$GITHUB_OUTPUT"
+
+      - name: Cache CMake build directory
+        uses: actions/cache@v4
+        with:
+          path: build
+          key: cmake-${{ matrix.toolchain }}-${{ runner.os }}-${{ steps.srchash.outputs.hash }}
+          restore-keys: |
+            cmake-${{ matrix.toolchain }}-${{ runner.os }}-
+
+      - name: Configure
+        run: cmake -B build -S . -G Ninja
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+
+  frontend:
+    name: frontend
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Enable pnpm via corepack
+        run: corepack enable
+
+      - name: Resolve pnpm store path
+        id: pnpm-store
+        run: echo "path=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-store.outputs.path }}
+          key: pnpm-${{ runner.os }}-${{ hashFiles('frontend/pnpm-lock.yaml') }}
+          restore-keys: |
+            pnpm-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm build
+
+      - name: Test
+        run: |
+          if pnpm run --silent | grep -qE '^\s*test\s*$'; then
+            pnpm test --run
+          else
+            echo "No 'test' script defined in package.json yet; skipping. Vitest is wired in Phase 9."
+          fi

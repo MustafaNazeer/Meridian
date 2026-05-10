@@ -3,7 +3,7 @@
 > **Important for Claude Code**: this file is your brief. Read it once, execute the tasks for the current phase, and stay strictly in this role. Do not take on tasks belonging to other agents. Do not recursively dispatch other subagents (route those needs back to the Project Manager session that dispatched you). When done, report file paths produced, decisions the PM should review, and the next agent in the handoff chain.
 
 ## Mission
-Own the build pipeline, repo plumbing, and deployment. Keep CI green, the VPS healthy, and the frontend deploys instant. The Engine Developer owns the C++ source; this agent owns everything that turns it into a running service the user can show on a laptop screen.
+Own the build pipeline, repo plumbing, and deployment. Keep CI green, the Fly.io machine healthy, and the frontend deploys instant. The Engine Developer owns the C++ source; this agent owns everything that turns it into a running service the user can show on a laptop screen.
 
 ## Inputs
 * `/home/mustafa/src/Meridian/SPEC.md`.
@@ -13,9 +13,9 @@ Own the build pipeline, repo plumbing, and deployment. Keep CI green, the VPS he
 * `.github/workflows/ci.yml`: builds and tests every PR.
 * `.github/workflows/bench.yml`: optional manual workflow that regenerates `bench/baseline.json`.
 * `.gitignore` (covers `build/`, `node_modules/`, IDE files, `future-ideas.md`, OS detritus).
-* Deployment artifacts: systemd service unit for `meridian-server`, log rotation config, a README under `docs/setup-guide.md` documenting the manual deploy steps.
+* Deployment artifacts: a `Dockerfile` building `meridian-server`, a `fly.toml` for the Fly.io machine (auto-stop and auto-start configured), and a README under `docs/setup-guide.md` documenting the manual deploy steps.
 * Cloudflare Pages project config (Wrangler is fine but optional; the Cloudflare dashboard is acceptable).
-* VPS provisioning notes (ephemeral, in `docs/setup-guide.md`; not Terraform unless the project ever justifies it).
+* Fly.io app provisioning notes (in `docs/setup-guide.md`; not Terraform unless the project ever justifies it).
 
 ## Tasks
 
@@ -36,12 +36,13 @@ Own the build pipeline, repo plumbing, and deployment. Keep CI green, the VPS he
 1. Add a smoke-test job to ci.yml: build meridian-server, start it with a 5-second ITCH replay, connect a WebSocket client, verify a snapshot was received and at least one delta arrived.
 
 ### Phase 10: Hosting and CI/CD
-1. Provision the VPS (Hetzner CX22 by default; Fly.io if the user prefers). Document the steps inline in `docs/setup-guide.md`.
-2. Install meridian-server as a systemd service running as a non-root user. Enable on boot. Configure log rotation.
-3. Front the VPS with Cloudflare for HTTPS termination on the WebSocket port.
-4. Deploy the frontend to Cloudflare Pages. Configure `VITE_WS_URL` to point at the WSS URL on the VPS.
-5. Set up a GitHub Actions deploy job that pushes the frontend on `main` push.
-6. Pair with the Security Engineer on the final hardening checklist.
+1. Pick the Fly.io app name (default candidates: `meridian`, then `meridian-engine`, then `meridian-lob` if both are taken) and the deploy region (default `iad` if available in the free tier; fall back to `ord`, then `sjc`). Document the choice in `docs/setup-guide.md`.
+2. Write `Dockerfile` for `meridian-server`: multi-stage build (Debian or Ubuntu builder image with the C++ toolchain, slim runtime image), non-root user, expose the WebSocket port, healthcheck endpoint hit by Fly's load balancer.
+3. Write `fly.toml` for the machine: chosen region, smallest free-tier machine size that fits the engine's resident set, `auto_stop_machines = true`, `auto_start_machines = true`, `min_machines_running = 0`, and the WebSocket port mapping.
+4. Run `fly launch` (or `fly deploy` against an existing app), verify the machine boots, and capture the resulting `wss://<app>.fly.dev/ws` URL.
+5. Deploy the frontend to Cloudflare Pages at `meridian-demo.pages.dev`. Configure `VITE_WS_URL` to point at the Fly WSS URL captured in step 4.
+6. Set up a GitHub Actions deploy job that runs `fly deploy` on `main` push for the engine, and a separate job that pushes the frontend to Cloudflare Pages on `main` push.
+7. Pair with the Security Engineer on the final hardening checklist (CSP `connect-src` includes the Fly origin; HSTS via Fly's edge; secrets stored in `fly secrets` and GitHub Actions secrets).
 
 ## Plugins to use
 * `superpowers:finishing-a-development-branch` at PR close.
@@ -50,10 +51,10 @@ Own the build pipeline, repo plumbing, and deployment. Keep CI green, the VPS he
 
 ## Definition of done
 * CI runs clean on every PR.
-* The VPS hosts meridian-server with a stable WebSocket URL.
-* Cloudflare Pages serves the frontend at a stable URL.
-* `docs/setup-guide.md` documents every manual step needed to reproduce the deploy from scratch.
-* The systemd service survives a VPS reboot.
+* The Fly.io machine hosts `meridian-server` and exposes a stable `wss://<app>.fly.dev/ws` URL.
+* Cloudflare Pages serves the frontend at `meridian-demo.pages.dev`.
+* `docs/setup-guide.md` documents every manual step needed to reproduce the deploy from scratch (`fly launch`, `fly secrets set`, `fly deploy`, Cloudflare Pages project setup, environment variables).
+* The Fly machine restarts cleanly after `fly deploy` and after Fly's idle auto-stop / auto-start cycle.
 
 ## Handoffs
 * Source code questions to the Engine Developer or Frontend Developer.
