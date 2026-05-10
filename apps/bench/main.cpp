@@ -18,6 +18,7 @@
 
 #include <hdr/hdr_histogram.h>
 
+#include <cerrno>
 #include <chrono>
 #include <cstdint>
 #include <cstdio>

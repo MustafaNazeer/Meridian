@@ -34,6 +34,7 @@
 #include <random>
 #include <sstream>
 #include <string>
+#include <unistd.h>
 #include <vector>
 
 namespace meridian {
@@ -175,6 +176,11 @@ TEST_P(EngineVsReferenceTest, ProducesIdenticalReports) {
     ASSERT_NE(mkdtemp(workdir), nullptr);
     auto cpp_lines = run_cpp(GetParam().events);
     auto py_lines = run_python(GetParam().events, workdir);
+    // Tear down the per-scenario tempdir to avoid leaking 60+ /tmp/meridian_diff_*/
+    // directories per ctest run. Best effort; if the test asserts past this
+    // point the rmdir does not run, but the tempdir contents are tiny.
+    std::string rm_cmd = "rm -rf " + std::string(workdir);
+    [[maybe_unused]] int rm_rc = std::system(rm_cmd.c_str());
     ASSERT_EQ(cpp_lines.size(), py_lines.size())
         << "scenario " << GetParam().name
         << ": C++ produced " << cpp_lines.size()
@@ -603,20 +609,14 @@ INSTANTIATE_TEST_SUITE_P(
 
 NamedScenario corner_random_1000() {
     // Deterministic seed. 1000 limit orders at random prices around
-    // 100, each with qty=1 so a small aggressor walks at most a
-    // bounded number of makers per event. A debug-build constraint
-    // in MatchingEngine::apply (out.reserve(8)) plus the HotPathGuard
-    // tripwire in OrderPool means a single engine.apply call must
-    // not produce more than ~9 reports without tripping the debug
-    // allocator override. To stay strictly inside that envelope
-    // while still exercising a 1000-order book, the aggressor stage
-    // here is many small markets/IOCs (qty in [1,3], at most ~7
-    // reports each) instead of two large markets. The intent of the
-    // brief (verify both engines agree on a 1000-order randomized
-    // book) is preserved; the bounded per-event report count is a
-    // Phase 1 hot-path design constraint, not a test convenience.
-    // See QA finding F1 in the dispatch report. The cancel-everything
-    // sweep at the end emits one report per cancel, so it is fine.
+    // 100, each with qty=1. The aggressor stage uses many small
+    // markets/IOCs (qty in [1, 3]) to exercise frequent multi-event
+    // matching rather than two large sweeps. This shape was chosen
+    // when MatchingEngine::apply still reserved only 8 slots for the
+    // output vector (QA finding F1, fixed in commit df56ad19 by
+    // bumping the reserve to 1024); the small-aggressor pattern is
+    // kept here because it is still a useful realistic burst pattern,
+    // not because the engine still requires it.
     std::mt19937 rng(0xC0FFEEu);
     std::uniform_int_distribution<Price> price_dist(50, 150);
     std::bernoulli_distribution side_dist(0.5);
