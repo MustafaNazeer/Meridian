@@ -93,3 +93,6 @@ logs/
 
 # Local config overrides
 meridian.local.toml
+
+# Claude Code: maintainer's private files
+CLAUDE.md
