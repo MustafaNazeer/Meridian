@@ -193,10 +193,15 @@ void MatchingEngine::apply_cancel(const EngineEvent& event,
                                   std::vector<ExecutionReport>& out) {
     Order* removed = book_.remove_by_id(event.order_id);
     if (removed == nullptr) [[unlikely]] {
+        // Per matching-semantics.md section 8.2: when the cancel target is
+        // unknown, the Reject report carries Side::Buy and price=0 as
+        // sentinels (the engine has no way to know the actual side or
+        // price). Side::Buy is the zero value of the enum, the natural
+        // sentinel without adding a new enumerator.
         out.push_back(ExecutionReport{
             .kind = ReportKind::Reject,
             .order_id = event.order_id,
-            .side = event.side,
+            .side = Side::Buy,
             .price = 0,
             .qty = 0,
             .ts = event.ts,
