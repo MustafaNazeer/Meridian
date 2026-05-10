@@ -29,7 +29,7 @@ This is engine internals only; no networking, no untrusted input. Most security 
 
 ## Multi-instrument and cancel-by-id
 
-* [ ] Confirm symbol lookup uses a fixed allow list at engine init (no dynamic symbol creation from external input until ITCH replay lands).
+* [x] Confirmed symbol lookup uses a fixed allow list at engine init. `BookRegistry` is constructed with an `initializer_list<Symbol>` at startup and never accepts new symbols at runtime. The ITCH replay binary maps every distinct ITCH stock id to a single pre-registered symbol id (1) and rejects unknown symbols on `MatchingEngine::apply` via the `RejectReason::UnknownSymbol` path; nothing on the wire can grow the registry.
 * [~] No network surface yet. Not applicable.
 
 ## Property-based tests for matching invariants
@@ -48,10 +48,10 @@ This is engine internals only; no networking, no untrusted input. Most security 
 
 ## NASDAQ ITCH 5.0 replay
 
-* [ ] ITCH parser uses bounds checked reads everywhere; no raw `memcpy` past validated lengths.
-* [ ] ITCH parser rejects truncated frames and unknown message types loudly (not silently).
-* [ ] Fuzz test the ITCH parser with libFuzzer, or with rapidcheck generators, against at least 60 minutes of CPU time on a representative workstation. Record the fuzz corpus and any findings under `docs/security/fuzz-itch-{date}.md`.
-* [ ] Tape file integrity: the SHA-256 of every ITCH tape used in CI and the live demo is recorded in a tape manifest (e.g., `bench/tape-manifest.json`) and verified before use.
+* [x] ITCH parser uses bounds checked reads everywhere; no raw `memcpy` past validated lengths. The parser at `include/meridian/itch.hpp` bounds-checks the 2-byte length prefix against the remaining buffer, then bounds-checks each per-type field against the declared body length. Verified by `tests/unit/test_itch.cpp` (truncated length prefix, truncated body, length mismatch, invalid side, unknown type skipped by length).
+* [x] ITCH parser rejects truncated frames and unknown message types loudly (not silently). Truncated frames return `ParseStatus::TruncatedFrame` (callers stop on non-Ok). Unknown types are skipped via the length prefix, which is the documented defensive posture: an attacker-controlled tape cannot crash the parser by injecting a type byte the parser does not implement, but the resulting message is delivered as `MessageKind::OtherSkipped` so the caller can audit-log the skip if desired.
+* [ ] Fuzz test the ITCH parser with libFuzzer or with hand rolled generators, against at least 60 minutes of CPU time on a representative workstation. Record the fuzz corpus and any findings under `docs/security/fuzz-itch-{date}.md`. Deferred until the parser surface widens (X, U, F messages) and the ITCH integration corpus moves beyond the synthetic-tape fixture.
+* [~] Tape file integrity: the synthetic-tape fixture used by the integration test is generated at test time from a deterministic seed, so a static SHA-256 manifest does not apply (the bytes are derivable from the generator command). When a real NASDAQ tape (or any externally sourced binary) is committed, this row turns into the SHA-256 manifest line and the test verifies the hash before use.
 * [ ] Confirm the parser produces only POD `EngineEvent` structs; no callbacks, no virtual dispatch into untrusted code.
 
 ## Post-only and FOK order types

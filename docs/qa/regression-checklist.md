@@ -202,9 +202,7 @@ relevant section above with the concrete commands.
   is a one-time pass at `MERIDIAN_TSAN_DURATION_SEC=60` with zero
   TSAN warnings and zero torn-read mismatches.
 * **Benchmark regression** (in force): `meridian-bench --events 1000000 --seed 42 --warmup 100000` runs in `.github/workflows/ci.yml` on every PR (clang job only) and `bench/check_regression.py` compares against the committed `bench/baseline.json`. CI fails if throughput drops more than 5 percent or if any of p50, p99, p99.9 latency percentiles rise more than 10 percent. The baseline is captured on the GitHub Actions ubuntu-24.04 runner so the comparison is apples-to-apples; regenerate it by pasting numbers from a representative CI run into `bench/baseline.json` and opening a PR. Acceptance is a one-time pass on the desktop reference machine at the documented headline targets (>= 6M evt/s, p50 <= 500 ns, p99 <= 2 us, p99.9 <= 5 us).
-* **ITCH integration**: a 5-minute NASDAQ ITCH 5.0 sample is replayed
-  through both the C++ engine and the Python reference; the final
-  book state and total fill count must match exactly.
+* **ITCH integration** (in force, A and D subset): `tests/integration/test_itch_replay.cpp` generates a 10000-message synthetic ITCH 5.0 tape (Add Order and Order Delete only, seed 42, 30 percent cancels) at test time, runs `meridian-replay` and `tests/reference/itch_replay.py` against it, and byte-diffs the JSON Lines audit outputs. Acceptance for the broader ITCH coverage (X partial cancel, U order replace, F add-order-with-MPID, plus a 5-minute real NASDAQ tape if one becomes available without licensing constraints) lands alongside the post-only / FOK milestone, since X requires a partial-cancel API on the engine.
 * **WebSocket smoke**: `meridian-server` runs against a 60-second
   replay; a client receives a `snapshot` followed by at least one
   `delta`; the JSON shape matches `docs/api/websocket.md`.

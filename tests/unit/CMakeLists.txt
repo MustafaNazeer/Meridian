@@ -32,3 +32,8 @@ add_executable(test_seqlock_snapshot test_seqlock_snapshot.cpp)
 target_link_libraries(test_seqlock_snapshot PRIVATE meridian GTest::gtest_main)
 target_compile_options(test_seqlock_snapshot PRIVATE -Wall -Wextra -Wpedantic -Werror)
 gtest_discover_tests(test_seqlock_snapshot)
+
+add_executable(test_itch test_itch.cpp)
+target_link_libraries(test_itch PRIVATE meridian GTest::gtest_main)
+target_compile_options(test_itch PRIVATE -Wall -Wextra -Wpedantic -Werror)
+gtest_discover_tests(test_itch)
