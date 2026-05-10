@@ -23,7 +23,14 @@ MatchingEngine::MatchingEngine(OrderPool& pool, Book& book) noexcept
 
 std::vector<ExecutionReport> MatchingEngine::apply(const EngineEvent& event) {
     std::vector<ExecutionReport> out;
-    out.reserve(8);
+    // Reserve generously so the inner sweep loop never reallocates inside
+    // HotPathGuard's scope. Each match emits 2 Fill reports plus an
+    // Acknowledge; a sweep that walks 500 makers (worst case for the
+    // Phase 1 corner-case scenarios) emits ~1001 reports. The reserve
+    // happens outside the HotPathGuard so the initial allocation is
+    // legitimate. Phase 5 will replace this with a thread-local fixed-
+    // capacity buffer once the bench harness measures the cost.
+    out.reserve(1024);
     if (event.kind == EventKind::NewOrder) {
         switch (event.type) {
             case OrderType::Limit:  apply_limit(event,  out); break;
