@@ -1243,14 +1243,22 @@ enum class RejectReason : std::uint8_t {
 
 struct ExecutionReport {
     ReportKind kind;
-    OrderId order_id;        // for fills, the aggressor's id
-    OrderId matched_id;      // for fills, the resting counterparty's id; 0 otherwise
-    Side side;
+    OrderId order_id;        // for fills, the side's own id (one report per side)
+    Side side;               // for fills, the side's own side (Buy for taker buy, Sell for maker sell)
     Price price;
     Quantity qty;
     Timestamp ts;
     RejectReason reject_reason;
 };
+
+// Per docs/risk/matching-semantics.md (Quant Domain Validator, 2026-05-09):
+// each match emits TWO Fill reports back to back (maker first, then taker).
+// Each report is self-describing about its own side. Acknowledge is emitted
+// FIRST for any accepted NewOrder (limit, market on non-empty book, IOC),
+// before any fills against that order. Outright rejects (market against
+// empty book) emit only Reject with no preceding Acknowledge. Cancel events
+// emit Cancel (success) or Reject NotFound (unknown id); no Acknowledge for
+// cancel events.
 
 }  // namespace meridian
 ```
@@ -1685,15 +1693,22 @@ TEST_F(MatchingTest, LimitFullyCrossesSingleRestingOrderEmitsFill) {
     engine.apply(new_limit(1, Side::Sell, 100, 10));
     auto reports = engine.apply(new_limit(2, Side::Buy, 100, 10));
 
-    ASSERT_EQ(reports.size(), 2u);
-    EXPECT_EQ(reports[0].kind, ReportKind::Fill);
+    // Per matching-semantics LIM-3: Ack first, then maker fill, then taker fill.
+    ASSERT_EQ(reports.size(), 3u);
+    EXPECT_EQ(reports[0].kind, ReportKind::Acknowledge);
     EXPECT_EQ(reports[0].order_id, 2u);
-    EXPECT_EQ(reports[0].matched_id, 1u);
-    EXPECT_EQ(reports[0].qty, 10);
-    EXPECT_EQ(reports[0].price, 100);
 
-    EXPECT_EQ(reports[1].kind, ReportKind::Acknowledge);
-    EXPECT_EQ(reports[1].order_id, 2u);
+    EXPECT_EQ(reports[1].kind, ReportKind::Fill);
+    EXPECT_EQ(reports[1].order_id, 1u);              // maker
+    EXPECT_EQ(reports[1].side, Side::Sell);
+    EXPECT_EQ(reports[1].qty, 10);
+    EXPECT_EQ(reports[1].price, 100);
+
+    EXPECT_EQ(reports[2].kind, ReportKind::Fill);
+    EXPECT_EQ(reports[2].order_id, 2u);              // taker
+    EXPECT_EQ(reports[2].side, Side::Buy);
+    EXPECT_EQ(reports[2].qty, 10);
+    EXPECT_EQ(reports[2].price, 100);
 
     EXPECT_EQ(book.best_ask(), nullptr);
     EXPECT_EQ(book.best_bid(), nullptr);
@@ -1703,10 +1718,14 @@ TEST_F(MatchingTest, LimitPartiallyFillsAndRestsResidual) {
     engine.apply(new_limit(1, Side::Sell, 100, 10));
     auto reports = engine.apply(new_limit(2, Side::Buy, 100, 25));
 
-    ASSERT_EQ(reports.size(), 2u);
-    EXPECT_EQ(reports[0].kind, ReportKind::Fill);
-    EXPECT_EQ(reports[0].qty, 10);
-    EXPECT_EQ(reports[1].kind, ReportKind::Acknowledge);
+    ASSERT_EQ(reports.size(), 3u);
+    EXPECT_EQ(reports[0].kind, ReportKind::Acknowledge);
+    EXPECT_EQ(reports[1].kind, ReportKind::Fill);
+    EXPECT_EQ(reports[1].order_id, 1u);
+    EXPECT_EQ(reports[1].qty, 10);
+    EXPECT_EQ(reports[2].kind, ReportKind::Fill);
+    EXPECT_EQ(reports[2].order_id, 2u);
+    EXPECT_EQ(reports[2].qty, 10);
 
     Level* bid = book.best_bid();
     ASSERT_NE(bid, nullptr);
@@ -1719,16 +1738,20 @@ TEST_F(MatchingTest, LimitSweepsMultipleRestingOrdersFifoAtSamePrice) {
     engine.apply(new_limit(2, Side::Sell, 100, 25, /*ts=*/2));
     auto reports = engine.apply(new_limit(3, Side::Buy, 100, 30));
 
-    // Aggressor 3 should fill 10 from id=1 first (older), then 20 from id=2
-    // (newer), leaving id=2 with 5 remaining.
-    ASSERT_EQ(reports.size(), 3u);  // 2 fills + 1 ack
-    EXPECT_EQ(reports[0].kind, ReportKind::Fill);
-    EXPECT_EQ(reports[0].matched_id, 1u);
-    EXPECT_EQ(reports[0].qty, 10);
-    EXPECT_EQ(reports[1].kind, ReportKind::Fill);
-    EXPECT_EQ(reports[1].matched_id, 2u);
-    EXPECT_EQ(reports[1].qty, 20);
-    EXPECT_EQ(reports[2].kind, ReportKind::Acknowledge);
+    // Aggressor 3 fills 10 from id=1 (older), then 20 from id=2 (newer).
+    // 1 ack + 2 fills per match * 2 matches = 5 reports.
+    ASSERT_EQ(reports.size(), 5u);
+    EXPECT_EQ(reports[0].kind, ReportKind::Acknowledge);
+    // First match: maker=1 (10), taker=3 (10).
+    EXPECT_EQ(reports[1].order_id, 1u);
+    EXPECT_EQ(reports[1].qty, 10);
+    EXPECT_EQ(reports[2].order_id, 3u);
+    EXPECT_EQ(reports[2].qty, 10);
+    // Second match: maker=2 (20), taker=3 (20).
+    EXPECT_EQ(reports[3].order_id, 2u);
+    EXPECT_EQ(reports[3].qty, 20);
+    EXPECT_EQ(reports[4].order_id, 3u);
+    EXPECT_EQ(reports[4].qty, 20);
 
     Level* ask = book.best_ask();
     ASSERT_NE(ask, nullptr);
@@ -1740,13 +1763,18 @@ TEST_F(MatchingTest, LimitSweepsMultiplePriceLevels) {
     engine.apply(new_limit(2, Side::Sell, 101, 10));
     auto reports = engine.apply(new_limit(3, Side::Buy, 102, 20));
 
-    // Aggressor takes 5 at 100, then 10 at 101, leaves 5 resting at 102.
-    ASSERT_EQ(reports.size(), 3u);
-    EXPECT_EQ(reports[0].price, 100);
-    EXPECT_EQ(reports[0].qty, 5);
-    EXPECT_EQ(reports[1].price, 101);
-    EXPECT_EQ(reports[1].qty, 10);
-    EXPECT_EQ(reports[2].kind, ReportKind::Acknowledge);
+    // Takes 5 at 100 (1 match, 2 fills), 10 at 101 (1 match, 2 fills),
+    // residual 5 rests. 1 ack + 4 fills = 5 reports.
+    ASSERT_EQ(reports.size(), 5u);
+    EXPECT_EQ(reports[0].kind, ReportKind::Acknowledge);
+    EXPECT_EQ(reports[1].price, 100);
+    EXPECT_EQ(reports[1].qty, 5);
+    EXPECT_EQ(reports[2].price, 100);
+    EXPECT_EQ(reports[2].qty, 5);
+    EXPECT_EQ(reports[3].price, 101);
+    EXPECT_EQ(reports[3].qty, 10);
+    EXPECT_EQ(reports[4].price, 101);
+    EXPECT_EQ(reports[4].qty, 10);
 
     Level* bid = book.best_bid();
     ASSERT_NE(bid, nullptr);
@@ -1892,7 +1920,6 @@ std::vector<ExecutionReport> MatchingEngine::apply(const EngineEvent& event) {
                     out.push_back(ExecutionReport{
                         .kind = ReportKind::Reject,
                         .order_id = event.order_id,
-                        .matched_id = 0,
                         .side = event.side,
                         .price = event.price,
                         .qty = event.qty,
@@ -1937,10 +1964,21 @@ Quantity MatchingEngine::sweep(Side aggressor_side, Price limit_price,
         Order* resting = level->head();
         while (resting != nullptr && remaining > 0) {
             Quantity match_qty = std::min(remaining, resting->qty_remaining);
+            // Per matching-semantics.md: each match emits TWO Fill reports
+            // back to back, maker first then taker. Each report is
+            // self-describing about its own side.
+            out.push_back(ExecutionReport{
+                .kind = ReportKind::Fill,
+                .order_id = resting->id,
+                .side = resting->side,
+                .price = level->price(),
+                .qty = match_qty,
+                .ts = ts,
+                .reject_reason = RejectReason::None,
+            });
             out.push_back(ExecutionReport{
                 .kind = ReportKind::Fill,
                 .order_id = aggressor_id,
-                .matched_id = resting->id,
                 .side = aggressor_side,
                 .price = level->price(),
                 .qty = match_qty,
@@ -1957,18 +1995,21 @@ Quantity MatchingEngine::sweep(Side aggressor_side, Price limit_price,
             }
             resting = next;
         }
-
-        Side opposite = (aggressor_side == Side::Buy) ? Side::Sell : Side::Buy;
-        book_.erase_empty_level(opposite,
-                                (aggressor_side == Side::Buy)
-                                    ? (book_.best_ask() ? book_.best_ask()->price() : 0)
-                                    : (book_.best_bid() ? book_.best_bid()->price() : 0));
     }
     return remaining;
 }
 
 void MatchingEngine::apply_limit(const EngineEvent& event,
                                  std::vector<ExecutionReport>& out) {
+    out.push_back(ExecutionReport{
+        .kind = ReportKind::Acknowledge,
+        .order_id = event.order_id,
+        .side = event.side,
+        .price = event.price,
+        .qty = event.qty,
+        .ts = event.ts,
+        .reject_reason = RejectReason::None,
+    });
     Quantity remaining = sweep(event.side, event.price, event.order_id,
                                event.qty, event.ts, out);
     if (remaining > 0) {
@@ -1982,81 +2023,54 @@ void MatchingEngine::apply_limit(const EngineEvent& event,
         resting->ts_arrival = event.ts;
         book_.add(resting);
     }
-    out.push_back(ExecutionReport{
-        .kind = ReportKind::Acknowledge,
-        .order_id = event.order_id,
-        .matched_id = 0,
-        .side = event.side,
-        .price = event.price,
-        .qty = event.qty,
-        .ts = event.ts,
-        .reject_reason = RejectReason::None,
-    });
 }
 
 void MatchingEngine::apply_market(const EngineEvent& event,
                                   std::vector<ExecutionReport>& out) {
     Level* opposite = (event.side == Side::Buy) ? book_.best_ask() : book_.best_bid();
     if (opposite == nullptr) [[unlikely]] {
+        // Per matching-semantics section 4.1: market against empty book is
+        // a single Reject with no preceding Acknowledge.
         out.push_back(ExecutionReport{
             .kind = ReportKind::Reject,
             .order_id = event.order_id,
-            .matched_id = 0,
             .side = event.side,
-            .price = 0,
+            .price = event.price,
             .qty = event.qty,
             .ts = event.ts,
             .reject_reason = RejectReason::EmptyBook,
         });
         return;
     }
+    out.push_back(ExecutionReport{
+        .kind = ReportKind::Acknowledge,
+        .order_id = event.order_id,
+        .side = event.side,
+        .price = event.price,
+        .qty = event.qty,
+        .ts = event.ts,
+        .reject_reason = RejectReason::None,
+    });
     Price worst_price = (event.side == Side::Buy) ? std::numeric_limits<Price>::max()
                                                   : std::numeric_limits<Price>::min();
-    Quantity remaining = sweep(event.side, worst_price, event.order_id,
-                               event.qty, event.ts, out);
-    // Market orders never rest; any residual is implicitly cancelled.
-    if (remaining < event.qty) {
-        out.push_back(ExecutionReport{
-            .kind = ReportKind::Acknowledge,
-            .order_id = event.order_id,
-            .matched_id = 0,
-            .side = event.side,
-            .price = 0,
-            .qty = event.qty - remaining,
-            .ts = event.ts,
-            .reject_reason = RejectReason::None,
-        });
-    } else {
-        // No fills at all (sweep ran but opposite went empty). Reject.
-        out.push_back(ExecutionReport{
-            .kind = ReportKind::Reject,
-            .order_id = event.order_id,
-            .matched_id = 0,
-            .side = event.side,
-            .price = 0,
-            .qty = event.qty,
-            .ts = event.ts,
-            .reject_reason = RejectReason::EmptyBook,
-        });
-    }
+    sweep(event.side, worst_price, event.order_id, event.qty, event.ts, out);
+    // Market orders never rest; any residual is implicitly cancelled (no
+    // report).
 }
 
 void MatchingEngine::apply_ioc(const EngineEvent& event,
                                std::vector<ExecutionReport>& out) {
-    Quantity remaining = sweep(event.side, event.price, event.order_id,
-                               event.qty, event.ts, out);
     out.push_back(ExecutionReport{
         .kind = ReportKind::Acknowledge,
         .order_id = event.order_id,
-        .matched_id = 0,
         .side = event.side,
         .price = event.price,
-        .qty = event.qty - remaining,
+        .qty = event.qty,
         .ts = event.ts,
         .reject_reason = RejectReason::None,
     });
-    // Residual is implicitly cancelled (no Cancel report needed; the ack's
-    // qty field already reports what filled).
+    sweep(event.side, event.price, event.order_id, event.qty, event.ts, out);
+    // IOC orders never rest; any residual is implicitly cancelled (no report).
 }
 
 void MatchingEngine::apply_cancel(const EngineEvent& event,
@@ -2066,7 +2080,6 @@ void MatchingEngine::apply_cancel(const EngineEvent& event,
         out.push_back(ExecutionReport{
             .kind = ReportKind::Reject,
             .order_id = event.order_id,
-            .matched_id = 0,
             .side = event.side,
             .price = 0,
             .qty = 0,
@@ -2082,7 +2095,6 @@ void MatchingEngine::apply_cancel(const EngineEvent& event,
     out.push_back(ExecutionReport{
         .kind = ReportKind::Cancel,
         .order_id = event.order_id,
-        .matched_id = 0,
         .side = cancelled_side,
         .price = cancelled_price,
         .qty = cancelled_qty,
@@ -2172,28 +2184,40 @@ TEST_F(MatchingTest, MarketFullyFillsAtBestPriceAcrossLevels) {
     engine.apply(new_limit(2, Side::Sell, 101, 5));
     auto reports = engine.apply(new_market(3, Side::Buy, 8));
 
-    // 5 at 100, then 3 at 101.
-    ASSERT_EQ(reports.size(), 3u);
-    EXPECT_EQ(reports[0].kind, ReportKind::Fill);
-    EXPECT_EQ(reports[0].price, 100);
-    EXPECT_EQ(reports[0].qty, 5);
-    EXPECT_EQ(reports[1].kind, ReportKind::Fill);
-    EXPECT_EQ(reports[1].price, 101);
-    EXPECT_EQ(reports[1].qty, 3);
-    EXPECT_EQ(reports[2].kind, ReportKind::Acknowledge);
-    EXPECT_EQ(reports[2].qty, 8);
+    // Per matching-semantics MKT-2: ack first, then 2 fills per match
+    // (maker, taker). 5 at 100, 3 at 101. 1 ack + 4 fills = 5 reports.
+    ASSERT_EQ(reports.size(), 5u);
+    EXPECT_EQ(reports[0].kind, ReportKind::Acknowledge);
+    EXPECT_EQ(reports[0].qty, 8);  // submitted qty
+    EXPECT_EQ(reports[1].order_id, 1u);
+    EXPECT_EQ(reports[1].price, 100);
+    EXPECT_EQ(reports[1].qty, 5);
+    EXPECT_EQ(reports[2].order_id, 3u);
+    EXPECT_EQ(reports[2].price, 100);
+    EXPECT_EQ(reports[2].qty, 5);
+    EXPECT_EQ(reports[3].order_id, 2u);
+    EXPECT_EQ(reports[3].price, 101);
+    EXPECT_EQ(reports[3].qty, 3);
+    EXPECT_EQ(reports[4].order_id, 3u);
+    EXPECT_EQ(reports[4].price, 101);
+    EXPECT_EQ(reports[4].qty, 3);
 }
 
 TEST_F(MatchingTest, MarketPartiallyFillsAndResidualIsImplicitlyCancelled) {
     engine.apply(new_limit(1, Side::Sell, 100, 5));
     auto reports = engine.apply(new_market(2, Side::Buy, 10));
 
-    // 5 fills, then book empties, residual 5 is implicitly cancelled.
-    ASSERT_EQ(reports.size(), 2u);
-    EXPECT_EQ(reports[0].kind, ReportKind::Fill);
-    EXPECT_EQ(reports[0].qty, 5);
-    EXPECT_EQ(reports[1].kind, ReportKind::Acknowledge);
+    // Per matching-semantics MKT-3: ack first, then 1 match (2 fills),
+    // then book empties; residual 5 is implicitly cancelled (no report).
+    ASSERT_EQ(reports.size(), 3u);
+    EXPECT_EQ(reports[0].kind, ReportKind::Acknowledge);
+    EXPECT_EQ(reports[0].qty, 10);  // submitted qty
+    EXPECT_EQ(reports[1].kind, ReportKind::Fill);
+    EXPECT_EQ(reports[1].order_id, 1u);
     EXPECT_EQ(reports[1].qty, 5);
+    EXPECT_EQ(reports[2].kind, ReportKind::Fill);
+    EXPECT_EQ(reports[2].order_id, 2u);
+    EXPECT_EQ(reports[2].qty, 5);
 
     EXPECT_EQ(book.best_bid(), nullptr);
     EXPECT_EQ(book.best_ask(), nullptr);
@@ -2218,10 +2242,12 @@ EngineEvent new_ioc(OrderId id, Side side, Price px, Quantity qty,
 }
 
 TEST_F(MatchingTest, IocOnEmptyBookAcksWithZeroFilled) {
+    // Per matching-semantics IOC-3: IOC against empty book acks (with the
+    // submitted qty), then no fills, residual implicitly cancelled.
     auto reports = engine.apply(new_ioc(1, Side::Buy, 100, 10));
     ASSERT_EQ(reports.size(), 1u);
     EXPECT_EQ(reports[0].kind, ReportKind::Acknowledge);
-    EXPECT_EQ(reports[0].qty, 0);
+    EXPECT_EQ(reports[0].qty, 10);  // submitted qty (not filled qty)
     EXPECT_EQ(book.best_bid(), nullptr);
 }
 
@@ -2229,12 +2255,17 @@ TEST_F(MatchingTest, IocFillsWhatItCanAndDoesNotRest) {
     engine.apply(new_limit(1, Side::Sell, 100, 5));
     auto reports = engine.apply(new_ioc(2, Side::Buy, 100, 20));
 
-    // 5 fills, residual 15 is implicitly cancelled (never rests).
-    ASSERT_EQ(reports.size(), 2u);
-    EXPECT_EQ(reports[0].kind, ReportKind::Fill);
-    EXPECT_EQ(reports[0].qty, 5);
-    EXPECT_EQ(reports[1].kind, ReportKind::Acknowledge);
+    // Per matching-semantics IOC-2: ack (qty=20), 1 match (2 fills),
+    // residual 15 implicitly cancelled.
+    ASSERT_EQ(reports.size(), 3u);
+    EXPECT_EQ(reports[0].kind, ReportKind::Acknowledge);
+    EXPECT_EQ(reports[0].qty, 20);
+    EXPECT_EQ(reports[1].kind, ReportKind::Fill);
+    EXPECT_EQ(reports[1].order_id, 1u);
     EXPECT_EQ(reports[1].qty, 5);
+    EXPECT_EQ(reports[2].kind, ReportKind::Fill);
+    EXPECT_EQ(reports[2].order_id, 2u);
+    EXPECT_EQ(reports[2].qty, 5);
 
     EXPECT_EQ(book.best_bid(), nullptr);
     EXPECT_EQ(book.best_ask(), nullptr);
@@ -2244,15 +2275,19 @@ TEST_F(MatchingTest, IocPriceLimitedDoesNotCrossWorsePrices) {
     engine.apply(new_limit(1, Side::Sell, 100, 5));
     engine.apply(new_limit(2, Side::Sell, 105, 10));
 
-    // IOC Buy at 102 only crosses the 100-priced level.
+    // IOC Buy at 102 only crosses the 100-priced level. Ack + 1 match
+    // (2 fills), residual 15 implicitly cancelled.
     auto reports = engine.apply(new_ioc(3, Side::Buy, 102, 20));
 
-    ASSERT_EQ(reports.size(), 2u);
-    EXPECT_EQ(reports[0].kind, ReportKind::Fill);
-    EXPECT_EQ(reports[0].price, 100);
-    EXPECT_EQ(reports[0].qty, 5);
-    EXPECT_EQ(reports[1].kind, ReportKind::Acknowledge);
+    ASSERT_EQ(reports.size(), 3u);
+    EXPECT_EQ(reports[0].kind, ReportKind::Acknowledge);
+    EXPECT_EQ(reports[0].qty, 20);
+    EXPECT_EQ(reports[1].kind, ReportKind::Fill);
+    EXPECT_EQ(reports[1].price, 100);
     EXPECT_EQ(reports[1].qty, 5);
+    EXPECT_EQ(reports[2].kind, ReportKind::Fill);
+    EXPECT_EQ(reports[2].price, 100);
+    EXPECT_EQ(reports[2].qty, 5);
 
     Level* ask = book.best_ask();
     ASSERT_NE(ask, nullptr);
@@ -2414,7 +2449,6 @@ std::vector<ExecutionReport> MatchingEngine::apply(const EngineEvent& event) {
                 out.push_back(ExecutionReport{
                     .kind = ReportKind::Reject,
                     .order_id = event.order_id,
-                    .matched_id = 0,
                     .side = event.side,
                     .price = event.price,
                     .qty = event.qty,
@@ -2454,7 +2488,7 @@ TEST_F(MatchingTest, SweepLoopMakesNoHeapAllocation) {
     // allocating; if it does, the debug operator new override aborts the
     // test.
     auto reports = engine.apply(new_ioc(4, Side::Buy, 105, 15));
-    EXPECT_EQ(reports.size(), 4u);  // 3 fills + 1 ack
+    EXPECT_EQ(reports.size(), 7u);  // 1 ack + 2 fills per match * 3 matches
 }
 ```
 
@@ -2618,7 +2652,6 @@ std::string report_to_jsonl(const ExecutionReport& r) {
     std::ostringstream ss;
     ss << "{"
        << "\"kind\":\"" << kind << "\","
-       << "\"matched_id\":" << r.matched_id << ","
        << "\"order_id\":" << r.order_id << ","
        << "\"price\":" << r.price << ","
        << "\"qty\":" << r.qty << ","
@@ -3293,7 +3326,7 @@ The PM ran a fresh-eyes pass over this plan after writing it.
 
 **Type consistency:**
 - `Order` field names (`id`, `symbol`, `side`, `type`, `price`, `qty_remaining`, `ts_arrival`, `prev`, `next`) consistent across `types.hpp`, `order_pool.cpp`, `level.cpp`, `book.cpp`, `matching.cpp`, and tests.
-- `ExecutionReport` field names (`kind`, `order_id`, `matched_id`, `side`, `price`, `qty`, `ts`, `reject_reason`) consistent across `execution_report.hpp`, `matching.cpp`, `report_to_jsonl` in the integration test, and the Reference Implementation Engineer's expected JSON shape.
+- `ExecutionReport` field names (`kind`, `order_id`, `side`, `price`, `qty`, `ts`, `reject_reason`) consistent across `execution_report.hpp`, `matching.cpp`, `report_to_jsonl` in the integration test, and the Reference Implementation Engineer's expected JSON shape. Per the `matching-semantics.md` convention, each match emits two Fill reports (maker first, then taker), each self-describing about its own side; there is no `matched_id` field.
 - `Side` enum values (`Buy`, `Sell`) consistent. The Python reference uses `Side.BUY`/`Side.SELL` (uppercase enum convention in Python); the JSON shape uses lowercase string `"buy"`/`"sell"` everywhere.
 - `OrderType` enum values (`Limit`, `Market`, `IOC`, `PostOnly`, `FOK`) consistent. JSON shape uses lowercase `"limit"`/`"market"`/`"ioc"`.
 - `RejectReason` enum values (`None`, `EmptyBook`, `NotFound`, `InsufficientLiquidity`, `WouldCross`) consistent. JSON shape uses lowercase snake_case.
