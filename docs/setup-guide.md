@@ -52,23 +52,24 @@ To be filled in by DevOps in Phase 10. Will cover the multi stage Dockerfile, th
 
 To be filled in by DevOps as each workflow lands. Will cover the secrets configured in GitHub (`FLY_API_TOKEN`, `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`), the protection rules on `main`, and how to manually trigger the bench workflow.
 
-### 12.1 Branch protection on `main` (Phase 0, manual UI step)
+### 12.1 Branch protection on `main`
 
-The DevOps Engineer cannot flip branch protection bits non-interactively in this dispatch; the Project Manager session does this with the user via the GitHub web UI at `https://github.com/MustafaNazeer/Meridian/settings/branches`. Configure the protection rule on `main` as follows once `ci.yml` has run at least once on a PR (so the check names are registered):
+Applied 2026-05-09 via `gh api -X PUT repos/MustafaNazeer/Meridian/branches/main/protection` after PRs #3 and #4 ran `ci.yml` and registered the check names with GitHub. The rule is active and enforces:
 
 1. **Require a pull request before merging.** Approvals: `1`. Dismiss stale pull request approvals when new commits are pushed: enabled. Require review from Code Owners: disabled (no `CODEOWNERS` file in v1).
-2. **Require status checks to pass before merging.** Require branches to be up to date before merging: enabled. Required checks (after `ci.yml` has run once so GitHub registers the names):
+2. **Require status checks to pass before merging.** Require branches to be up to date before merging: enabled. Required checks:
    * `engine (clang)`
    * `engine (gcc)`
    * `frontend`
 3. **Require conversation resolution before merging.** Enabled.
 4. **Require linear history.** Enabled (matches the squash merge convention in `CLAUDE.md`).
-5. **Do not allow bypassing the above settings.** Enabled, with one exception: include administrators in restrictions, but allow `--admin` merges from the repo owner per the standing protocol in `CLAUDE.md` ("When the user says push"). The `--admin` authorization is documented as bypassing only the "1 review required" rule, never the required status checks or the linear history rule.
-6. **Restrict who can push to matching branches.** No direct pushes to `main`; all changes flow through pull requests.
+5. **Restrict who can push to matching branches.** No direct pushes to `main`; all changes flow through pull requests. Force pushes and branch deletion both blocked.
 
-When Phase 5 lands `bench.yml` (manual workflow), the bench job is added to the required-checks list only if the user explicitly requests it; bench runs are typically gated to manual triggers, so making it a required check would block merges on a workflow that does not auto-run.
+**Admin bypass posture.** `enforce_admins` is set to `false` because the legacy GitHub branch-protection API cannot express the per-rule admin carveout the project actually wants (admins should be able to bypass the "1 review required" rule on solo PRs since the rule is structurally unsatisfiable, but should never bypass required status checks or linear history). The discipline is enforced in `CLAUDE.md` instead: the standing `--admin` authorization is explicitly limited to the review-bypass case only and never extends to bypassing required CI checks or any other rule. If a future iteration needs the carveout enforced by the platform rather than by convention, migrate to GitHub Repository Rulesets, which support per-rule bypass actors.
 
-When Phase 8 lands the WebSocket smoke job inside `ci.yml`, that job's name is added to the required-checks list.
+When Phase 5 lands `bench.yml` (manual workflow), the bench job is added to the required-checks list only if the user explicitly requests it; bench runs are typically gated to manual triggers, so making it a required check would block merges on a workflow that does not auto-run. Update via `gh api -X PATCH repos/MustafaNazeer/Meridian/branches/main/protection/required_status_checks` with the augmented `contexts` array.
+
+When Phase 8 lands the WebSocket smoke job inside `ci.yml`, that job's name is added to the required-checks list with the same `gh api` PATCH.
 
 When Phase 10 lands `deploy.yml`, the deploy jobs are not required checks; they run after merge to `main`, not on PRs.
 
