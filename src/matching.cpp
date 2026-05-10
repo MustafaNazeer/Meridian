@@ -18,28 +18,33 @@ HotPathGuard::~HotPathGuard() noexcept {
 #endif
 }
 
-MatchingEngine::MatchingEngine(OrderPool& pool, Book& book) noexcept
-    : pool_(pool), book_(book) {}
+MatchingEngine::MatchingEngine(OrderPool& pool, BookRegistry& registry,
+                               OrderIndex& index) noexcept
+    : pool_(pool), registry_(registry), index_(index) {}
 
 std::vector<ExecutionReport> MatchingEngine::apply(const EngineEvent& event) {
     std::vector<ExecutionReport> out;
-    // Reserve generously so the inner sweep loop never reallocates inside
-    // HotPathGuard's scope. Each match emits 2 Fill reports plus an
-    // Acknowledge; a sweep that walks 500 makers (worst case for the
-    // Phase 1 corner-case scenarios) emits ~1001 reports. The reserve
-    // happens outside the HotPathGuard so the initial allocation is
-    // legitimate. Phase 5 will replace this with a thread-local fixed-
-    // capacity buffer once the bench harness measures the cost.
     out.reserve(1024);
     if (event.kind == EventKind::NewOrder) {
+        Book* book = registry_.book(event.symbol);
+        if (book == nullptr) [[unlikely]] {
+            out.push_back(ExecutionReport{
+                .kind = ReportKind::Reject,
+                .order_id = event.order_id,
+                .side = event.side,
+                .price = event.price,
+                .qty = event.qty,
+                .ts = event.ts,
+                .reject_reason = RejectReason::UnknownSymbol,
+            });
+            return out;
+        }
         switch (event.type) {
-            case OrderType::Limit:  apply_limit(event,  out); break;
-            case OrderType::Market: apply_market(event, out); break;
-            case OrderType::IOC:    apply_ioc(event,    out); break;
+            case OrderType::Limit:  apply_limit(event,  *book, out); break;
+            case OrderType::Market: apply_market(event, *book, out); break;
+            case OrderType::IOC:    apply_ioc(event,    *book, out); break;
             case OrderType::PostOnly:
             case OrderType::FOK:
-                // Phase 7. For Phase 1 we reject explicitly so a stray
-                // PostOnly/FOK does not silently fall through.
                 out.push_back(ExecutionReport{
                     .kind = ReportKind::Reject,
                     .order_id = event.order_id,
@@ -68,15 +73,14 @@ inline bool crosses(Side aggressor_side, Price limit_price, Price resting_price)
 
 }  // namespace
 
-Quantity MatchingEngine::sweep(Side aggressor_side, Price limit_price,
-                               OrderId aggressor_id, Quantity remaining,
-                               Timestamp ts,
+Quantity MatchingEngine::sweep(Book& book, Side aggressor_side,
+                               Price limit_price, OrderId aggressor_id,
+                               Quantity remaining, Timestamp ts,
                                std::vector<ExecutionReport>& out) {
     HotPathGuard guard;
     while (remaining > 0) {
-        Level* level = (aggressor_side == Side::Buy)
-                           ? book_.best_ask()
-                           : book_.best_bid();
+        Level* level = (aggressor_side == Side::Buy) ? book.best_ask()
+                                                     : book.best_bid();
         if (level == nullptr) [[unlikely]] {
             break;
         }
@@ -87,9 +91,6 @@ Quantity MatchingEngine::sweep(Side aggressor_side, Price limit_price,
         Order* resting = level->head();
         while (resting != nullptr && remaining > 0) {
             Quantity match_qty = std::min(remaining, resting->qty_remaining);
-            // Per matching-semantics.md: each match emits TWO Fill reports
-            // back to back, maker first, then taker. Each report is self-
-            // describing about its own side (no matched_id field).
             out.push_back(ExecutionReport{
                 .kind = ReportKind::Fill,
                 .order_id = resting->id,
@@ -111,7 +112,9 @@ Quantity MatchingEngine::sweep(Side aggressor_side, Price limit_price,
             remaining -= match_qty;
             Order* next = resting->next;
             if (match_qty == resting->qty_remaining) {
-                Order* removed = book_.remove_by_id(resting->id);
+                OrderId resting_id = resting->id;
+                Order* removed = book.remove_by_id(resting_id);
+                index_.erase(resting_id);
                 pool_.release(removed);
             } else {
                 level->adjust_qty(resting, resting->qty_remaining - match_qty);
@@ -122,7 +125,7 @@ Quantity MatchingEngine::sweep(Side aggressor_side, Price limit_price,
     return remaining;
 }
 
-void MatchingEngine::apply_limit(const EngineEvent& event,
+void MatchingEngine::apply_limit(const EngineEvent& event, Book& book,
                                  std::vector<ExecutionReport>& out) {
     out.push_back(ExecutionReport{
         .kind = ReportKind::Acknowledge,
@@ -133,7 +136,7 @@ void MatchingEngine::apply_limit(const EngineEvent& event,
         .ts = event.ts,
         .reject_reason = RejectReason::None,
     });
-    Quantity remaining = sweep(event.side, event.price, event.order_id,
+    Quantity remaining = sweep(book, event.side, event.price, event.order_id,
                                event.qty, event.ts, out);
     if (remaining > 0) {
         Order* resting = pool_.acquire();
@@ -144,16 +147,15 @@ void MatchingEngine::apply_limit(const EngineEvent& event,
         resting->price = event.price;
         resting->qty_remaining = remaining;
         resting->ts_arrival = event.ts;
-        book_.add(resting);
+        book.add(resting);
+        index_.insert(event.order_id, resting);
     }
 }
 
-void MatchingEngine::apply_market(const EngineEvent& event,
+void MatchingEngine::apply_market(const EngineEvent& event, Book& book,
                                   std::vector<ExecutionReport>& out) {
-    Level* opposite = (event.side == Side::Buy) ? book_.best_ask() : book_.best_bid();
+    Level* opposite = (event.side == Side::Buy) ? book.best_ask() : book.best_bid();
     if (opposite == nullptr) [[unlikely]] {
-        // Per matching-semantics.md section 4.1: market against empty book
-        // is a single Reject with no preceding Acknowledge.
         out.push_back(ExecutionReport{
             .kind = ReportKind::Reject,
             .order_id = event.order_id,
@@ -177,11 +179,10 @@ void MatchingEngine::apply_market(const EngineEvent& event,
     Price worst_price = (event.side == Side::Buy)
                             ? std::numeric_limits<Price>::max()
                             : std::numeric_limits<Price>::min();
-    sweep(event.side, worst_price, event.order_id, event.qty, event.ts, out);
-    // Market orders never rest; any residual is implicitly cancelled.
+    sweep(book, event.side, worst_price, event.order_id, event.qty, event.ts, out);
 }
 
-void MatchingEngine::apply_ioc(const EngineEvent& event,
+void MatchingEngine::apply_ioc(const EngineEvent& event, Book& book,
                                std::vector<ExecutionReport>& out) {
     out.push_back(ExecutionReport{
         .kind = ReportKind::Acknowledge,
@@ -192,19 +193,13 @@ void MatchingEngine::apply_ioc(const EngineEvent& event,
         .ts = event.ts,
         .reject_reason = RejectReason::None,
     });
-    sweep(event.side, event.price, event.order_id, event.qty, event.ts, out);
-    // IOC orders never rest; any residual is implicitly cancelled.
+    sweep(book, event.side, event.price, event.order_id, event.qty, event.ts, out);
 }
 
 void MatchingEngine::apply_cancel(const EngineEvent& event,
                                   std::vector<ExecutionReport>& out) {
-    Order* removed = book_.remove_by_id(event.order_id);
-    if (removed == nullptr) [[unlikely]] {
-        // Per matching-semantics.md section 8.2: when the cancel target is
-        // unknown, the Reject report carries Side::Buy and price=0 as
-        // sentinels (the engine has no way to know the actual side or
-        // price). Side::Buy is the zero value of the enum, the natural
-        // sentinel without adding a new enumerator.
+    Order* order = index_.find(event.order_id);
+    if (order == nullptr) [[unlikely]] {
         out.push_back(ExecutionReport{
             .kind = ReportKind::Reject,
             .order_id = event.order_id,
@@ -216,9 +211,14 @@ void MatchingEngine::apply_cancel(const EngineEvent& event,
         });
         return;
     }
-    Quantity cancelled_qty = removed->qty_remaining;
-    Side cancelled_side = removed->side;
-    Price cancelled_price = removed->price;
+    Symbol sym = order->symbol;
+    Side cancelled_side = order->side;
+    Price cancelled_price = order->price;
+    Quantity cancelled_qty = order->qty_remaining;
+    Book* book = registry_.book(sym);
+    // book must exist; the order's symbol was registered when it was placed.
+    Order* removed = book->remove_by_id(event.order_id);
+    index_.erase(event.order_id);
     pool_.release(removed);
     out.push_back(ExecutionReport{
         .kind = ReportKind::Cancel,

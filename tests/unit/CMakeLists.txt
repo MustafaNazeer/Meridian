@@ -17,3 +17,13 @@ add_executable(test_matching test_matching.cpp)
 target_link_libraries(test_matching PRIVATE meridian GTest::gtest_main)
 target_compile_options(test_matching PRIVATE -Wall -Wextra -Wpedantic -Werror)
 gtest_discover_tests(test_matching)
+
+add_executable(test_order_index test_order_index.cpp)
+target_link_libraries(test_order_index PRIVATE meridian GTest::gtest_main)
+target_compile_options(test_order_index PRIVATE -Wall -Wextra -Wpedantic -Werror)
+gtest_discover_tests(test_order_index)
+
+add_executable(test_book_registry test_book_registry.cpp)
+target_link_libraries(test_book_registry PRIVATE meridian GTest::gtest_main)
+target_compile_options(test_book_registry PRIVATE -Wall -Wextra -Wpedantic -Werror)
+gtest_discover_tests(test_book_registry)

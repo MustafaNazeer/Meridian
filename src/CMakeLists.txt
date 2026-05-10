@@ -2,6 +2,8 @@ add_library(meridian STATIC
     order_pool.cpp
     level.cpp
     book.cpp
+    book_registry.cpp
+    order_index.cpp
     matching.cpp
 )
 

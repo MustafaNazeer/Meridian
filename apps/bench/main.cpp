@@ -11,8 +11,10 @@
 // kept separate so generation cost does not contaminate the measurement.
 
 #include "meridian/book.hpp"
+#include "meridian/book_registry.hpp"
 #include "meridian/execution_report.hpp"
 #include "meridian/matching.hpp"
+#include "meridian/order_index.hpp"
 #include "meridian/order_pool.hpp"
 #include "meridian/types.hpp"
 
@@ -203,8 +205,9 @@ int main(int argc, char** argv) {
     // released; one slot per event plus headroom is enough.
     const std::size_t pool_capacity = static_cast<std::size_t>(cfg.events) + 1024;
     meridian::OrderPool pool(pool_capacity);
-    meridian::Book book(/*symbol=*/1);
-    meridian::MatchingEngine engine(pool, book);
+    meridian::BookRegistry registry{1};
+    meridian::OrderIndex index;
+    meridian::MatchingEngine engine(pool, registry, index);
 
     std::vector<meridian::EngineEvent> events;
     generate_events(events, cfg.events, cfg.seed);
