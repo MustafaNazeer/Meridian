@@ -83,7 +83,7 @@ The files in `agents/` are not just documentation. Each one is a self contained 
 | Frontend styling | Tailwind CSS | Locked in for v1. Tokens come from the canonical Twilight HTML at `docs/design/canonical.html`. |
 | Visual theme | Twilight (dark) | Background `#0E1126`, accent `#D4A24C`, fonts Inter (UI), Newsreader italic (display), JetBrains Mono (numerics). Source: `docs/design/canonical.html`. |
 | Frontend hosting | Cloudflare Pages | Same as Vega; free tier; instant deploys. |
-| Backend hosting | Hetzner CX22 VPS (~€4/mo) or Fly.io | Render does not host raw C++ binaries comfortably; need a real Linux box. Fly.io is alternative. |
+| Backend hosting | Fly.io machine, free tier, auto-stop on idle and auto-start on first request | Render does not host raw C++ binaries; Fly machines do, with a free allowance, Dockerfile plus `fly.toml` deploys, and no servers to keep patched. Region resolved at Phase 10 (default `iad`, Ashburn VA). Cold start UX handled by the frontend's connection state machine (see design spec section 5.5). |
 | State management (frontend) | Zustand | Small, ergonomic, no Redux ceremony. |
 | Charts | Hand-rolled SVG | Data is small (≤20 levels per side, ≤50 trades); a chart library is overkill. |
 | WebSocket protocol | JSON over WSS | Simple, debuggable in browser DevTools. Binary protocol can come later if measured to matter. |
@@ -173,9 +173,9 @@ Frontend Developer builds the React plus Vite app following the Twilight visual 
 **End of phase**: run the check-in protocol.
 
 ### Phase 10: Hosting and CI/CD
-**Window cost: ~85 percent of one window.** Deployment requires the user to log in and click through two dashboards (Cloudflare, Hetzner or Fly.io), so expect back and forth with the user during this phase.
+**Window cost: ~75 percent of one window.** Deployment requires the user to log in and click through two dashboards (Cloudflare, Fly.io), so expect back and forth with the user during this phase. Slightly cheaper than the original VPS estimate because Fly removes the SSH, systemd, fail2ban, and log rotation work.
 
-DevOps Engineer deploys the frontend to Cloudflare Pages, sets up the C++ binary on the chosen VPS (systemd service, log rotation, restart policy), and configures the WebSocket URL via `VITE_WS_URL`. Sets up the custom subdomain if the user wants one. Security Engineer runs the final hardening checklist (HTTPS, HSTS, CSP, dependency scan via `pip-audit` for any Python in tests/ and `pnpm audit` for the frontend). Documentation Engineer finalizes `docs/setup-guide.md`.
+DevOps Engineer deploys the frontend to Cloudflare Pages (no custom domain for v1; the demo lives at `meridian-demo.pages.dev`), packages `meridian-server` into a Dockerfile, writes the `fly.toml` machine config (auto-stop on idle, auto-start on connect), deploys to Fly.io, and configures the WebSocket URL via `VITE_WS_URL` pointing at `wss://<fly-app>.fly.dev/ws`. Picks the Fly app name and region (default `iad` if available) at the start of the phase. Security Engineer runs the final hardening checklist (HTTPS via Fly's edge, HSTS, CSP with the Fly app origin in `connect-src`, dependency scan via `pip-audit` for any Python in `tests/` and `pnpm audit` for the frontend). Documentation Engineer finalizes `docs/setup-guide.md`.
 
 **End of phase**: run the check-in protocol.
 
@@ -199,7 +199,7 @@ Each link points to a file in `agents/`. Numbers 06 (Data Engineer) and 07 (Data
 | 04 | [Frontend Developer](agents/04-frontend-developer.md) | Builds the React app, depth chart, trade tape, and WebSocket client. |
 | 05 | [UI/UX Designer](agents/05-ui-ux-designer.md) | Wireframes, design tokens, interaction design, Twilight visual stewardship. |
 | 08 | [Security Engineer](agents/08-security-engineer.md) | Threat model, hardening, WebSocket origin and rate limit policy, dependency scanning. |
-| 09 | [DevOps Engineer](agents/09-devops-engineer.md) | CMake, CI/CD, VPS provisioning, Cloudflare Pages deployment, systemd service. |
+| 09 | [DevOps Engineer](agents/09-devops-engineer.md) | CMake, CI/CD, Fly.io machine deploys (Dockerfile plus `fly.toml`), Cloudflare Pages deployment. |
 | 10 | [QA Engineer](agents/10-qa-engineer.md) | Test plan, unit tests, property-based tests, integration tests, regression suite. |
 | 11 | [Code Reviewer](agents/11-code-reviewer.md) | Reviews every PR for code quality, hot-path discipline, and idiom. |
 | 12 | [Performance Engineer](agents/12-performance-engineer.md) | Profiles the matching loop, drives the 6M events per second benchmark, owns the latency budget. |

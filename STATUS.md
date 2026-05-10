@@ -2,11 +2,11 @@
 
 Single source of truth for which phase is next. Read this file when the user says "work on the next phase" or any equivalent. Update this file when a phase changes state. The Project Manager session owns it.
 
-**Last updated**: 2026-05-09 (project scaffolded from the bootstrap template; no phase work has begun).
+**Last updated**: 2026-05-09 (Phase 0 opened; PM brainstorming the open questions in SPEC.md section 13 before writing `docs/plan.md`).
 
 ## Next phase
 
-**Phase 0: Foundations.** Status: `not started`. Owner: Project Manager session in the next Claude Code conversation that opens this directory. See `GETTING-STARTED.md` for the literal first session walkthrough.
+**Phase 0: Foundations.** Status: `in progress`. Owner: Project Manager session.
 
 ## Phase status table
 
@@ -24,7 +24,7 @@ Status values: `not started`, `in progress`, `completed`, `bundled with phase N`
 | 7 | Post-only and FOK order types | not started | | ~30% alone or bundled with Phase 8 | two more order types, property tests updated |
 | 8 | WebSocket server and protocol | not started | | ~60% alone or bundled with Phase 7 | uWebSockets wired, snapshot + delta protocol, meridian-server binary |
 | 9 | React frontend with Twilight visual | not started | | ~95-99% | React + Vite + TS + Tailwind app, Twilight tokens, all panels |
-| 10 | Hosting and CI/CD | not started | | ~85% | Cloudflare Pages, VPS, domain, systemd service, hardening checklist |
+| 10 | Hosting and CI/CD | not started | | ~75% | Cloudflare Pages, Fly.io machine (Dockerfile + `fly.toml`), hardening checklist |
 | 11 | Polish, README, and benchmark report | not started | | ~80% | headline README, benchmark report PDF, final test pass |
 
 ## Resume notes

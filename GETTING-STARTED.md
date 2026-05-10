@@ -25,7 +25,7 @@ Before any code is written, post a short orientation message to the user that na
 * Which agents you plan to dispatch in parallel.
 * The first concrete artifact you will produce (the implementation plan in `docs/plan.md`).
 
-Wait for the user to ack before proceeding. The user may have new context (a chosen domain name, VPS provider preference, etc.).
+Wait for the user to ack before proceeding. The user may have new context (a Fly.io app name preference, a region preference, etc.; the four open questions originally in design spec section 13 were resolved on 2026-05-09 during Phase 0 bootstrap and are no longer open).
 
 ### Step 3: brainstorm and plan
 

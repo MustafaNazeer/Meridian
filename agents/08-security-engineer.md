@@ -12,7 +12,7 @@ Threat-model the live demo, harden the WebSocket server and the C++ binary, and 
 * The frontend codebase (especially `frontend/src/ws/client.ts`).
 
 ## Outputs
-* `/home/mustafa/src/Meridian/docs/security/threat-model.md`: STRIDE-based threat model covering the WebSocket endpoint, the static-file serving on the VPS, and the build pipeline.
+* `/home/mustafa/src/Meridian/docs/security/threat-model.md`: STRIDE-based threat model covering the WebSocket endpoint, the static-file serving from the Fly.io machine, and the build pipeline.
 * `/home/mustafa/src/Meridian/docs/security/checklist.md`: per-phase hardening checklist.
 * `/home/mustafa/src/Meridian/docs/security/secrets.md`: list of every secret the project uses, where it is stored, who can rotate it, and what the rotation procedure is.
 * Sign-off comments on every PR that touches networking, input handling, or secrets.
@@ -26,13 +26,13 @@ Threat-model the live demo, harden the WebSocket server and the C++ binary, and 
    * **Replay tape file**: trusted input (we ship known ITCH samples), but document the assumption.
    * **Build pipeline**: GitHub Actions workflow access, dependency provenance (uWebSockets, simdjson, glaze, rapidcheck, GoogleTest, Google Benchmark via FetchContent), SBOM generation.
 2. Stub `docs/security/checklist.md` with empty checklist sections per phase.
-3. Stub `docs/security/secrets.md` with the known set: GitHub Actions secrets (deploy key for the VPS, Cloudflare Pages API token), VPS root password (rotate before exposing publicly).
+3. Stub `docs/security/secrets.md` with the known set: GitHub Actions secrets (Fly.io deploy token via `FLY_API_TOKEN`, Cloudflare Pages API token), Fly.io app secrets set via `fly secrets set` (rotate before exposing publicly). Note that the Fly.io account itself is protected by the user's password and 2FA, not stored in the repo.
 
 ### Phase 8: WebSocket server and protocol
 1. Review the WebSocket handshake code. Confirm:
    * Origin header is checked against an allow-list (Cloudflare Pages domain plus localhost for dev).
    * Max payload size is set (anything over 64 KB is dropped; the demo never sends near that).
-   * Max client count is set (hundreds, not thousands; size to the VPS).
+   * Max client count is set (hundreds, not thousands; size to the Fly.io machine's memory budget).
    * Per-IP rate limit on connection attempts (e.g., 10 attempts per minute) to deflect trivial DoS.
 2. Sign off only after the above are in code, not just documentation.
 
@@ -43,14 +43,13 @@ Threat-model the live demo, harden the WebSocket server and the C++ binary, and 
 
 ### Phase 10: Hosting and CI/CD
 1. Run the final hardening checklist:
-   * HTTPS via Cloudflare in front of the WebSocket; the VPS terminates TLS or stays HTTP-behind-Cloudflare-only (decide and document).
-   * HSTS with `max-age` at least 6 months.
-   * CSP, X-Frame-Options DENY, X-Content-Type-Options nosniff.
-   * SSH key-only access on the VPS, root login disabled, fail2ban or equivalent.
-   * Systemd service runs as a non-root user with no shell.
-   * Log rotation does not retain raw client IPs longer than 7 days.
+   * HTTPS via Fly's edge (Fly issues and renews the TLS certificate for `<app>.fly.dev` automatically). Confirm the WebSocket upgrade is over `wss://`.
+   * HSTS with `max-age` at least 6 months on the Cloudflare Pages frontend.
+   * CSP on the frontend: `connect-src` allows the Fly app origin (`wss://<app>.fly.dev`) plus self; `script-src` is `self`; `style-src` is `self` plus Google Fonts if used; `default-src` is `none`. Plus X-Frame-Options DENY and X-Content-Type-Options nosniff.
+   * The Fly machine runs `meridian-server` as a non-root user inside the Docker image, with no shell. Confirm via `fly ssh console` that the user account has `/sbin/nologin` or similar.
+   * The audit log is in-memory only on the live demo (per design spec section 13); confirm no client IPs are persisted to disk.
 2. Run `pnpm audit` and a C++ dependency audit (CMake FetchContent does not have a built-in audit; manually compare locked commit SHAs against upstream advisories for uWebSockets, simdjson, glaze).
-3. Rotate any default secrets before going live.
+3. Rotate any default secrets before going live: regenerate `FLY_API_TOKEN`, regenerate the Cloudflare Pages API token.
 
 ## Plugins to use
 * `security-review` for the formal threat model and audit passes.

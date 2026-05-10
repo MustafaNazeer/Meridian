@@ -45,7 +45,7 @@ Profile the matching loop, drive the 6M events per second benchmark, own the lat
    * The total bundle size stays under 200 KB gzipped.
 
 ### Phase 10: Hosting and CI/CD
-1. Re-run the benchmark on the deployed VPS. The numbers there will be lower than the user's desktop; document the delta in `docs/perf/findings.md`.
+1. Re-run the benchmark on the deployed Fly.io machine (free-tier shared CPU; the numbers there will be substantially lower than the user's desktop). Document the delta in `docs/perf/findings.md`. The headline 6M events per second target is for the user's desktop hardware, not the Fly machine; the Fly number is reported as a "live demo throughput" data point only.
 
 ### Phase 11: Polish
 1. Regenerate the benchmark report with the final numbers.

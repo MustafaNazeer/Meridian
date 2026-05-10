@@ -50,8 +50,9 @@ Build the C++ library and the three driver binaries: meridian-bench, meridian-re
 4. Document the protocol at `docs/api/websocket.md`.
 
 ### Phase 10: Hosting and CI/CD
-1. Pair with the DevOps Engineer on the systemd service unit, `meridian.toml` production config, and log rotation.
-2. Make sure `meridian-server --help` shows every flag with examples.
+1. Pair with the DevOps Engineer on the `Dockerfile` for `meridian-server` (multi-stage build, non-root runtime user) and the `meridian.toml` production config that ships into the container.
+2. Add a `/healthz` endpoint to `meridian-server` that returns a 200 OK with a one-line JSON status; Fly's load balancer will hit this for readiness checks.
+3. Make sure `meridian-server --help` shows every flag with examples.
 
 ## Plugins to use
 * `superpowers:executing-plans` to follow the PM's per-phase plan.

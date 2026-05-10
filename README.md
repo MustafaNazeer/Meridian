@@ -42,7 +42,7 @@ The library and the bench binary contain zero networking code, so the headline n
 | ITCH parser | Hand-rolled (single-header) |
 | Frontend | React 18 plus Vite plus TypeScript plus Tailwind |
 | Frontend host | Cloudflare Pages |
-| Backend host | Hetzner CX22 VPS or Fly.io |
+| Backend host | Fly.io machine (free tier, Dockerfile plus `fly.toml`) |
 | CI/CD | GitHub Actions |
 | License | MIT |
 

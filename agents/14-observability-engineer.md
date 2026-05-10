@@ -31,11 +31,12 @@ Make the live deploy debuggable without sacrificing the latency budget. Logging 
 
 ### Phase 10: Hosting and CI/CD
 1. Write `docs/observability/runbook.md`:
-   * How to ssh to the VPS and tail the systemd journal for `meridian-server`.
-   * How to roll back to a previous binary (the systemd unit points at `/usr/local/bin/meridian-server`; rollback is a `cp` from `/usr/local/bin/meridian-server.prev` and a `systemctl restart`).
+   * How to tail Fly's logs (`fly logs --app <app>`) and how to attach a shell to the running machine (`fly ssh console --app <app>`).
+   * How to roll back a bad deploy (`fly releases --app <app>` to find the previous release ID, `fly deploy --image-label <prev-release>` to redeploy that image, or `fly machines update <id> --image <prev-image-sha>` for a more surgical rollback).
+   * How the Fly machine's auto-stop and auto-start cycle interacts with the demo: a connection after idle takes 5 to 15 seconds (consistent with the design spec section 13 cold-start state). Document what an unhealthy cold start looks like versus a healthy one.
    * How to read the `/metrics` endpoint and what the expected steady-state values are.
-   * What "the dashboard is broken" looks like, in priority order: WebSocket cannot connect (check VPS, check Cloudflare, check the systemd service), dashboard renders but is stale (check the sampler thread and the WebSocket broadcast loop), dashboard shows nonsense values (check the matching engine, then the sampler delta logic).
-2. Configure log rotation: 7 days retention, 10 MB max per file, gzip on rotation.
+   * What "the dashboard is broken" looks like, in priority order: WebSocket cannot connect (check the Fly machine status with `fly status`, check Cloudflare Pages deploy, check the frontend's `VITE_WS_URL`), dashboard renders but is stale (check the sampler thread and the WebSocket broadcast loop), dashboard shows nonsense values (check the matching engine, then the sampler delta logic).
+2. Configure log shipping: rely on Fly's built-in log retention (Fly retains roughly 100 MB per app on the free tier; the runbook notes this and how to plumb logs to a separate aggregator if the demand ever appears).
 
 ### Phase 11: Polish
 1. Confirm the runbook is current; have the user (or a second pair of eyes) try to use it cold to diagnose a fake outage.
@@ -47,10 +48,10 @@ Make the live deploy debuggable without sacrificing the latency budget. Logging 
 * No spdlog call exists on the hot path; the matching loop is logging-free.
 * The `/metrics` endpoint returns useful counters.
 * The runbook documents every diagnosis flow the maintainer would actually follow.
-* Log rotation is configured and tested (at least one rotation has happened cleanly during testing).
+* Fly log retention is verified end to end (a `fly logs` invocation surfaces a known recent log line).
 
 ## Handoffs
 * Hot-path discipline pairs with the Performance Engineer (they will catch any regression).
 * Frontend logging review pairs with the Frontend Developer.
 * Hosting integration goes to the DevOps Engineer.
-* `docs/observability/runbook.md` ships only after Citation and Fact Auditor sign-off (the diagnostic flows must reference real commands, real metric names, and real systemd unit paths that exist).
+* `docs/observability/runbook.md` ships only after Citation and Fact Auditor sign-off (the diagnostic flows must reference real commands, real metric names, and real `fly` CLI invocations that work against the actual deployed app).
