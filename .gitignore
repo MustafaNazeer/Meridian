@@ -28,6 +28,7 @@ CTestTestfile.cmake
 Testing/
 _deps/
 Makefile
+.cache/
 
 # Profile-guided optimization
 *.profraw
@@ -52,6 +53,12 @@ dist/
 .vite/
 *.tsbuildinfo
 .eslintcache
+pnpm-lock.yaml.bak
+frontend/.env
+frontend/.env.local
+frontend/.env.*.local
+frontend/.env.development
+frontend/.env.production
 
 # IDE
 .vscode/

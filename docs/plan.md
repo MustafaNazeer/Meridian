@@ -19,7 +19,7 @@ per phase.
 
 **Architecture:** Single-process C++20 matching engine compiled to
 `libmeridian.a` plus three driver binaries (`meridian-bench`,
-`meridian-replay`, `meridian-server`). Frontend is a React 18 plus Vite
+`meridian-replay`, `meridian-server`). Frontend is a React 19 plus Vite
 plus TypeScript plus Tailwind SPA hosted on Cloudflare Pages at
 `meridian-demo.pages.dev`, talking to the server over WSS. The engine
 deploys as a Fly.io machine described by `Dockerfile` plus `fly.toml`,
@@ -27,7 +27,7 @@ auto-stopping when idle and auto-starting on first request.
 
 **Tech Stack:** C++20, CMake 3.25 or newer with Ninja, GoogleTest,
 rapidcheck, Google Benchmark, uWebSockets v20 or newer, simdjson, glaze,
-spdlog. React 18, Vite, TypeScript, Tailwind CSS, Zustand. CMake
+spdlog. React 19, Vite, TypeScript, Tailwind CSS, Zustand. CMake
 FetchContent for vendoring C++ deps. Python 3.11 plus pytest for the
 reference implementation under `tests/reference/`. Fly.io plus
 Cloudflare Pages for hosting.

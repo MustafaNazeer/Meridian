@@ -79,7 +79,7 @@ The files in `agents/` are not just documentation. Each one is a self contained 
 | ITCH parser | Hand-rolled (one header file) | The 5.0 format is small and stable; a parser library is overkill. |
 | Logging | spdlog | De facto standard, level filtered out of release hot path. |
 | JSON | simdjson (parse), glaze (serialize) | Both are fast and modern. |
-| Frontend framework | React 18 + Vite + TypeScript | Mirrors Vega's tooling so the constellation has one frontend story. |
+| Frontend framework | React 19 + Vite + TypeScript | Vite default as of 2026-05-09. The frontend story is shared in spirit with Vega; matching exact major versions is a non-goal. |
 | Frontend styling | Tailwind CSS | Locked in for v1. Tokens come from the canonical Twilight HTML at `docs/design/canonical.html`. |
 | Visual theme | Twilight (dark) | Background `#0E1126`, accent `#D4A24C`, fonts Inter (UI), Newsreader italic (display), JetBrains Mono (numerics). Source: `docs/design/canonical.html`. |
 | Frontend hosting | Cloudflare Pages | Same as Vega; free tier; instant deploys. |

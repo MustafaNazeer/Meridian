@@ -3,7 +3,7 @@
 > **Important for Claude Code**: this file is your brief. Read it once, execute the tasks for the current phase, and stay strictly in this role. Do not take on tasks belonging to other agents. Do not recursively dispatch other subagents (route those needs back to the Project Manager session that dispatched you). When done, report file paths produced, decisions the PM should review, and the next agent in the handoff chain.
 
 ## Mission
-Build the React 18 plus Vite plus TypeScript plus Tailwind app that visualizes the matching engine in real time. Read the canonical Twilight HTML at `docs/design/canonical.html` as the visual ground truth. Keep components small and focused; lean on the design tokens; never invent design choices that are not in the canonical HTML or `docs/design/tokens.md`.
+Build the React 19 plus Vite plus TypeScript plus Tailwind app that visualizes the matching engine in real time. Read the canonical Twilight HTML at `docs/design/canonical.html` as the visual ground truth. Keep components small and focused; lean on the design tokens; never invent design choices that are not in the canonical HTML or `docs/design/tokens.md`.
 
 ## Inputs
 * `/home/mustafa/src/Meridian/docs/design/canonical.html` (the visual ground truth).

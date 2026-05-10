@@ -51,7 +51,7 @@ It is the venue half of a two-project quant systems narrative on the resume: Veg
 | Benchmark | Google Benchmark | Standard for microbenchmarks |
 | WebSocket | uWebSockets v20+ | Single-process WS server with low overhead |
 | ITCH parsing | Hand-rolled (one header file) | Format is small and stable; a parser library is overkill |
-| Front end | React 18 + Vite + TypeScript + Tailwind | Mirrors Vega's tooling so the constellation has one front-end story |
+| Front end | React 19 + Vite + TypeScript + Tailwind | Vite default as of 2026-05-09. Vega's frontend is on React 18; matching majors is a non-goal. |
 | Front-end host | Cloudflare Pages | Same as Vega; free tier; instant deploys |
 | Back-end host | Fly.io machine, free tier, auto-stop on idle and auto-start on first request | Render does not host raw C++ binaries; Fly machines do, with a free allowance, Dockerfile + `fly.toml` deployment, and no servers to keep patched. Region resolved at Phase 10 (default `iad`). Cold-start UX handled in section 5.5. |
 | License | MIT | Industry default for portfolio C++ projects |
@@ -103,7 +103,7 @@ This visual identity must be distinct from Vega's "Oxblood" theme. No oxblood re
                                                        │ WSS
                                                        ▼
                               ┌────────────────────────────────────┐
-                              │  React 18 + Vite + TS + Tailwind   │
+                              │  React 19 + Vite + TS + Tailwind   │
                               │  Cloudflare Pages                  │
                               │  Twilight visual identity          │
                               └────────────────────────────────────┘
@@ -173,13 +173,15 @@ Seqlock-protected struct: `{best_bid_px, best_bid_qty, best_ask_px, best_ask_qty
 * Starts sampler on core 6 (30 Hz)
 * Starts uWebSockets event loop on core 5
 * Serves:
-  * `GET /` → static React app (built into the binary or mounted from disk)
-  * `WSS /ws` → top-of-book delta stream
+  * `WSS /ws`: top-of-book delta stream (the live demo's only first-class endpoint)
+  * `GET /healthz`: returns 200 with a one-line JSON status; Fly's load balancer hits this for readiness checks
+  * `GET /metrics`: returns the JSON counters defined by the Observability Engineer (events ingested, trades emitted, clients connected, messages broadcast)
+* Does NOT serve the React SPA. Cloudflare Pages owns the SPA at `meridian-demo.pages.dev`; the resolved decision in section 13 puts the frontend on Cloudflare Pages, not on the Fly machine. The earlier draft of this section that mentioned `GET /` returning a static React app is superseded.
 * Graceful shutdown on SIGTERM
 
 ### 5.5 Web client
 
-React 18 SPA. WebSocket client subscribes to a symbol topic on connect; receives:
+React 19 SPA. WebSocket client subscribes to a symbol topic on connect; receives:
 
 * `snapshot`: full book L10 + recent trades + perf metrics (on connect)
 * `delta`: per-tick top-of-book changes, new trades, perf updates (30 Hz)
