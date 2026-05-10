@@ -94,7 +94,7 @@ Phase 11  Polish, README, benchmark report  ->  v0.1 ships
 
 ## Phase 0: Foundations
 
-**Status:** in progress (opened 2026-05-09).
+**Status:** completed 2026-05-09 (PR #3 squash-merged to `main` at `3c744ed`; first CI run was green).
 
 **Window cost:** ~95 percent of one Claude Max window.
 
