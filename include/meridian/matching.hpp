@@ -57,6 +57,10 @@ private:
                       std::vector<ExecutionReport>& out);
     void apply_ioc(const EngineEvent& event, Book& book,
                    std::vector<ExecutionReport>& out);
+    void apply_post_only(const EngineEvent& event, Book& book,
+                         std::vector<ExecutionReport>& out);
+    void apply_fok(const EngineEvent& event, Book& book,
+                   std::vector<ExecutionReport>& out);
     void apply_cancel(const EngineEvent& event,
                       std::vector<ExecutionReport>& out);
 

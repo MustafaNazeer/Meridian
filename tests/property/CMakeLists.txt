@@ -1,6 +1,6 @@
 # Property-based tests: deterministic random event sequences run through
 # the matching engine, with each invariant from
-# docs/risk/matching-semantics.md section 7 checked across at least 1000
+# docs/risk/matching-semantics.md section 9 checked across at least 1000
 # cases per CI run. Generators and shadow-state bookkeeping are hand
 # rolled in GoogleTest; no external PBT framework is pulled in.
 

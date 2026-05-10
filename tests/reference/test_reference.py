@@ -634,7 +634,7 @@ class CancelTests(_BaseRefTest):
 
 
 class ConservationLawTests(_BaseRefTest):
-    """Cross-check matching-semantics.md section 7.1 worked walkthroughs.
+    """Cross-check matching-semantics.md section 9.1 worked walkthroughs.
 
     The conservation law ``submitted = filled + resting + cancelled``
     is checked here on a few examples by reading the engine state

@@ -125,9 +125,11 @@ EngineEvent to_engine_event(const ScenarioEvent& e) {
         ev.kind = EventKind::Cancel;
     } else {
         ev.kind = EventKind::NewOrder;
-        if (e.type == "limit")       ev.type = OrderType::Limit;
-        else if (e.type == "market") ev.type = OrderType::Market;
-        else if (e.type == "ioc")    ev.type = OrderType::IOC;
+        if (e.type == "limit")          ev.type = OrderType::Limit;
+        else if (e.type == "market")    ev.type = OrderType::Market;
+        else if (e.type == "ioc")       ev.type = OrderType::IOC;
+        else if (e.type == "postonly")  ev.type = OrderType::PostOnly;
+        else if (e.type == "fok")       ev.type = OrderType::FOK;
         ev.price = e.price;
         ev.qty = e.qty;
     }
@@ -436,10 +438,93 @@ INSTANTIATE_TEST_SUITE_P(
     scenario_name);
 
 // =====================================================================
+// PostOnlyWorkedExamples: POSTONLY-1..POSTONLY-6 from
+// docs/risk/matching-semantics.md section 6. Post-only must not cross;
+// a would-cross order is rejected with reason WouldCross and no
+// preceding Acknowledge (section 6.1 convention).
+// =====================================================================
+
+INSTANTIATE_TEST_SUITE_P(
+    PostOnlyWorkedExamples, EngineVsReferenceTest,
+    ::testing::Values(
+        // POSTONLY-1: passive post-only on empty book (section 6.2).
+        NamedScenario{"postonly_1_passive_empty_book", {
+            {"new_order", "postonly", 101, "buy", 10000, 50, 1},
+        }},
+        // POSTONLY-2: post-only buy below best ask, no cross (section 6.3).
+        NamedScenario{"postonly_2_buy_below_best_ask_rests", {
+            {"new_order", "limit",    201, "sell", 10005, 30, 1},
+            {"new_order", "postonly", 102, "buy",  10000, 20, 2},
+        }},
+        // POSTONLY-3: post-only buy at best ask, would cross (section 6.4).
+        NamedScenario{"postonly_3_buy_at_best_ask_rejects", {
+            {"new_order", "limit",    201, "sell", 10000, 30, 1},
+            {"new_order", "postonly", 103, "buy",  10000, 20, 2},
+        }},
+        // POSTONLY-4: post-only sell above best bid, no cross (section 6.5).
+        NamedScenario{"postonly_4_sell_above_best_bid_rests", {
+            {"new_order", "limit",    101, "buy",  9995, 30, 1},
+            {"new_order", "postonly", 202, "sell", 10000, 20, 2},
+        }},
+        // POSTONLY-5: post-only buy strictly above best ask, would cross (section 6.6).
+        NamedScenario{"postonly_5_buy_above_best_ask_rejects", {
+            {"new_order", "limit",    201, "sell", 10000, 30, 1},
+            {"new_order", "postonly", 105, "buy",  10005, 20, 2},
+        }},
+        // POSTONLY-6: post-only on empty opposite side (section 6.7).
+        NamedScenario{"postonly_6_empty_opposite_rests", {
+            {"new_order", "limit",    101, "buy",  9990, 5, 1},
+            {"new_order", "postonly", 106, "buy",  10000, 20, 2},
+        }}
+    ),
+    scenario_name);
+
+// =====================================================================
+// FokWorkedExamples: FOK-1..FOK-5 from
+// docs/risk/matching-semantics.md section 7. FOK fills in full or
+// rejects with reason InsufficientLiquidity and no preceding
+// Acknowledge (section 7.1 convention). The liquidity scan inspects
+// every crossing level on the opposite side; if the cumulative qty is
+// below the requested qty, the engine rejects without touching any
+// resting order.
+// =====================================================================
+
+INSTANTIATE_TEST_SUITE_P(
+    FokWorkedExamples, EngineVsReferenceTest,
+    ::testing::Values(
+        // FOK-1: FOK against empty opposite side (section 7.2).
+        NamedScenario{"fok_1_empty_book_rejects", {
+            {"new_order", "fok", 301, "buy", 10000, 10, 1},
+        }},
+        // FOK-2: FOK with exact liquidity at one level (section 7.3).
+        NamedScenario{"fok_2_exact_liquidity_full_fill", {
+            {"new_order", "limit", 201, "sell", 10000, 10, 1},
+            {"new_order", "fok",   302, "buy",  10000, 10, 2},
+        }},
+        // FOK-3: FOK with insufficient liquidity rejects (section 7.4).
+        NamedScenario{"fok_3_insufficient_liquidity_rejects", {
+            {"new_order", "limit", 201, "sell", 10000, 5, 1},
+            {"new_order", "fok",   303, "buy",  10000, 10, 2},
+        }},
+        // FOK-4: FOK sweeps two levels with full fill (section 7.5).
+        NamedScenario{"fok_4_two_level_sweep_full_fill", {
+            {"new_order", "limit", 201, "sell", 10000, 4, 1},
+            {"new_order", "limit", 202, "sell", 10001, 6, 2},
+            {"new_order", "fok",   304, "buy",  10001, 10, 3},
+        }},
+        // FOK-5: FOK at non-crossing price rejects (section 7.6).
+        NamedScenario{"fok_5_non_crossing_price_rejects", {
+            {"new_order", "limit", 201, "sell", 10005, 10, 1},
+            {"new_order", "fok",   305, "buy",  10000, 5, 2},
+        }}
+    ),
+    scenario_name);
+
+// =====================================================================
 // CancelWorkedExamples: CXL-1..CXL-6 from
-// docs/risk/matching-semantics.md section 6. Cancel-by-id with Reject
-// reason NotFound for unknown ids. The unknown-id Reject carries
-// sentinel side Buy and price 0 per the convention in section 8.2.
+// docs/risk/matching-semantics.md (Cancel section). Cancel-by-id with
+// Reject reason NotFound for unknown ids. The unknown-id Reject
+// carries sentinel side Buy and price 0 per the conventions section.
 //
 // CXL-2 and CXL-5 require a partial-fill or full-fill prefix to set up
 // the state the worked example assumes; the prefix events are kept

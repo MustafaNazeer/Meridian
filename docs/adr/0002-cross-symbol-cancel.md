@@ -40,5 +40,5 @@ The first path is preferred. No deadline; the dual-index design is acceptable fo
 
 ## Related
 
-* Matching semantics: `docs/risk/matching-semantics.md` (single-symbol conventions; section 8.2 describes the unknown-id sentinel choice that carries over to the cross-symbol cancel design).
+* Matching semantics: `docs/risk/matching-semantics.md` (single-symbol conventions; section 10.2 describes the unknown-id sentinel choice that carries over to the cross-symbol cancel design).
 * Audit cases: `docs/risk/audit-cases.md` is the side-by-side correctness audit, including the multi-instrument cases.

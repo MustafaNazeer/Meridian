@@ -46,9 +46,9 @@ struct GeneratedEvent {
 };
 
 // Per-event generator knobs. Defaults are tuned for the invariant suite:
-// short bursts of mixed limit / market / IOC traffic across the demo
-// symbol set, with a non-trivial cancel ratio so the cancel-by-id path
-// is exercised on every seed.
+// short bursts of mixed limit / market / IOC / post-only / FOK traffic
+// across the demo symbol set, with a non-trivial cancel ratio so the
+// cancel-by-id path is exercised on every seed.
 struct GenConfig {
     std::size_t length = 100;
     Price price_min = 50;
@@ -58,10 +58,13 @@ struct GenConfig {
     // Probability buckets (must sum to 1.0).
     double p_new_order = 0.70;
     double p_cancel    = 0.30;
-    // Conditional on NewOrder.
-    double p_limit  = 0.60;
-    double p_market = 0.20;
-    double p_ioc    = 0.20;
+    // Conditional on NewOrder. The buckets sum to 1.0 across the five
+    // implemented order types.
+    double p_limit     = 0.50;
+    double p_market    = 0.15;
+    double p_ioc       = 0.15;
+    double p_post_only = 0.10;
+    double p_fok       = 0.10;
     // Cancels: with this probability, the cancel targets an OrderId that
     // was never submitted (exercising the NotFound branch). Otherwise it
     // picks uniformly from previously-submitted ids.
@@ -101,13 +104,21 @@ public:
                 ev.price = price_dist(rng_);
                 ev.qty = qty_dist(rng_);
                 const double t = uni01(rng_);
-                if (t < cfg_.p_limit) {
+                const double cum_limit     = cfg_.p_limit;
+                const double cum_market    = cum_limit + cfg_.p_market;
+                const double cum_ioc       = cum_market + cfg_.p_ioc;
+                const double cum_post_only = cum_ioc + cfg_.p_post_only;
+                if (t < cum_limit) {
                     ev.type = OrderType::Limit;
-                } else if (t < cfg_.p_limit + cfg_.p_market) {
+                } else if (t < cum_market) {
                     ev.type = OrderType::Market;
                     ev.price = 0;
-                } else {
+                } else if (t < cum_ioc) {
                     ev.type = OrderType::IOC;
+                } else if (t < cum_post_only) {
+                    ev.type = OrderType::PostOnly;
+                } else {
+                    ev.type = OrderType::FOK;
                 }
                 submitted_ids.push_back(ev.order_id);
                 out.push_back({ev});
@@ -197,7 +208,9 @@ public:
             }
             case ReportKind::Reject: {
                 if (r.reject_reason == RejectReason::EmptyBook ||
-                    r.reject_reason == RejectReason::UnknownSymbol) {
+                    r.reject_reason == RejectReason::UnknownSymbol ||
+                    r.reject_reason == RejectReason::WouldCross ||
+                    r.reject_reason == RejectReason::InsufficientLiquidity) {
                     ShadowOrder& s = orders_[r.order_id];
                     s.rejected_at_submission = true;
                 }
@@ -223,11 +236,15 @@ public:
                 s.currently_resting = false;
                 continue;
             }
-            // Limit can rest. Market and IOC never rest; for them, the
-            // residual is implicitly cancelled (no Cancel report) and
-            // the shadow accounts for that as "implicit_cancel" on
-            // demand in the conservation-law check below.
-            s.currently_resting = (s.type == OrderType::Limit);
+            // Limit and PostOnly can rest. Market, IOC, and FOK never
+            // rest; for Market and IOC the residual is implicitly
+            // cancelled (no Cancel report) and the shadow accounts for
+            // that as "implicit_cancel" on demand in the conservation
+            // law check below. FOK only ever fills in full or rejects;
+            // a non-rejected FOK has qty_filled == qty_submitted, so
+            // it never reaches this branch.
+            s.currently_resting = (s.type == OrderType::Limit ||
+                                   s.type == OrderType::PostOnly);
         }
     }
 
@@ -240,11 +257,13 @@ public:
     }
 
     // The implicit-cancel quantity for a market or IOC that walked away
-    // with unfilled residual: submitted - filled. For limit and
-    // unsubmitted ids this returns 0.
+    // with unfilled residual: submitted - filled. Limit and PostOnly
+    // rest their residual on the book (no implicit cancel); FOK either
+    // fills in full or is rejected upfront (no residual to cancel).
     [[nodiscard]] Quantity implicit_cancel_qty(const ShadowOrder& s) const noexcept {
         if (!s.submitted || s.rejected_at_submission || s.cancelled) return 0;
-        if (s.type == OrderType::Limit) return 0;
+        if (s.type == OrderType::Limit || s.type == OrderType::PostOnly) return 0;
+        if (s.type == OrderType::FOK) return 0;
         return s.qty_submitted - s.qty_filled;
     }
 

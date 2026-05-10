@@ -101,8 +101,8 @@ Every public-API rule in `matching_reference.py` cites the section of `docs/risk
 
 Two convention choices were ratified in `matching-semantics.md` section 8 and are encoded here verbatim:
 
-* **Section 8.1**: market against empty book emits a single `Reject` with no preceding `Acknowledge`. Implemented in `submit_market`.
-* **Section 8.2**: cancel of an unknown id emits a `Reject` with sentinel side `Side.BUY` and price `0`. Implemented in `cancel_at`.
+* **Section 10.1**: market against empty book emits a single `Reject` with no preceding `Acknowledge`. Implemented in `submit_market`.
+* **Section 10.2**: cancel of an unknown id emits a `Reject` with sentinel side `Side.BUY` and price `0`. Implemented in `cancel_at`.
 
 If either of these is ever overridden, the relevant unit tests in `test_reference.py` and the matching code in `matching_reference.py` need to be updated together; both this README and the matching-semantics worked examples have to move at the same time.
 

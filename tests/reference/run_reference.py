@@ -29,7 +29,7 @@ Cancel events:
 Cancels do not carry ``symbol``. The reference looks up the order's
 symbol in its cross-symbol id-to-symbol map and routes the cancel to
 the correct per-symbol book. An unknown id produces ``Reject NOT_FOUND``
-(matching-semantics.md section 6).
+(matching-semantics.md section 8).
 
 The cancel event carries a ``ts`` so the emitted ``Cancel`` (or
 ``Reject NOT_FOUND``) report's timestamp matches the C++ engine's
@@ -102,6 +102,14 @@ def _process_event(engine: MatchingReference, event: dict) -> list:
             )
         if otype == "ioc":
             return engine.submit_ioc(
+                order_id, side, price, qty, ts, symbol=symbol
+            )
+        if otype == "postonly":
+            return engine.submit_post_only(
+                order_id, side, price, qty, ts, symbol=symbol
+            )
+        if otype == "fok":
+            return engine.submit_fok(
                 order_id, side, price, qty, ts, symbol=symbol
             )
         raise ValueError(f"unknown order type {otype!r}")

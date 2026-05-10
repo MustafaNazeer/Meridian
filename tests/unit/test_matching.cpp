@@ -333,57 +333,136 @@ TEST_F(MatchingTest, CancelAfterPartialFillRemovesResidual) {
     EXPECT_EQ(book.best_ask(), nullptr);
 }
 
-// =============== Unimplemented order types: stub reject ===============
-// PostOnly and FOK are declared in OrderType for forward parity but are
-// not implemented yet. The engine emits a Reject (with reason None as
-// a sentinel; PostOnly's WouldCross and FOK's InsufficientLiquidity
-// arrive when those types land) so a stray submission does not silently
-// fall through. These tests exercise that defensive branch in
-// matching.cpp's apply() switch so the line shows as covered in lcov
-// reports rather than flagged as an uncovered gap. When PostOnly and
-// FOK are implemented, replace these tests with the real behavior.
+// =============== Post-only ===============
 
-TEST_F(MatchingTest, PostOnlyOrderRejectsAsUnimplemented) {
+TEST_F(MatchingTest, PostOnlyOnEmptyBookRests) {
     EngineEvent ev{
         .kind = EventKind::NewOrder,
-        .symbol = 1,
-        .ts = 1,
-        .order_id = 1,
-        .side = Side::Buy,
-        .type = OrderType::PostOnly,
-        .price = 100,
-        .qty = 10,
+        .symbol = 1, .ts = 1, .order_id = 1,
+        .side = Side::Buy, .type = OrderType::PostOnly,
+        .price = 100, .qty = 10,
     };
     auto reports = engine.apply(ev);
     ASSERT_EQ(reports.size(), 1u);
-    EXPECT_EQ(reports[0].kind, ReportKind::Reject);
-    EXPECT_EQ(reports[0].order_id, 1u);
-    EXPECT_EQ(reports[0].qty, 10);
-    EXPECT_EQ(reports[0].price, 100);
-    // Book unchanged: a stub reject must never rest.
-    EXPECT_EQ(book.best_bid(), nullptr);
-    EXPECT_EQ(book.best_ask(), nullptr);
+    EXPECT_EQ(reports[0].kind, ReportKind::Acknowledge);
+    EXPECT_EQ(reports[0].reject_reason, RejectReason::None);
+    ASSERT_NE(book.best_bid(), nullptr);
+    EXPECT_EQ(book.best_bid()->price(), 100);
+    EXPECT_EQ(book.best_bid()->total_qty(), 10);
 }
 
-TEST_F(MatchingTest, FokOrderRejectsAsUnimplemented) {
-    EngineEvent ev{
-        .kind = EventKind::NewOrder,
-        .symbol = 1,
-        .ts = 1,
-        .order_id = 1,
-        .side = Side::Sell,
-        .type = OrderType::FOK,
-        .price = 200,
-        .qty = 5,
-    };
-    auto reports = engine.apply(ev);
+TEST_F(MatchingTest, PostOnlyBuyAtBestAskRejectsWouldCross) {
+    // Set up resting ask at 100.
+    engine.apply(EngineEvent{EventKind::NewOrder, 1, 1, 1, Side::Sell,
+                             OrderType::Limit, 100, 5});
+    // Post-only buy at 100 would cross the resting ask: single Reject.
+    auto reports = engine.apply(EngineEvent{EventKind::NewOrder, 1, 2, 2,
+                                            Side::Buy, OrderType::PostOnly,
+                                            100, 10});
     ASSERT_EQ(reports.size(), 1u);
     EXPECT_EQ(reports[0].kind, ReportKind::Reject);
-    EXPECT_EQ(reports[0].order_id, 1u);
-    EXPECT_EQ(reports[0].qty, 5);
-    EXPECT_EQ(reports[0].price, 200);
-    EXPECT_EQ(book.best_bid(), nullptr);
+    EXPECT_EQ(reports[0].reject_reason, RejectReason::WouldCross);
+    EXPECT_EQ(reports[0].order_id, 2u);
+    EXPECT_EQ(reports[0].qty, 10);
+    // Resting ask at 100 unchanged.
+    ASSERT_NE(book.best_ask(), nullptr);
+    EXPECT_EQ(book.best_ask()->price(), 100);
+    EXPECT_EQ(book.best_ask()->total_qty(), 5);
+}
+
+TEST_F(MatchingTest, PostOnlySellBelowBestBidRejectsWouldCross) {
+    engine.apply(EngineEvent{EventKind::NewOrder, 1, 1, 1, Side::Buy,
+                             OrderType::Limit, 100, 5});
+    // Post-only sell at 100 would cross the resting bid: single Reject.
+    auto reports = engine.apply(EngineEvent{EventKind::NewOrder, 1, 2, 2,
+                                            Side::Sell, OrderType::PostOnly,
+                                            100, 10});
+    ASSERT_EQ(reports.size(), 1u);
+    EXPECT_EQ(reports[0].kind, ReportKind::Reject);
+    EXPECT_EQ(reports[0].reject_reason, RejectReason::WouldCross);
+}
+
+TEST_F(MatchingTest, PostOnlyBelowBestAskRests) {
+    engine.apply(EngineEvent{EventKind::NewOrder, 1, 1, 1, Side::Sell,
+                             OrderType::Limit, 105, 5});
+    // Post-only buy at 100 (below best ask 105): no cross, ack and rest.
+    auto reports = engine.apply(EngineEvent{EventKind::NewOrder, 1, 2, 2,
+                                            Side::Buy, OrderType::PostOnly,
+                                            100, 10});
+    ASSERT_EQ(reports.size(), 1u);
+    EXPECT_EQ(reports[0].kind, ReportKind::Acknowledge);
+    ASSERT_NE(book.best_bid(), nullptr);
+    EXPECT_EQ(book.best_bid()->price(), 100);
+    ASSERT_NE(book.best_ask(), nullptr);
+    EXPECT_EQ(book.best_ask()->price(), 105);
+}
+
+// =============== FOK ===============
+
+TEST_F(MatchingTest, FokOnEmptyBookRejectsInsufficientLiquidity) {
+    auto reports = engine.apply(EngineEvent{EventKind::NewOrder, 1, 1, 1,
+                                            Side::Buy, OrderType::FOK,
+                                            100, 10});
+    ASSERT_EQ(reports.size(), 1u);
+    EXPECT_EQ(reports[0].kind, ReportKind::Reject);
+    EXPECT_EQ(reports[0].reject_reason, RejectReason::InsufficientLiquidity);
+    EXPECT_EQ(reports[0].qty, 10);
+}
+
+TEST_F(MatchingTest, FokWithExactLiquidityFullyFills) {
+    engine.apply(EngineEvent{EventKind::NewOrder, 1, 1, 1, Side::Sell,
+                             OrderType::Limit, 100, 10});
+    auto reports = engine.apply(EngineEvent{EventKind::NewOrder, 1, 2, 2,
+                                            Side::Buy, OrderType::FOK,
+                                            100, 10});
+    ASSERT_EQ(reports.size(), 3u);
+    EXPECT_EQ(reports[0].kind, ReportKind::Acknowledge);
+    EXPECT_EQ(reports[1].kind, ReportKind::Fill);  // maker
+    EXPECT_EQ(reports[1].order_id, 1u);
+    EXPECT_EQ(reports[2].kind, ReportKind::Fill);  // taker
+    EXPECT_EQ(reports[2].order_id, 2u);
     EXPECT_EQ(book.best_ask(), nullptr);
+    EXPECT_EQ(book.best_bid(), nullptr);
+}
+
+TEST_F(MatchingTest, FokWithInsufficientLiquidityRejects) {
+    engine.apply(EngineEvent{EventKind::NewOrder, 1, 1, 1, Side::Sell,
+                             OrderType::Limit, 100, 5});  // only 5 available
+    auto reports = engine.apply(EngineEvent{EventKind::NewOrder, 1, 2, 2,
+                                            Side::Buy, OrderType::FOK,
+                                            100, 10});  // wants 10
+    ASSERT_EQ(reports.size(), 1u);
+    EXPECT_EQ(reports[0].kind, ReportKind::Reject);
+    EXPECT_EQ(reports[0].reject_reason, RejectReason::InsufficientLiquidity);
+    // Maker untouched: no partial fill on a rejected FOK.
+    ASSERT_NE(book.best_ask(), nullptr);
+    EXPECT_EQ(book.best_ask()->total_qty(), 5);
+}
+
+TEST_F(MatchingTest, FokSweepsTwoLevelsToFill) {
+    engine.apply(EngineEvent{EventKind::NewOrder, 1, 1, 1, Side::Sell,
+                             OrderType::Limit, 100, 4});
+    engine.apply(EngineEvent{EventKind::NewOrder, 1, 2, 2, Side::Sell,
+                             OrderType::Limit, 101, 6});
+    auto reports = engine.apply(EngineEvent{EventKind::NewOrder, 1, 3, 3,
+                                            Side::Buy, OrderType::FOK,
+                                            101, 10});
+    // Ack + 2 maker fills + 2 taker fills = 5 reports.
+    ASSERT_EQ(reports.size(), 5u);
+    EXPECT_EQ(reports[0].kind, ReportKind::Acknowledge);
+    EXPECT_EQ(book.best_ask(), nullptr);
+    EXPECT_EQ(book.best_bid(), nullptr);
+}
+
+TEST_F(MatchingTest, FokAtNonCrossingPriceRejects) {
+    engine.apply(EngineEvent{EventKind::NewOrder, 1, 1, 1, Side::Sell,
+                             OrderType::Limit, 105, 10});  // ask at 105
+    auto reports = engine.apply(EngineEvent{EventKind::NewOrder, 1, 2, 2,
+                                            Side::Buy, OrderType::FOK,
+                                            100, 5});  // willing to pay only 100
+    ASSERT_EQ(reports.size(), 1u);
+    EXPECT_EQ(reports[0].kind, ReportKind::Reject);
+    EXPECT_EQ(reports[0].reject_reason, RejectReason::InsufficientLiquidity);
 }
 
 // =============== Hot path discipline ===============
