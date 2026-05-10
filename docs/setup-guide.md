@@ -18,7 +18,7 @@ Will cover the configure step (`cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=
 
 ## 4. Running the unit and property test suite
 
-Will cover `ctest --output-on-failure`, the rapidcheck case count knob, and how to run a single property test in isolation.
+Will cover `ctest --output-on-failure`, the per-test `kCases` knob in `tests/property/`, and how to run a single property test in isolation.
 
 ## 5. Running the Python reference implementation
 
