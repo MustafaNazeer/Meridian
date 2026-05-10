@@ -225,6 +225,28 @@ NamedScenario id_reuse_after_cancel_different_symbol() {
     }};
 }
 
+NamedScenario cancel_after_fully_filled_multi_symbol() {
+    // Phase 2 audit case 2: cancel an OrderId that was already fully
+    // filled, in a multi-symbol setting. The cross-symbol OrderIndex
+    // should miss the lookup and emit Reject NotFound, leaving every
+    // book on every symbol unchanged. Mirrors CXL-5 from Phase 1 but
+    // routes through BookRegistry plus OrderIndex.
+    return {"cancel_after_fully_filled_multi_symbol", {
+        // Symbol 2 maker rests, then is fully consumed by a crossing taker.
+        {"new_order", "limit", 201, 2, "sell", 10001, 30, 1},
+        {"new_order", "limit", 301, 2, "buy",  10001, 30, 2},
+        // Symbol 4 carries an unrelated resting order; it must remain
+        // untouched after the cancel-after-fully-filled below.
+        {"new_order", "limit", 401, 4, "buy",   9000, 15, 3},
+        // Cancel id 201 (already fully filled). Engine must route via
+        // OrderIndex, miss, and emit Reject NotFound.
+        {"cancel",    "",      201, 0, "buy",      0,  0, 4},
+        // Sanity touch on symbol 4: place a sell that crosses 401 to
+        // confirm symbol 4's book is intact and routes correctly.
+        {"new_order", "ioc",   402, 4, "sell",  9000, 15, 5},
+    }};
+}
+
 NamedScenario mixed_50_event_corpus() {
     NamedScenario s;
     s.name = "mixed_50_event_random";
@@ -257,6 +279,7 @@ INSTANTIATE_TEST_SUITE_P(
         cross_symbol_cancel_by_id_routing(),
         unknown_symbol_reject(),
         id_reuse_after_cancel_different_symbol(),
+        cancel_after_fully_filled_multi_symbol(),
         mixed_50_event_corpus()
     ),
     scenario_name);
