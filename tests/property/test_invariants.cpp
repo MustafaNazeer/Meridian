@@ -16,6 +16,7 @@
 // docs/risk/matching-semantics.md section 9.
 
 #include "harness.hpp"
+#include "meridian/depth_snapshot.hpp"
 #include "meridian/seqlock_snapshot.hpp"
 #include "meridian/types.hpp"
 
@@ -45,7 +46,7 @@ TEST(MatchingInvariants, QuantityConservation) {
         SCOPED_TRACE(::testing::Message() << "seed=" << seed);
         auto events = EventGenerator(seed).generate();
         auto run = run_engine(events);
-        for (const auto& [id, s] : run.shadow.orders()) {
+        for (const auto& [id, s] : run->shadow.orders()) {
             if (!s.submitted) continue;
             if (s.rejected_at_submission) {
                 EXPECT_EQ(s.qty_filled, 0) << "rejected order id " << id
@@ -54,8 +55,8 @@ TEST(MatchingInvariants, QuantityConservation) {
                                           << " should not get a cancel report";
                 continue;
             }
-            const Quantity resting   = run.shadow.resting_qty(s);
-            const Quantity implicit  = run.shadow.implicit_cancel_qty(s);
+            const Quantity resting   = run->shadow.resting_qty(s);
+            const Quantity implicit  = run->shadow.implicit_cancel_qty(s);
             const Quantity cancelled = (s.cancelled ? s.qty_cancelled : 0) + implicit;
             const Quantity sum = s.qty_filled + resting + cancelled;
             EXPECT_EQ(sum, s.qty_submitted)
@@ -76,7 +77,7 @@ TEST(MatchingInvariants, NoDoubleFill) {
         SCOPED_TRACE(::testing::Message() << "seed=" << seed);
         auto events = EventGenerator(seed).generate();
         auto run = run_engine(events);
-        for (const auto& [id, s] : run.shadow.orders()) {
+        for (const auto& [id, s] : run->shadow.orders()) {
             if (!s.submitted) continue;
             EXPECT_LE(s.qty_filled, s.qty_submitted)
                 << "double fill on id " << id
@@ -106,7 +107,7 @@ TEST(MatchingInvariants, NoLostOrders) {
         auto events = EventGenerator(seed).generate();
         auto run = run_engine(events);
         std::unordered_set<OrderId> shadow_resting;
-        for (const auto& [id, s] : run.shadow.orders()) {
+        for (const auto& [id, s] : run->shadow.orders()) {
             if (!s.submitted) continue;
 
             const bool filled       = (s.qty_filled == s.qty_submitted) &&
@@ -130,11 +131,11 @@ TEST(MatchingInvariants, NoLostOrders) {
                 << " states at end of sequence";
             if (s.currently_resting) shadow_resting.insert(id);
         }
-        EXPECT_EQ(shadow_resting.size(), run.engine_resting_ids.size())
+        EXPECT_EQ(shadow_resting.size(), run->engine_resting_ids.size())
             << "shadow says " << shadow_resting.size() << " resting, "
-            << "engine OrderIndex says " << run.engine_resting_ids.size();
+            << "engine OrderIndex says " << run->engine_resting_ids.size();
         for (OrderId id : shadow_resting) {
-            EXPECT_TRUE(run.engine_resting_ids.contains(id))
+            EXPECT_TRUE(run->engine_resting_ids.contains(id))
                 << "shadow says id " << id
                 << " is resting; engine OrderIndex disagrees";
         }
@@ -152,7 +153,7 @@ TEST(MatchingInvariants, IocNeverRests) {
         SCOPED_TRACE(::testing::Message() << "seed=" << seed);
         auto events = EventGenerator(seed).generate();
         auto run = run_engine(events);
-        for (const auto& [id, type] : run.engine_resting_types) {
+        for (const auto& [id, type] : run->engine_resting_types) {
             EXPECT_NE(type, OrderType::IOC)
                 << "IOC order " << id << " is resting in OrderIndex";
             EXPECT_NE(type, OrderType::Market)
@@ -205,7 +206,7 @@ TEST(MatchingInvariants, PriceTimePriority) {
         std::size_t report_idx = 0;
         for (std::size_t ei = 0; ei < events.size(); ++ei) {
             const EngineEvent& ev = events[ei].ev;
-            const std::size_t n = run.report_count_per_event[ei];
+            const std::size_t n = run->report_count_per_event[ei];
             const std::size_t event_first_report = report_idx;
             (void)event_first_report;
 
@@ -214,7 +215,7 @@ TEST(MatchingInvariants, PriceTimePriority) {
             Quantity aggressor_filled = 0;
 
             for (std::size_t ri = 0; ri < n; ++ri) {
-                const ExecutionReport& r = run.reports[report_idx++];
+                const ExecutionReport& r = run->reports[report_idx++];
                 if (r.kind == ReportKind::Fill) {
                     auto it = resting.find(r.order_id);
                     if (it != resting.end()) {
@@ -290,8 +291,8 @@ TEST(MatchingInvariants, PriceTimePriority) {
                     // Skip ids that the engine rejected outright (no
                     // ack, no fills, no rest). The shadow flags those
                     // via rejected_at_submission.
-                    auto sit = run.shadow.orders().find(ev.order_id);
-                    const bool rejected = (sit != run.shadow.orders().end() &&
+                    auto sit = run->shadow.orders().find(ev.order_id);
+                    const bool rejected = (sit != run->shadow.orders().end() &&
                                            sit->second.rejected_at_submission);
                     if (!rejected) {
                         Level key{ev.symbol, ev.side, ev.price};
@@ -304,10 +305,10 @@ TEST(MatchingInvariants, PriceTimePriority) {
         }
         // End of run: every id that the engine reports as resting must
         // also be tracked as resting in this shadow at the same level.
-        ASSERT_EQ(resting.size(), run.engine_resting_ids.size())
+        ASSERT_EQ(resting.size(), run->engine_resting_ids.size())
             << "shadow tracks " << resting.size()
-            << " resting orders, engine has " << run.engine_resting_ids.size();
-        for (OrderId id : run.engine_resting_ids) {
+            << " resting orders, engine has " << run->engine_resting_ids.size();
+        for (OrderId id : run->engine_resting_ids) {
             ASSERT_TRUE(resting.contains(id))
                 << "engine reports id " << id
                 << " resting; shadow does not";
@@ -332,12 +333,12 @@ TEST(MatchingInvariants, PostOnlyNeverCrosses) {
         std::size_t report_idx = 0;
         for (std::size_t ei = 0; ei < events.size(); ++ei) {
             const EngineEvent& ev = events[ei].ev;
-            const std::size_t n = run.report_count_per_event[ei];
+            const std::size_t n = run->report_count_per_event[ei];
             if (ev.kind == EventKind::NewOrder &&
                 ev.type == OrderType::PostOnly) {
                 int fills_this_event = 0;
                 for (std::size_t ri = 0; ri < n; ++ri) {
-                    if (run.reports[report_idx + ri].kind == ReportKind::Fill) {
+                    if (run->reports[report_idx + ri].kind == ReportKind::Fill) {
                         ++fills_this_event;
                     }
                 }
@@ -362,7 +363,7 @@ TEST(MatchingInvariants, FokAllOrNothing) {
         SCOPED_TRACE(::testing::Message() << "seed=" << seed);
         auto events = EventGenerator(seed).generate();
         auto run = run_engine(events);
-        for (const auto& [id, s] : run.shadow.orders()) {
+        for (const auto& [id, s] : run->shadow.orders()) {
             if (!s.submitted) continue;
             if (s.type != OrderType::FOK) continue;
             const bool fully_filled = (s.qty_filled == s.qty_submitted);
@@ -457,6 +458,58 @@ TEST(MatchingInvariants, SnapshotMatchesBook) {
                         << "snapshot reports an ask but book is empty, symbol " << s;
                 }
             }
+        }
+    }
+}
+
+// Invariant 11: after any event sequence, on each side the depth array
+// returned by Book::depth() is strictly ordered by price (bids
+// descending, asks ascending) for the first bid_levels and ask_levels
+// entries, with no duplicate prices.
+TEST(MatchingInvariants, DepthOrderedAndDeduped) {
+    for (int i = 0; i < kCases; ++i) {
+        const std::uint64_t seed = kSeedBase + static_cast<std::uint64_t>(i);
+        SCOPED_TRACE(::testing::Message() << "seed=" << seed);
+        auto events = EventGenerator(seed).generate();
+        auto run = run_engine(events);
+        for (Symbol s : run->symbols) {
+            const Book* b = run->registry->book(s);
+            ASSERT_NE(b, nullptr);
+            const auto d = b->depth();
+            for (std::size_t k = 1; k < d.bid_levels; ++k) {
+                EXPECT_LT(d.bids[k].px, d.bids[k - 1].px)
+                    << "symbol=" << s << " bid " << k << " seed=" << seed;
+            }
+            for (std::size_t k = 1; k < d.ask_levels; ++k) {
+                EXPECT_GT(d.asks[k].px, d.asks[k - 1].px)
+                    << "symbol=" << s << " ask " << k << " seed=" << seed;
+            }
+        }
+    }
+}
+
+// Invariant 12: the sum of per-level total_qty across the published
+// depth array on a side is a lower bound on the sum of resting
+// quantity on that side. Equivalent phrasing:
+// cum_depth_qty(side) <= total_resting_qty(side).
+TEST(MatchingInvariants, DepthQuantityBoundedByResting) {
+    for (int i = 0; i < kCases; ++i) {
+        const std::uint64_t seed = kSeedBase + static_cast<std::uint64_t>(i);
+        SCOPED_TRACE(::testing::Message() << "seed=" << seed);
+        auto events = EventGenerator(seed).generate();
+        auto run = run_engine(events);
+        for (Symbol s : run->symbols) {
+            const Book* b = run->registry->book(s);
+            ASSERT_NE(b, nullptr);
+            const auto d = b->depth();
+            Quantity bid_depth = 0;
+            for (std::size_t k = 0; k < d.bid_levels; ++k) bid_depth += d.bids[k].qty;
+            Quantity ask_depth = 0;
+            for (std::size_t k = 0; k < d.ask_levels; ++k) ask_depth += d.asks[k].qty;
+            EXPECT_LE(bid_depth, run->shadow.resting_qty_by_side(s, Side::Buy))
+                << "symbol=" << s << " seed=" << seed;
+            EXPECT_LE(ask_depth, run->shadow.resting_qty_by_side(s, Side::Sell))
+                << "symbol=" << s << " seed=" << seed;
         }
     }
 }

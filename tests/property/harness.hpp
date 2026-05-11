@@ -29,6 +29,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <random>
 #include <unordered_map>
 #include <unordered_set>
@@ -274,6 +275,19 @@ public:
         return s.qty_submitted - s.qty_filled;
     }
 
+    // Sum of resting quantity on `sym` for orders on the given `side`,
+    // computed from the post-finalize() shadow state. Used by the L8
+    // depth quantity-bound invariant in test_invariants.cpp.
+    [[nodiscard]] Quantity resting_qty_by_side(Symbol sym, Side side) const noexcept {
+        Quantity total = 0;
+        for (const auto& [id, s] : orders_) {
+            if (s.currently_resting && s.symbol == sym && s.side == side) {
+                total += (s.qty_submitted - s.qty_filled);
+            }
+        }
+        return total;
+    }
+
 private:
     std::unordered_map<OrderId, ShadowOrder> orders_;
     std::vector<OrderId> submitted_in_order_;
@@ -292,38 +306,62 @@ struct EngineRun {
     // For the IOC-never-rests invariant: the order types of every
     // currently-resting id at end of run, queried from the engine.
     std::unordered_map<OrderId, OrderType> engine_resting_types;
+
+    // The set of demo symbols the run exercised. Invariants iterate
+    // this list to walk Book::depth() per symbol.
+    std::vector<Symbol> symbols;
+
+    // Engine state held alive past run_engine() so post-run inspection
+    // of Book::depth() and other accessors works. The order of these
+    // members matters: pool, registry, index must outlive engine
+    // because engine holds references to them.
+    std::unique_ptr<OrderPool>      pool;
+    std::unique_ptr<BookRegistry>   registry;
+    std::unique_ptr<OrderIndex>     index;
+    std::unique_ptr<MatchingEngine> engine;
+
+    // Non-copyable, non-movable: MatchingEngine holds references to
+    // the other three members; moving the EngineRun would invalidate
+    // those references.
+    EngineRun() = default;
+    EngineRun(const EngineRun&) = delete;
+    EngineRun& operator=(const EngineRun&) = delete;
+    EngineRun(EngineRun&&) = delete;
+    EngineRun& operator=(EngineRun&&) = delete;
 };
 
-inline EngineRun run_engine(const std::vector<GeneratedEvent>& events) {
-    EngineRun run;
+inline std::unique_ptr<EngineRun> run_engine(const std::vector<GeneratedEvent>& events) {
+    auto run = std::make_unique<EngineRun>();
     // Pool capacity: at most one resting order per submitted id, plus
     // generous slack for transient peaks during a sweep.
-    OrderPool pool(2 * events.size() + 64);
-    BookRegistry registry{kDemoSymbols[0], kDemoSymbols[1], kDemoSymbols[2],
-                          kDemoSymbols[3], kDemoSymbols[4]};
-    OrderIndex index;
-    MatchingEngine engine{pool, registry, index};
+    run->pool = std::make_unique<OrderPool>(2 * events.size() + 64);
+    run->registry = std::unique_ptr<BookRegistry>(new BookRegistry{
+        kDemoSymbols[0], kDemoSymbols[1], kDemoSymbols[2],
+        kDemoSymbols[3], kDemoSymbols[4]});
+    run->index = std::make_unique<OrderIndex>();
+    run->engine = std::make_unique<MatchingEngine>(*run->pool, *run->registry, *run->index);
+    run->symbols = std::vector<Symbol>(kDemoSymbols.begin(), kDemoSymbols.end());
 
-    run.report_count_per_event.reserve(events.size());
+    run->report_count_per_event.reserve(events.size());
     for (const auto& g : events) {
-        run.shadow.on_event(g.ev);
-        auto reports = engine.apply(g.ev);
-        run.report_count_per_event.push_back(reports.size());
+        run->shadow.on_event(g.ev);
+        auto reports = run->engine->apply(g.ev);
+        run->report_count_per_event.push_back(reports.size());
         for (const auto& r : reports) {
-            run.shadow.on_report(r);
-            run.reports.push_back(r);
+            run->shadow.on_report(r);
+            run->reports.push_back(r);
         }
     }
-    run.shadow.finalize();
+    run->shadow.finalize();
     // Snapshot the engine's view of resting ids at end of run by
     // querying every submitted id against the OrderIndex. This is the
     // ground truth for the "no lost orders" and "IOC never rests"
     // invariants.
-    for (OrderId id : run.shadow.submitted_in_order()) {
-        Order* o = index.find(id);
+    for (OrderId id : run->shadow.submitted_in_order()) {
+        Order* o = run->index->find(id);
         if (o != nullptr) {
-            run.engine_resting_ids.insert(id);
-            run.engine_resting_types[id] = o->type;
+            run->engine_resting_ids.insert(id);
+            run->engine_resting_types[id] = o->type;
         }
     }
     return run;

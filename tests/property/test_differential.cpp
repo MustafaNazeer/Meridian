@@ -125,8 +125,8 @@ TEST(Differential, RandomSequencesAgreeWithReference) {
         [[maybe_unused]] int rm_rc = std::system(rm_cmd.c_str());
 
         std::vector<std::string> cpp_lines;
-        cpp_lines.reserve(run.reports.size());
-        for (const auto& r : run.reports) cpp_lines.push_back(report_to_jsonl(r));
+        cpp_lines.reserve(run->reports.size());
+        for (const auto& r : run->reports) cpp_lines.push_back(report_to_jsonl(r));
 
         ASSERT_EQ(cpp_lines.size(), py_lines.size())
             << "C++ produced " << cpp_lines.size()
