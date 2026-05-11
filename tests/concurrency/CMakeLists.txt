@@ -1,11 +1,20 @@
-# Concurrency tests: built with ThreadSanitizer to catch data races on
-# the seqlock-protected snapshot. Runs as part of ctest on every PR.
+# Concurrency tests: seqlock correctness and ring snapshot stress.
+# Runs as part of ctest on every PR.
 #
-# The test target compiles with -fsanitize=thread, -g, -O1. The library
-# libmeridian.a is intentionally not linked: SeqlockSnapshot is header
-# only, so the test binary is fully TSAN instrumented for the code under
-# test. Linking gtest_main (compiled without TSAN) is fine because TSAN
-# only watches code inside instrumented translation units.
+# The first target (test_seqlock_concurrent) is built with
+# ThreadSanitizer because SeqlockSnapshot uses per-field atomics and
+# is TSAN-clean by construction. The remaining two targets
+# (test_seqlock_depth_concurrent, test_trade_ring_concurrent) are
+# built without ThreadSanitizer because SeqlockDepth and TradeRing
+# deliberately use a non-atomic struct copy under the seqlock retry
+# contract; see the per-target comments below for the rationale and
+# the relevant header comments.
+#
+# For the TSAN target, the library libmeridian.a is intentionally not
+# linked: the seqlock primitives are header only, so the test binary
+# is fully TSAN instrumented for the code under test. Linking
+# gtest_main (compiled without TSAN) is fine because TSAN only
+# watches code inside instrumented translation units.
 
 add_executable(test_seqlock_concurrent test_seqlock_concurrent.cpp)
 
