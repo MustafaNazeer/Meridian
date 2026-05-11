@@ -78,3 +78,24 @@ target_compile_options(test_trade_ring_concurrent PRIVATE
     -g -O1
 )
 gtest_discover_tests(test_trade_ring_concurrent)
+
+# test_latency_histogram_concurrent is built WITH ThreadSanitizer.
+# LatencyHistogram uses per-bucket std::atomic counters with relaxed
+# fetch_add and relaxed loads, so all accesses are race-free per the
+# C++ memory model. TSAN verifies this end-to-end.
+add_executable(test_latency_histogram_concurrent test_latency_histogram_concurrent.cpp)
+target_include_directories(test_latency_histogram_concurrent PRIVATE
+    ${CMAKE_SOURCE_DIR}/include
+)
+target_link_libraries(test_latency_histogram_concurrent PRIVATE
+    GTest::gtest_main
+    Threads::Threads
+)
+target_compile_options(test_latency_histogram_concurrent PRIVATE
+    -Wall -Wextra -Wpedantic -Werror
+    -fsanitize=thread -g -O1
+)
+target_link_options(test_latency_histogram_concurrent PRIVATE
+    -fsanitize=thread
+)
+gtest_discover_tests(test_latency_histogram_concurrent)
