@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { buildInfo } from '../lib/build';
 import { useDashboard } from '../store/dashboard';
-import { decodeTopOfBook } from '../types';
+import { decodeDepth, decodeLatency, decodeTopOfBook, decodeTrades } from '../types';
 import { MeridianWsClient } from '../ws/client';
 
 // Mounts a singleton WebSocket client on initial render and bridges
@@ -21,8 +21,10 @@ export function useMeridianStream(): void {
     const url = buildInfo().websocketUrl;
     const client = new MeridianWsClient(url, {
       onState: setConnectionState,
-      onSnapshot: (msg, bytes) => applySnapshot(decodeTopOfBook(msg), bytes),
-      onDelta: (msg, bytes) => applyDelta(decodeTopOfBook(msg), bytes),
+      onSnapshot: (msg, bytes) =>
+        applySnapshot(decodeTopOfBook(msg), bytes, decodeDepth(msg), decodeTrades(msg), decodeLatency(msg)),
+      onDelta: (msg, bytes) =>
+        applyDelta(decodeTopOfBook(msg), bytes, decodeDepth(msg), decodeTrades(msg), decodeLatency(msg)),
       onPerfTick: (deltas, bytes) => notePerfTick({ deltas, bytes }),
       onReconnect: (attempt, inMs) => setReconnect(attempt, inMs),
     });

@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { ConnectionState, Symbol, TopOfBook } from '../types';
+import type { ConnectionState, Depth, Latency, Symbol, TopOfBook, Trade } from '../types';
 
 // Rolling per-tick price history so the hero "Last" stat can compare
 // the latest tick to the prior tick and recolor up/down. The history
@@ -36,6 +36,11 @@ export type DashboardState = {
   // the wire counters and depth-chart inputs continue to read `top` so
   // the perf panel and chart stay accurate.
   displayedTop: TopOfBook | null;
+  depth: Depth | null;
+  displayedDepth: Depth | null;
+  trades: Trade[];
+  latency: Latency | null;
+  displayedLatency: Latency | null;
   prevLast: LastTick | null;
   lastTickColor: 'up' | 'down' | 'flat';
   ticksSinceConnect: number;
@@ -47,8 +52,20 @@ export type DashboardState = {
   // Reducers.
   setConnectionState: (s: ConnectionState) => void;
   setSymbol: (s: Symbol) => void;
-  applySnapshot: (t: TopOfBook, bytes: number) => void;
-  applyDelta: (t: TopOfBook, bytes: number) => void;
+  applySnapshot: (
+    t: TopOfBook,
+    bytes: number,
+    depth: Depth,
+    trades: Trade[],
+    latency: Latency,
+  ) => void;
+  applyDelta: (
+    t: TopOfBook,
+    bytes: number,
+    depth: Depth,
+    trades: Trade[],
+    latency: Latency,
+  ) => void;
   notePerfTick: (perSec: { deltas: number; bytes: number }) => void;
   setReconnect: (attempt: number, inMs: number) => void;
   flushDisplayed: () => void;
@@ -69,6 +86,11 @@ export const useDashboard = create<DashboardState>((set) => ({
   selectedSymbol: 'AAPL',
   top: null,
   displayedTop: null,
+  depth: null,
+  displayedDepth: null,
+  trades: [],
+  latency: null,
+  displayedLatency: null,
   prevLast: null,
   lastTickColor: 'flat',
   ticksSinceConnect: 0,
@@ -84,6 +106,11 @@ export const useDashboard = create<DashboardState>((set) => ({
       selectedSymbol: s,
       top: null,
       displayedTop: null,
+      depth: null,
+      displayedDepth: null,
+      trades: [],
+      latency: null,
+      displayedLatency: null,
       prevLast: null,
       lastTickColor: 'flat',
       ticksSinceConnect: 0,
@@ -91,7 +118,7 @@ export const useDashboard = create<DashboardState>((set) => ({
       connectionState: 'connecting',
     }),
 
-  applySnapshot: (t, bytes) =>
+  applySnapshot: (t, bytes, depth, trades, latency) =>
     set((prev) => {
       const lastMid = midOf(t);
       const history = lastMid !== null ? [{ px: lastMid, ts: t.ts }] : [];
@@ -101,6 +128,11 @@ export const useDashboard = create<DashboardState>((set) => ({
         // displayedTop so the editorial cells leave the connecting
         // skeleton without waiting for the next throttle tick.
         displayedTop: t,
+        depth,
+        displayedDepth: depth,
+        trades,
+        latency,
+        displayedLatency: latency,
         // A snapshot is the start of a stream; reset prior-tick state.
         prevLast: null,
         lastTickColor: 'flat',
@@ -119,7 +151,7 @@ export const useDashboard = create<DashboardState>((set) => ({
       };
     }),
 
-  applyDelta: (t, bytes) =>
+  applyDelta: (t, bytes, depth, trades, latency) =>
     set((prev) => {
       const nextMid = midOf(t);
       const prevMid = prev.top ? midOf(prev.top) : null;
@@ -137,6 +169,9 @@ export const useDashboard = create<DashboardState>((set) => ({
           : prev.history;
       return {
         top: t,
+        depth,
+        trades,
+        latency,
         prevLast: nextPrevLast,
         lastTickColor: color,
         ticksSinceConnect: prev.ticksSinceConnect + 1,
@@ -168,18 +203,29 @@ export const useDashboard = create<DashboardState>((set) => ({
       connectionState: 'disconnected',
     }),
 
-  // Mirror the latest `top` into `displayedTop`. Called from a 4 Hz
-  // interval in App.tsx (via useDisplayThrottle), this throttles
-  // rendering of the editorial cells without throttling the underlying
-  // wire stream.
+  // Mirror the latest top, depth, and latency into their displayed
+  // counterparts. Called from a 4 Hz interval in App.tsx (via
+  // useDisplayThrottle), this throttles rendering of the editorial
+  // cells without throttling the underlying wire stream.
   flushDisplayed: () =>
-    set((prev) => (prev.top === prev.displayedTop ? {} : { displayedTop: prev.top })),
+    set((prev) => {
+      const changes: Partial<DashboardState> = {};
+      if (prev.top !== prev.displayedTop) changes.displayedTop = prev.top;
+      if (prev.depth !== prev.displayedDepth) changes.displayedDepth = prev.depth;
+      if (prev.latency !== prev.displayedLatency) changes.displayedLatency = prev.latency;
+      return changes;
+    }),
 
   reset: () =>
     set({
       connectionState: 'connecting',
       top: null,
       displayedTop: null,
+      depth: null,
+      displayedDepth: null,
+      trades: [],
+      latency: null,
+      displayedLatency: null,
       prevLast: null,
       lastTickColor: 'flat',
       ticksSinceConnect: 0,
