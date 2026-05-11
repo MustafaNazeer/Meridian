@@ -51,3 +51,21 @@ target_compile_options(test_seqlock_depth_concurrent PRIVATE
     -g -O1
 )
 gtest_discover_tests(test_seqlock_depth_concurrent)
+
+# test_trade_ring_concurrent is built WITHOUT ThreadSanitizer for the
+# same reason as test_seqlock_depth_concurrent: the trade ring uses a
+# non-atomic struct copy under the seqlock retry contract. See the
+# TradeRing header comment in include/meridian/trade_print.hpp.
+add_executable(test_trade_ring_concurrent test_trade_ring_concurrent.cpp)
+target_include_directories(test_trade_ring_concurrent PRIVATE
+    ${CMAKE_SOURCE_DIR}/include
+)
+target_link_libraries(test_trade_ring_concurrent PRIVATE
+    GTest::gtest_main
+    Threads::Threads
+)
+target_compile_options(test_trade_ring_concurrent PRIVATE
+    -Wall -Wextra -Wpedantic -Werror
+    -g -O1
+)
+gtest_discover_tests(test_trade_ring_concurrent)
