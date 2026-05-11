@@ -20,12 +20,17 @@ HotPathGuard::~HotPathGuard() noexcept {
 }
 
 MatchingEngine::MatchingEngine(OrderPool& pool, BookRegistry& registry,
-                               OrderIndex& index) noexcept
-    : pool_(pool), registry_(registry), index_(index) {}
+                               OrderIndex& index,
+                               bool observability) noexcept
+    : pool_(pool), registry_(registry), index_(index),
+      observability_(observability) {}
 
 void MatchingEngine::apply(const EngineEvent& event,
                            std::vector<ExecutionReport>& out) {
-    const auto t_start = std::chrono::steady_clock::now();
+    std::chrono::steady_clock::time_point t_start;
+    if (observability_) {
+        t_start = std::chrono::steady_clock::now();
+    }
     const std::size_t reports_before = out.size();
     Book* book = nullptr;
 
@@ -41,7 +46,9 @@ void MatchingEngine::apply(const EngineEvent& event,
                 .ts = event.ts,
                 .reject_reason = RejectReason::UnknownSymbol,
             });
-            latency_.record(std::chrono::steady_clock::now() - t_start);
+            if (observability_) {
+                latency_.record(std::chrono::steady_clock::now() - t_start);
+            }
             return;
         }
         // HotPathGuard remains inside sweep(): it watches the inner
@@ -59,6 +66,7 @@ void MatchingEngine::apply(const EngineEvent& event,
             case OrderType::PostOnly: apply_post_only(event, *book, out); break;
             case OrderType::FOK:      apply_fok(event,       *book, out); break;
         }
+        // TOB publish is always performed regardless of observability.
         // Publish post-event top of book for any path that reached an
         // accepted book. PostOnly / FOK reject without touching the
         // book, but republishing the unchanged snapshot is harmless and
@@ -66,39 +74,42 @@ void MatchingEngine::apply(const EngineEvent& event,
         // extra seq stores per rejected event, which is not on any hot
         // measured path.
         book->publish_top_of_book(event.ts);
-        book->publish_depth(event.ts);
+        if (observability_) {
+            book->publish_depth(event.ts);
 
-        // Emit trade prints: walk the reports produced by this event,
-        // identify (Fill maker, Fill taker) pairs, and push one
-        // TradePrint per pair. The aggressor side is the taker's side
-        // (= event.side for NewOrder events). Reports were appended to
-        // `out` starting at index `reports_before`.
-        const std::size_t end = out.size();
-        for (std::size_t i = reports_before; i + 1 < end; ++i) {
-            const ExecutionReport& maker = out[i];
-            const ExecutionReport& taker = out[i + 1];
-            if (maker.kind == ReportKind::Fill &&
-                taker.kind == ReportKind::Fill &&
-                maker.order_id != taker.order_id &&
-                taker.order_id == event.order_id) {
-                book->publish_trade(TradePrint{
-                    .ts = event.ts,
-                    .price = maker.price,
-                    .qty = maker.qty,
-                    .aggressor = event.side,
-                    .seq = 0,  // assigned by Book::publish_trade
-                });
-                ++i;  // skip past the taker leg we already consumed
+            // Emit trade prints: walk the reports produced by this event,
+            // identify (Fill maker, Fill taker) pairs, and push one
+            // TradePrint per pair. The aggressor side is the taker's side
+            // (= event.side for NewOrder events). Reports were appended to
+            // `out` starting at index `reports_before`.
+            const std::size_t end = out.size();
+            for (std::size_t i = reports_before; i + 1 < end; ++i) {
+                const ExecutionReport& maker = out[i];
+                const ExecutionReport& taker = out[i + 1];
+                if (maker.kind == ReportKind::Fill &&
+                    taker.kind == ReportKind::Fill &&
+                    maker.order_id != taker.order_id &&
+                    taker.order_id == event.order_id) {
+                    book->publish_trade(TradePrint{
+                        .ts = event.ts,
+                        .price = maker.price,
+                        .qty = maker.qty,
+                        .aggressor = event.side,
+                        .seq = 0,  // assigned by Book::publish_trade
+                    });
+                    ++i;  // skip past the taker leg we already consumed
+                }
             }
         }
     } else {
         apply_cancel(event, out);
-        // apply_cancel publishes both top_of_book and depth on the
-        // success path. The NotFound reject path publishes neither,
-        // which is correct because the book state did not change.
+        // apply_cancel publishes top_of_book unconditionally and (when
+        // observability is on) depth on the success path.
     }
 
-    latency_.record(std::chrono::steady_clock::now() - t_start);
+    if (observability_) {
+        latency_.record(std::chrono::steady_clock::now() - t_start);
+    }
 }
 
 namespace {
@@ -364,12 +375,15 @@ void MatchingEngine::apply_cancel(const EngineEvent& event,
         .ts = event.ts,
         .reject_reason = RejectReason::None,
     });
-    // Publish post-cancel top of book and depth. A NotFound cancel
-    // returns earlier without touching any book, so no publish is
-    // needed on that branch (the snapshot reflects the most recent
-    // accepted event, which is the right reading).
+    // Publish post-cancel top of book unconditionally; depth only when
+    // observability is on. A NotFound cancel returns earlier without
+    // touching any book, so no publish is needed on that branch (the
+    // snapshot reflects the most recent accepted event, which is the
+    // right reading).
     book->publish_top_of_book(event.ts);
-    book->publish_depth(event.ts);
+    if (observability_) {
+        book->publish_depth(event.ts);
+    }
 }
 
 }  // namespace meridian

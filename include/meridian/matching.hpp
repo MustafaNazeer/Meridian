@@ -28,8 +28,14 @@ public:
 
 class MatchingEngine {
 public:
+    // observability: when true (default), apply() calls publish_depth
+    // and publish_trade on the book and records a sample into the
+    // latency histogram on every event. When false (bench mode), these
+    // calls are skipped to isolate the pure matching cost. TOB publish
+    // is always performed regardless.
     MatchingEngine(OrderPool& pool, BookRegistry& registry,
-                   OrderIndex& index) noexcept;
+                   OrderIndex& index,
+                   bool observability = true) noexcept;
 
     // Hot-path API: appends every report produced by this event to
     // `out`. Caller owns the vector and is responsible for clear()ing
@@ -80,6 +86,7 @@ private:
     BookRegistry& registry_;
     OrderIndex& index_;
     LatencyHistogram latency_;
+    bool observability_;
 };
 
 }  // namespace meridian
