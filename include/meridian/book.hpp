@@ -1,7 +1,9 @@
 #pragma once
 
+#include "meridian/depth_snapshot.hpp"
 #include "meridian/level.hpp"
 #include "meridian/seqlock_snapshot.hpp"
+#include "meridian/trade_print.hpp"
 #include "meridian/types.hpp"
 
 #include <functional>
@@ -46,6 +48,31 @@ public:
         return snapshot_.read();
     }
 
+    // Publish the post-event L8 depth picture through the depth
+    // seqlock. Walks the first kDepthLevels entries of each side's
+    // price map. Called by MatchingEngine::apply after every accepted
+    // event, immediately after publish_top_of_book.
+    void publish_depth(Timestamp ts) noexcept;
+
+    // Reader-side accessor for the L8 depth snapshot.
+    [[nodiscard]] DepthSnapshot depth() const noexcept {
+        return depth_.read();
+    }
+
+    // Publish a trade print into the per-Book ring. Called by
+    // MatchingEngine::apply once per match leg. The caller leaves the
+    // print's seq field at zero; this method assigns the monotonic
+    // per-Book seq before writing.
+    void publish_trade(const TradePrint& p) noexcept;
+
+    // Reader-side accessor for the recent-prints ring. Copies up to
+    // kTradeRing prints, oldest first, into `out` and writes the
+    // populated count into `count`. Safe to call from any thread.
+    void trades(std::array<TradePrint, kTradeRing>& out,
+                std::size_t& count) const noexcept {
+        trades_.read(out, count);
+    }
+
     // Diagnostic accessor (tests and observability). Not for
     // application logic.
     [[nodiscard]] const SeqlockSnapshot& snapshot() const noexcept {
@@ -63,6 +90,9 @@ private:
     AskLevelMap asks_;
     std::unordered_map<OrderId, Order*> id_index_;
     SeqlockSnapshot snapshot_;
+    SeqlockDepth depth_;
+    TradeRing    trades_;
+    std::uint64_t next_trade_seq_ = 0;  // single-writer monotonic counter
 };
 
 }  // namespace meridian
