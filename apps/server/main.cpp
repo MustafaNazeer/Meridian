@@ -266,8 +266,16 @@ int main(int argc, char** argv) {
             if (reference < kPriceFloor) reference = kPriceFloor;
             if (reference > kPriceCeiling) reference = kPriceCeiling;
 
+            // Event mix tuned for steady state: at this share with the
+            // current qty range, the expected add and cancel rates are
+            // roughly balanced, so the resting book hovers in the low
+            // hundreds rather than accumulating into the thousands.
+            // Real-exchange ITCH feeds show much higher cancel ratios
+            // than this (often 80 percent plus); 50 / 10 / 40 is a
+            // visually legible undercount that still reads as a busy
+            // market.
             const int b = bucket(rng);
-            if (b < 72 || max_id == 0) {
+            if (b < 50 || max_id == 0) {
                 // Limit order placed near the reference, with a small
                 // offset so the resting book builds depth across a
                 // handful of ticks rather than at one price.
@@ -280,7 +288,7 @@ int main(int argc, char** argv) {
                     : reference + offset;
                 ev.qty = qty_dist(rng);
                 max_id = ev.order_id;
-            } else if (b < 80) {
+            } else if (b < 60) {
                 // Occasional market sweep that lifts the resting book.
                 ev.kind = meridian::EventKind::NewOrder;
                 ev.type = meridian::OrderType::Market;
