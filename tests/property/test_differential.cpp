@@ -152,7 +152,7 @@ TEST(Differential, RandomSequencesAgreeWithReference) {
         }
 
         // Depth diff: one depth_snapshot per demo symbol expected.
-        ASSERT_EQ(py_depths.size(), 5u)
+        ASSERT_EQ(py_depths.size(), run->symbols.size())
             << "expected one depth_snapshot per demo symbol";
         for (Symbol s : run->symbols) {
             const Book* b = run->registry->book(s);
@@ -160,7 +160,7 @@ TEST(Differential, RandomSequencesAgreeWithReference) {
             const DepthSnapshot cpp_depth = b->depth();
 
             // Locate the Python depth line for this symbol.
-            const std::string needle = "\"symbol\":" + std::to_string(s);
+            const std::string needle = "\"symbol\":" + std::to_string(s) + "}";
             auto it = std::find_if(py_depths.begin(), py_depths.end(),
                 [&](const std::string& line) {
                     return line.find(needle) != std::string::npos;

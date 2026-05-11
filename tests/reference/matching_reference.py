@@ -238,9 +238,10 @@ class _Level:
     orders: "OrderedDict[int, _RestingOrder]" = field(default_factory=OrderedDict)
 
     def total_qty(self) -> int:
-        """Sum of remaining quantities at this level. O(n) but only
-        used by ``top_of_book`` for the demo binary; not on the diff
-        path."""
+        """O(n) sum over remaining quantities at this level.
+        Called by ``top_of_book`` and ``l8_depth``; must faithfully
+        reflect the current order queue contents because both callers
+        are diffed byte-for-byte against the C++ engine."""
 
         return sum(o.qty_remaining for o in self.orders.values())
 
