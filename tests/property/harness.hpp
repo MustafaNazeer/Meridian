@@ -276,8 +276,8 @@ public:
     }
 
     // Sum of resting quantity on `sym` for orders on the given `side`,
-    // computed from the post-finalize() shadow state. Used by the L8
-    // depth quantity-bound invariant in test_invariants.cpp.
+    // computed from the post-finalize() shadow state. Used by the P12
+    // (DepthQuantityBoundedByResting) invariant in test_invariants.cpp.
     [[nodiscard]] Quantity resting_qty_by_side(Symbol sym, Side side) const noexcept {
         Quantity total = 0;
         for (const auto& [id, s] : orders_) {

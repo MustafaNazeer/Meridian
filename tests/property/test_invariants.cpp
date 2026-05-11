@@ -12,7 +12,7 @@
 // On failure the assertion message includes the seed, so a regression
 // can be reproduced by hardcoding that seed in a one-off scenario.
 //
-// The five invariants below are the in-scope set from
+// The invariants below are the in-scope set from
 // docs/risk/matching-semantics.md section 9.
 
 #include "harness.hpp"
