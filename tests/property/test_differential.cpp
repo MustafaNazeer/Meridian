@@ -12,6 +12,7 @@
 #include "harness.hpp"
 #include "meridian/types.hpp"
 
+#include <algorithm>
 #include <cstdio>
 #include <cstdlib>
 #include <cstdint>
@@ -124,16 +125,69 @@ TEST(Differential, RandomSequencesAgreeWithReference) {
         const std::string rm_cmd = "rm -rf " + std::string(workdir);
         [[maybe_unused]] int rm_rc = std::system(rm_cmd.c_str());
 
+        // Partition Python output: lines with kind=depth_snapshot go
+        // into py_depths; everything else is an execution report.
+        std::vector<std::string> py_reports;
+        std::vector<std::string> py_depths;
+        py_reports.reserve(py_lines.size());
+        for (const auto& line : py_lines) {
+            if (line.find("\"kind\":\"depth_snapshot\"") != std::string::npos) {
+                py_depths.push_back(line);
+            } else {
+                py_reports.push_back(line);
+            }
+        }
+
+        // Report diff: C++ report stream vs Python report stream.
         std::vector<std::string> cpp_lines;
         cpp_lines.reserve(run->reports.size());
         for (const auto& r : run->reports) cpp_lines.push_back(report_to_jsonl(r));
 
-        ASSERT_EQ(cpp_lines.size(), py_lines.size())
+        ASSERT_EQ(cpp_lines.size(), py_reports.size())
             << "C++ produced " << cpp_lines.size()
-            << " reports, Python produced " << py_lines.size();
+            << " reports, Python produced " << py_reports.size();
         for (std::size_t k = 0; k < cpp_lines.size(); ++k) {
-            ASSERT_EQ(cpp_lines[k], py_lines[k])
+            ASSERT_EQ(cpp_lines[k], py_reports[k])
                 << "report " << k << " disagrees";
+        }
+
+        // Depth diff: one depth_snapshot per demo symbol expected.
+        ASSERT_EQ(py_depths.size(), 5u)
+            << "expected one depth_snapshot per demo symbol";
+        for (Symbol s : run->symbols) {
+            const Book* b = run->registry->book(s);
+            ASSERT_NE(b, nullptr);
+            const DepthSnapshot cpp_depth = b->depth();
+
+            // Locate the Python depth line for this symbol.
+            const std::string needle = "\"symbol\":" + std::to_string(s);
+            auto it = std::find_if(py_depths.begin(), py_depths.end(),
+                [&](const std::string& line) {
+                    return line.find(needle) != std::string::npos;
+                });
+            ASSERT_NE(it, py_depths.end()) << "no depth_snapshot for symbol " << s;
+
+            // Build the expected JSON in the same alphabetical field
+            // order that Python emits with sort_keys=True:
+            // asks, bids, kind, symbol.
+            std::ostringstream cpp_json;
+            cpp_json << "{\"asks\":[";
+            for (std::size_t j = 0; j < static_cast<std::size_t>(cpp_depth.ask_levels); ++j) {
+                if (j != 0) cpp_json << ',';
+                cpp_json << '[' << cpp_depth.asks[j].px
+                         << ',' << cpp_depth.asks[j].qty
+                         << ',' << cpp_depth.asks[j].order_count << ']';
+            }
+            cpp_json << "],\"bids\":[";
+            for (std::size_t j = 0; j < static_cast<std::size_t>(cpp_depth.bid_levels); ++j) {
+                if (j != 0) cpp_json << ',';
+                cpp_json << '[' << cpp_depth.bids[j].px
+                         << ',' << cpp_depth.bids[j].qty
+                         << ',' << cpp_depth.bids[j].order_count << ']';
+            }
+            cpp_json << "],\"kind\":\"depth_snapshot\",\"symbol\":" << s << "}";
+
+            EXPECT_EQ(cpp_json.str(), *it) << "depth mismatch for symbol=" << s;
         }
     }
 }

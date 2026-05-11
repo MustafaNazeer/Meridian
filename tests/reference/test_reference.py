@@ -937,6 +937,67 @@ class MultiSymbolTests(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
+# L8 depth: l8_depth(symbol) method
+# ---------------------------------------------------------------------------
+
+
+class L8DepthTests(unittest.TestCase):
+    """Unit tests for MatchingReference.l8_depth and _SingleSymbolBook.l8_depth."""
+
+    def test_l8_depth_empty_book(self) -> None:
+        """A fresh book returns empty lists on both sides."""
+
+        engine = MatchingReference(symbols=(1,))
+        depth = engine.l8_depth(1)
+        self.assertEqual(depth, {"bids": [], "asks": []})
+
+    def test_l8_depth_two_levels_each_side(self) -> None:
+        """Two resting bids and two resting asks: bids descending, asks
+        ascending, order count and total qty correct."""
+
+        engine = MatchingReference(symbols=(1,))
+        engine.submit_limit(101, Side.BUY, 100, 10, 1, symbol=1)
+        engine.submit_limit(102, Side.BUY,  99, 20, 2, symbol=1)
+        engine.submit_limit(201, Side.SELL, 101, 15, 3, symbol=1)
+        engine.submit_limit(202, Side.SELL, 102, 25, 4, symbol=1)
+
+        depth = engine.l8_depth(1)
+        self.assertEqual(depth["bids"], [[100, 10, 1], [99, 20, 1]])
+        self.assertEqual(depth["asks"], [[101, 15, 1], [102, 25, 1]])
+
+    def test_l8_depth_caps_at_eight(self) -> None:
+        """Ten resting bids produce exactly 8 entries (closest to spread
+        first, so the 8 highest prices)."""
+
+        engine = MatchingReference(symbols=(1,))
+        for i in range(10):
+            # Prices 200, 199, ..., 191 so they all rest.
+            engine.submit_limit(
+                1000 + i, Side.BUY, 200 - i, 5, i + 1, symbol=1
+            )
+
+        bids = engine.l8_depth(1)["bids"]
+        self.assertEqual(len(bids), 8)
+        # The 8 returned levels must be the 8 highest prices in
+        # descending order.
+        expected_prices = list(range(200, 192, -1))  # 200 down to 193
+        actual_prices = [entry[0] for entry in bids]
+        self.assertEqual(actual_prices, expected_prices)
+
+    def test_l8_depth_multiple_orders_at_one_level(self) -> None:
+        """Two orders at the same price collapse into one level entry
+        with summed qty and order_count=2."""
+
+        engine = MatchingReference(symbols=(1,))
+        engine.submit_limit(301, Side.BUY, 100, 10, 1, symbol=1)
+        engine.submit_limit(302, Side.BUY, 100, 30, 2, symbol=1)
+
+        depth = engine.l8_depth(1)
+        self.assertEqual(depth["bids"], [[100, 40, 2]])
+        self.assertEqual(depth["asks"], [])
+
+
+# ---------------------------------------------------------------------------
 # Determinism: byte-identical JSON across runs
 # ---------------------------------------------------------------------------
 
