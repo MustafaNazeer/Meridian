@@ -49,11 +49,16 @@ public:
     void write(const DepthSnapshot& s) noexcept {
         const std::uint64_t v = seq_.load(std::memory_order_relaxed);
         seq_.store(v + 1, std::memory_order_release);
-        // The DepthSnapshot fields are POD; the seqlock retry contract
-        // is the sole correctness guarantee (readers retry if their
-        // two seq loads disagree). The data writes are non-atomic and
-        // ordered after the odd-seq store and before the even-seq
-        // store by the release semantics on those two stores.
+        // data_ is a POD struct; its stores are non-atomic. The
+        // seqlock retry contract (readers retry on seq mismatch) is
+        // the sole correctness guarantee for readers. For the
+        // writer's ordering, the even-seq release store at the end
+        // anchors data_ = s before it (release prevents prior writes
+        // from being reordered after it); on x86 with GCC/Clang the
+        // odd-seq release store also acts as a compiler barrier
+        // preventing data_ = s from being hoisted before it, but
+        // that is a compiler behaviour rather than a C++20 memory
+        // model guarantee.
         data_ = s;
         seq_.store(v + 2, std::memory_order_release);
     }

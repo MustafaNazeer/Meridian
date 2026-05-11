@@ -53,10 +53,12 @@ TEST(SeqlockDepth, FullL8RoundTrip) {
     EXPECT_EQ(out.ask_levels, 8u);
     EXPECT_EQ(out.ts, 42);
     for (std::size_t i = 0; i < kDepthLevels; ++i) {
-        EXPECT_EQ(out.bids[i].px,  in.bids[i].px)  << "bid " << i;
-        EXPECT_EQ(out.bids[i].qty, in.bids[i].qty) << "bid " << i;
-        EXPECT_EQ(out.asks[i].px,  in.asks[i].px)  << "ask " << i;
-        EXPECT_EQ(out.asks[i].qty, in.asks[i].qty) << "ask " << i;
+        EXPECT_EQ(out.bids[i].px,          in.bids[i].px)          << "bid " << i;
+        EXPECT_EQ(out.bids[i].qty,         in.bids[i].qty)         << "bid " << i;
+        EXPECT_EQ(out.bids[i].order_count, in.bids[i].order_count) << "bid " << i;
+        EXPECT_EQ(out.asks[i].px,          in.asks[i].px)          << "ask " << i;
+        EXPECT_EQ(out.asks[i].qty,         in.asks[i].qty)         << "ask " << i;
+        EXPECT_EQ(out.asks[i].order_count, in.asks[i].order_count) << "ask " << i;
     }
 }
 
