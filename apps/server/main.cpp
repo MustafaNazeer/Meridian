@@ -51,7 +51,12 @@ namespace {
 
 struct Cfg {
     int port = 0;
-    std::uint64_t rate_eps = 50000;  // engine events per second
+    // Default rate is sized for a small Fly machine, not the bench. The
+    // bench binary is the right place to push events per second; this
+    // default keeps the live demo visually legible (the React dashboard
+    // updates at 30 Hz and individual book moves should be readable).
+    // Bump via --rate when running the server on a beefier host.
+    std::uint64_t rate_eps = 400;
     std::uint64_t seed = 42;
     std::vector<std::string> origins;  // empty = accept any (dev default)
 };
@@ -198,10 +203,25 @@ int main(int argc, char** argv) {
     std::fflush(stdout);
 
     // Engine thread: synthetic limit / market / cancel mix.
+    //
+    // The price model tracks a slowly drifting reference mid: every event
+    // nudges it by at most one tick with a strong pull toward the anchor
+    // (kAnchor = 100), so the displayed top of book moves like a real
+    // instrument rather than skipping uniformly across a wide range. New
+    // limit orders cluster near the current reference (one to four ticks
+    // off depending on side), so a tight visible spread builds and
+    // moves a tick at a time. The event mix favors limit orders so the
+    // book accumulates depth between cancels and market sweeps.
     std::thread engine_thr([&]() {
         std::mt19937_64 rng(cfg.seed);
-        std::uniform_int_distribution<int> price_dist(95, 105);
-        std::uniform_int_distribution<int> qty_dist(1, 30);
+        constexpr int kAnchor = 100;
+        constexpr int kPriceFloor = 92;
+        constexpr int kPriceCeiling = 108;
+        int reference = kAnchor;
+
+        std::uniform_int_distribution<int> offset_dist(0, 3);   // ticks off the mid
+        std::uniform_int_distribution<int> drift_dist(-1, 1);   // small random walk
+        std::uniform_int_distribution<int> qty_dist(1, 25);
         std::uniform_int_distribution<int> bucket(0, 99);
         std::bernoulli_distribution side_dist(0.5);
 
@@ -220,15 +240,43 @@ int main(int argc, char** argv) {
             ev.symbol = kSym;
             ev.ts = ++ts;
             ev.side = side_dist(rng) ? meridian::Side::Buy : meridian::Side::Sell;
+
+            // Mean-reverting random walk: each event nudges the
+            // reference at most one tick. At the anchor the step is a
+            // free uniform draw over {-1, 0, +1}; away from the anchor
+            // the away-direction step is suppressed so the reference
+            // drifts back toward the anchor over time. This keeps the
+            // displayed top of book within a few ticks of kAnchor.
+            const int raw_step = drift_dist(rng);
+            const int pull = reference > kAnchor ? -1 : (reference < kAnchor ? 1 : 0);
+            int step;
+            if (pull == 0) {
+                step = raw_step;
+            } else if (raw_step == 0 || raw_step == pull) {
+                step = raw_step;
+            } else {
+                step = 0;
+            }
+            reference += step;
+            if (reference < kPriceFloor) reference = kPriceFloor;
+            if (reference > kPriceCeiling) reference = kPriceCeiling;
+
             const int b = bucket(rng);
-            if (b < 70 || max_id == 0) {
+            if (b < 80 || max_id == 0) {
+                // Limit order placed near the reference, with a small
+                // offset so the resting book builds depth across a
+                // handful of ticks rather than at one price.
                 ev.kind = meridian::EventKind::NewOrder;
                 ev.type = meridian::OrderType::Limit;
                 ev.order_id = next_id++;
-                ev.price = price_dist(rng);
+                const int offset = offset_dist(rng);
+                ev.price = (ev.side == meridian::Side::Buy)
+                    ? reference - offset
+                    : reference + offset;
                 ev.qty = qty_dist(rng);
                 max_id = ev.order_id;
-            } else if (b < 90) {
+            } else if (b < 88) {
+                // Occasional market sweep that lifts the resting book.
                 ev.kind = meridian::EventKind::NewOrder;
                 ev.type = meridian::OrderType::Market;
                 ev.order_id = next_id++;
@@ -236,6 +284,10 @@ int main(int argc, char** argv) {
                 ev.qty = qty_dist(rng) / 4 + 1;
                 max_id = ev.order_id;
             } else {
+                // Cancellation of an existing order. Real exchanges
+                // cancel far more orders than they fill; the 12 percent
+                // share here is a deliberate undercount to keep the
+                // visible book lively rather than empty.
                 std::uniform_int_distribution<meridian::OrderId> cancel_dist(1, max_id);
                 ev.kind = meridian::EventKind::Cancel;
                 ev.order_id = cancel_dist(rng);

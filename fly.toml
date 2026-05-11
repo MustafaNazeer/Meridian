@@ -22,7 +22,12 @@ primary_region = "iad"
 
 [env]
   MERIDIAN_PORT = "8080"
-  MERIDIAN_RATE = "50000"
+  # The live demo runs at a visually legible rate, not a benchmark rate.
+  # The bench binary is the right place to push events per second; this
+  # value (400 events per second, ~13 per 30 Hz sampler tick) keeps the
+  # dashboard lively without flooding the React renderer or the Fly
+  # shared CPU machine.
+  MERIDIAN_RATE = "400"
   MERIDIAN_SEED = "42"
   # The Origin allowlist for /ws upgrades. Browsers always send Origin;
   # the production lockdown rejects anything that is not the Cloudflare
