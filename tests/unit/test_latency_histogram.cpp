@@ -67,10 +67,10 @@ TEST(LatencyHistogram, OverflowBucketCatchesLargeSamples) {
 
 TEST(LatencyHistogram, PercentilesFromKnownCdf) {
     LatencyHistogram h;
-    // 1000 samples, all in bucket 0 (30 ns); p50, p99, p999 all in
-    // bucket 0; max equals the upper bound of bucket 0 (lower bound is
-    // the conservative percentile per the spec, max takes the highest
-    // populated bucket's upper bound).
+    // 1000 samples, all in bucket 0 (30 ns); p50, p99, p999 all
+    // sit at bucket 0's lower bound (30 ns). max takes the lower
+    // bound of the last non-empty bucket, which is also bucket 0
+    // (30 ns) in this single-bucket case.
     for (int i = 0; i < 1000; ++i) h.record(ns{30});
     const auto snap = h.snapshot();
     EXPECT_EQ(snap.samples, 1000u);
