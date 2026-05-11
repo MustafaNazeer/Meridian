@@ -41,8 +41,10 @@ export function Tape() {
         <tbody data-element="TapeBody">
           {newestFirst.map((t, i) => {
             const sideClass = t.aggressor === 'B' ? 'text-bid' : 'text-ask';
-            const aggressorLabel = t.aggressor === 'B' ? 'buy' : 'sell';
-            const notional = (t.px * t.qty) / 100;
+            const sideLabel = t.aggressor === 'B' ? 'buy' : 'sell';
+            // Prices are in cents on the wire; formatPrice divides by 100.
+            // Keep notional in cents and let formatPrice do the single division.
+            const notional = t.px * t.qty;
             return (
               <tr
                 key={`trade-${t.ts}-${i}`}
@@ -50,11 +52,11 @@ export function Tape() {
                 className="border-b border-rule-tape"
               >
                 <td className="num text-ink-2 px-3 py-1.5">{formatThousands(t.ts)}</td>
-                <td className={`px-3 py-1.5 ${sideClass}`}>{aggressorLabel}</td>
+                <td className={`px-3 py-1.5 ${sideClass}`}>{sideLabel}</td>
                 <td className={`num px-3 py-1.5 text-right ${sideClass}`}>{formatPrice(t.px)}</td>
                 <td className="num text-ink-2 px-3 py-1.5 text-right">{formatQty(t.qty)}</td>
                 <td className="num text-ink-2 px-3 py-1.5 text-right">{formatPrice(notional)}</td>
-                <td className={`px-3 py-1.5 text-right ${sideClass}`}>{aggressorLabel}</td>
+                <td className="px-3 py-1.5 text-right text-ink-soft">taker</td>
               </tr>
             );
           })}
