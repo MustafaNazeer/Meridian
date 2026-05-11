@@ -76,3 +76,8 @@ target_compile_options(test_ws_smoke PRIVATE
 add_dependencies(test_ws_smoke meridian-server)
 
 gtest_discover_tests(test_ws_smoke)
+
+add_executable(test_trade_aggregation test_trade_aggregation.cpp)
+target_link_libraries(test_trade_aggregation PRIVATE meridian GTest::gtest_main)
+target_compile_options(test_trade_aggregation PRIVATE -Wall -Wextra -Wpedantic -Werror)
+gtest_discover_tests(test_trade_aggregation)
