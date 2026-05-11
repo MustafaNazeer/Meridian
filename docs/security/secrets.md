@@ -68,7 +68,7 @@ The Fly.io account and the Cloudflare account themselves are protected by a pass
 * **The Cloudflare account password and 2FA seed.** Same.
 * **The GitHub credentials.** Same.
 * **NASDAQ ITCH 5.0 sample tape URLs and SHA-256 hashes.** These are public reference data, not secrets. They live in `bench/tape-manifest.json` (or equivalent) so CI can verify integrity before consuming a tape. Not a secret.
-* **Domain configuration.** `meridian-demo.pages.dev` is a public URL. The Fly app name is public once the demo is live. Not secrets.
+* **Domain configuration.** `meridian-orderbook.pages.dev` is a public URL. The Fly app name is public once the demo is live. Not secrets.
 
 ## Pre-flight check: nothing committed
 

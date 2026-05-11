@@ -28,7 +28,7 @@
 
 namespace {
 
-constexpr const char* kAllowedOrigin = "https://meridian-demo.pages.dev";
+constexpr const char* kAllowedOrigin = "https://meridian-orderbook.pages.dev";
 constexpr const char* kBlockedOrigin = "https://attacker.example.com";
 
 int connect_loopback(int port) {

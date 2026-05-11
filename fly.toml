@@ -28,7 +28,7 @@ primary_region = "iad"
   # the production lockdown rejects anything that is not the Cloudflare
   # Pages production origin or the localhost dev origin. Update this
   # list, not the binary, when a new front-end origin needs to connect.
-  MERIDIAN_ORIGINS = "https://meridian-demo.pages.dev,http://localhost:5173"
+  MERIDIAN_ORIGINS = "https://meridian-orderbook.pages.dev,http://localhost:5173"
 
 [http_service]
   internal_port = 8080

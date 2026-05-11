@@ -82,7 +82,7 @@ public:
     // bumps `handshake_failures` plus `origin_rejects`. The list is
     // matched byte-for-byte (case-sensitive, no scheme or trailing
     // slash normalisation); callers pass the full origin string per
-    // RFC 6454 (e.g. "https://meridian-demo.pages.dev"). Call before
+    // RFC 6454 (e.g. "https://meridian-orderbook.pages.dev"). Call before
     // serve_forever(); thread-safe with respect to subsequent reads
     // because serve_forever() runs single-threaded.
     void set_allowed_origins(std::vector<std::string> origins);

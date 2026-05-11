@@ -42,7 +42,7 @@ Will cover the PGO build target, how to run `meridian-bench` with the same confi
 
 ## 10. Deploying the frontend to Cloudflare Pages
 
-The frontend deploys as a static Vite bundle to Cloudflare Pages. The Pages project name is `meridian-demo`; the default subdomain is `meridian-demo.pages.dev`. No custom domain in v1.
+The frontend deploys as a static Vite bundle to Cloudflare Pages. The Pages project name is `meridian-orderbook`; the default subdomain is `meridian-orderbook.pages.dev`. No custom domain in v1.
 
 There are two equivalent paths for the first deploy: the GitHub Actions workflow at `.github/workflows/deploy.yml` (recommended, reproducible) and the Cloudflare dashboard "Connect to Git" flow (fastest first-time setup, but less reproducible).
 
@@ -54,7 +54,7 @@ There are two equivalent paths for the first deploy: the GitHub Actions workflow
 
 ### 10.2 Create the Pages project
 
-Use the dashboard: `https://dash.cloudflare.com -> Workers and Pages -> Create -> Pages -> Direct Upload`. Name it `meridian-demo`. Do not configure a build command in the Pages UI; the GitHub Actions workflow builds the bundle and uploads `frontend/dist/` via `cloudflare/pages-action@v1`. The Pages project is just the publication target.
+Use the dashboard: `https://dash.cloudflare.com -> Workers and Pages -> Create -> Pages -> Direct Upload`. Name it `meridian-orderbook`. Do not configure a build command in the Pages UI; the GitHub Actions workflow builds the bundle and uploads `frontend/dist/` via `cloudflare/pages-action@v1`. The Pages project is just the publication target.
 
 ### 10.3 Configure GitHub Actions secrets
 
@@ -69,7 +69,7 @@ Go to `https://github.com/MustafaNazeer/Meridian/actions/workflows/deploy.yml`, 
 
 ### 10.5 Verify
 
-`curl -I https://meridian-demo.pages.dev` should return `200 OK`. Open the URL in a browser; the dashboard renders the `connecting` state and the connection state machine drives `connecting -> live` once the engine is reachable.
+`curl -I https://meridian-orderbook.pages.dev` should return `200 OK`. Open the URL in a browser; the dashboard renders the `connecting` state and the connection state machine drives `connecting -> live` once the engine is reachable.
 
 ## 11. Deploying meridian-server to Fly.io
 
@@ -114,7 +114,7 @@ curl https://meridian-engine.fly.dev/metrics
 # {"connections_total":0,...}
 ```
 
-Open the deployed frontend in a browser. The connection state machine should walk `connecting -> live` within roughly 5 to 15 seconds (the cold-start window the hero copy already names). The engine's Origin allowlist (set via `MERIDIAN_ORIGINS` in `fly.toml`) restricts `/ws` upgrades to `https://meridian-demo.pages.dev` and `http://localhost:5173`; any other origin gets `HTTP 403`. Confirm the lockdown is in force with:
+Open the deployed frontend in a browser. The connection state machine should walk `connecting -> live` within roughly 5 to 15 seconds (the cold-start window the hero copy already names). The engine's Origin allowlist (set via `MERIDIAN_ORIGINS` in `fly.toml`) restricts `/ws` upgrades to `https://meridian-orderbook.pages.dev` and `http://localhost:5173`; any other origin gets `HTTP 403`. Confirm the lockdown is in force with:
 
 ```bash
 # Upgrade attempt from an unlisted origin should return 403:

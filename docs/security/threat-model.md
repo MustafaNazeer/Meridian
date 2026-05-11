@@ -6,12 +6,12 @@
 
 ## Purpose and scope
 
-Meridian is a public, read-only portfolio demo of a price-time priority limit order book and matching engine. The live demo at `meridian-demo.pages.dev` lets any visitor watch a deterministic NASDAQ ITCH 5.0 replay against the C++ matching engine in real time over WSS. There is no authentication, no user submitted orders, no persistence, and no monetary value at stake. The threat model is sized accordingly: the goal is a demo that is hard to embarrass the author with, not a regulated trading venue.
+Meridian is a public, read-only portfolio demo of a price-time priority limit order book and matching engine. The live demo at `meridian-orderbook.pages.dev` lets any visitor watch a deterministic NASDAQ ITCH 5.0 replay against the C++ matching engine in real time over WSS. There is no authentication, no user submitted orders, no persistence, and no monetary value at stake. The threat model is sized accordingly: the goal is a demo that is hard to embarrass the author with, not a regulated trading venue.
 
 This document covers four attack surfaces that exist in the deployed system as of 2026-05-09:
 
 1. The WebSocket endpoint exposed by `meridian-server` running on a Fly.io machine (default region `iad`, app name resolved at deploy time).
-2. Static asset serving from Cloudflare Pages at `meridian-demo.pages.dev`, plus any static files served directly by the Fly machine.
+2. Static asset serving from Cloudflare Pages at `meridian-orderbook.pages.dev`, plus any static files served directly by the Fly machine.
 3. The replay tape file consumed by `meridian-replay` and `meridian-server` (trusted input, but the assumption is made explicit here).
 4. The build and deploy pipeline (GitHub Actions, Cloudflare Pages deploy hook, `flyctl` deploy), including dependency provenance for the C++ libraries pulled via CMake FetchContent.
 
@@ -29,7 +29,7 @@ Out of scope for this threat model:
 | `meridian-bench` | Developer or CI hardware | Internal | No network. Out of scope for this threat model. |
 | `meridian-replay` | Developer hardware | Internal | Reads a tape file, writes JSONL to stdout. |
 | `meridian-server` | Fly.io machine, Dockerfile plus `fly.toml`, region default `iad` | Public network boundary | Hosts the matching loop, the seqlock-protected snapshot, the sampler, and uWebSockets. Auto-stops when idle, auto-starts on first request. |
-| React web client | Cloudflare Pages, `meridian-demo.pages.dev` | Public network boundary | Static SPA. No backend code on Pages. |
+| React web client | Cloudflare Pages, `meridian-orderbook.pages.dev` | Public network boundary | Static SPA. No backend code on Pages. |
 | Build pipeline | GitHub Actions in `MustafaNazeer/Meridian` | Mixed (public repo, private secrets) | Builds, tests, deploys. Holds `FLY_API_TOKEN` and the Cloudflare Pages API token as repo secrets. |
 
 See also `docs/architecture.md` (high-level diagram, threading model) and the WebSocket protocol document under `docs/api/`.
@@ -69,7 +69,7 @@ The endpoint is publicly reachable from any client. On connect, the client recei
 
 Specific WebSocket server hardening requirements (these become checklist items, see `checklist.md`):
 
-* Origin header check against an allow list containing the Cloudflare Pages production origin (`https://meridian-demo.pages.dev`) and `http://localhost:5173` for dev. Anything else closes the socket before the upgrade completes. **In force** as of the deploy milestone: `WsServer::set_allowed_origins()` plus the `meridian-server --origins` flag implement the check; `MERIDIAN_ORIGINS` in `fly.toml` configures the production list; rejects return HTTP 403, bump `handshake_failures`, and bump a dedicated `origin_rejects` counter; six tests in `tests/unit/test_ws_origin.cpp` cover the matrix (empty allowlist accepts any Origin including missing; non-empty rejects missing and mismatched; non-empty accepts listed; multiple listed origins each accepted).
+* Origin header check against an allow list containing the Cloudflare Pages production origin (`https://meridian-orderbook.pages.dev`) and `http://localhost:5173` for dev. Anything else closes the socket before the upgrade completes. **In force** as of the deploy milestone: `WsServer::set_allowed_origins()` plus the `meridian-server --origins` flag implement the check; `MERIDIAN_ORIGINS` in `fly.toml` configures the production list; rejects return HTTP 403, bump `handshake_failures`, and bump a dedicated `origin_rejects` counter; six tests in `tests/unit/test_ws_origin.cpp` cover the matrix (empty allowlist accepts any Origin including missing; non-empty rejects missing and mismatched; non-empty accepts listed; multiple listed origins each accepted).
 * Max payload size of 64 KB on inbound frames. The protocol's largest expected inbound message is a subscribe naming one of five symbols, well under 100 bytes.
 * Max client count sized to the Fly machine memory budget. Hundreds, not thousands. Excess connections are rejected at handshake.
 * Per IP connection rate limit on handshake attempts (e.g., 10 per minute), implemented in uWebSockets accept callback or via a small token bucket in `apps/server/`.
@@ -81,7 +81,7 @@ Specific WebSocket server hardening requirements (these become checklist items, 
 
 Two static asset surfaces exist:
 
-1. The React SPA on Cloudflare Pages at `meridian-demo.pages.dev`. This is the primary surface visitors hit.
+1. The React SPA on Cloudflare Pages at `meridian-orderbook.pages.dev`. This is the primary surface visitors hit.
 2. The Fly machine's HTTP listener may also serve a small set of static files (e.g., a placeholder `/` page) so that operators visiting the Fly URL directly do not get a blank response. The design intent is that the React app lives on Cloudflare; the Fly origin is reached only over WSS. If we keep a static `/` on Fly, it must be a single page with no JavaScript and no inline event handlers.
 
 | STRIDE | Threat | Mitigation | Status |
