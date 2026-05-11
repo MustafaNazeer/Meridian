@@ -1,0 +1,51 @@
+# Fly.io configuration for the meridian-engine machine.
+#
+# The app serves three HTTP routes (`GET /healthz`, `GET /metrics`,
+# `WSS /ws`) over Fly's edge. Idle machines auto-stop; the first
+# WebSocket connection after a quiet period takes roughly 5 to 15
+# seconds while Fly wakes the machine, and the frontend renders an
+# explicit "engine warming up" state during that window.
+#
+# First deploy: `flyctl launch --no-deploy` once to claim the app
+# name on your account (or `flyctl apps create meridian-engine` if
+# the launch flow tries to overwrite this file), then `flyctl deploy
+# --remote-only` to build the Dockerfile on Fly's builder and ship.
+#
+# See docs/setup-guide.md for the full deploy walkthrough including
+# secrets and post-deploy verification.
+
+app = "meridian-engine"
+primary_region = "iad"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  MERIDIAN_PORT = "8080"
+  MERIDIAN_RATE = "50000"
+  MERIDIAN_SEED = "42"
+  # The Origin allowlist for /ws upgrades. Browsers always send Origin;
+  # the production lockdown rejects anything that is not the Cloudflare
+  # Pages production origin or the localhost dev origin. Update this
+  # list, not the binary, when a new front-end origin needs to connect.
+  MERIDIAN_ORIGINS = "https://meridian-demo.pages.dev,http://localhost:5173"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ["app"]
+
+  [[http_service.checks]]
+    grace_period = "10s"
+    interval = "30s"
+    method = "GET"
+    path = "/healthz"
+    protocol = "http"
+    timeout = "5s"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"

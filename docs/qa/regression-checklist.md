@@ -215,6 +215,8 @@ relevant section above with the concrete commands.
   replay, L10 depth, recent trades, perf metrics in the snapshot,
   CSP / allowed origins / max client count) lands alongside the
   ITCH-tape input and TOML config follow-ups.
+* **Origin allowlist** (in force, deploy milestone): `tests/unit/test_ws_origin.cpp` runs six cases covering the matrix (empty allowlist accepts any Origin including missing; non-empty rejects missing and mismatched with HTTP 403; non-empty accepts listed; multiple listed origins each accepted; `origin_rejects` counter bumps on every rejection). `meridian-server --origins LIST` exposes the allowlist on the CLI; `fly.toml`'s `MERIDIAN_ORIGINS` env baked the production list (`https://meridian-demo.pages.dev,http://localhost:5173`). Confirm on the deployed engine with a curl handshake from an unlisted origin and assert `HTTP/2 403` (the exact command lives in `docs/setup-guide.md` section 11.5).
+* **Deploy smoke** (in force, deploy milestone): `curl -fsS https://meridian-engine.fly.dev/healthz` returns `200 OK` with a JSON body; `curl -fsS https://meridian-engine.fly.dev/metrics` returns a JSON counters body; `https://meridian-demo.pages.dev` returns the Twilight dashboard HTML. The browser-level check is: open the Pages URL, observe the connection state machine walk `connecting -> live` within the 5 to 15 second Fly cold-start window, watch the Hero "Last (mid)" recolor on the next tick, and confirm the Header dot pulses gold rather than recoloring to ask. Acceptance covers a full Fly cold-start cycle once after every deploy.
 * **Frontend audit** (in force, top of book subset): `cd frontend &&
   pnpm install --frozen-lockfile && pnpm test && pnpm run build` is
   green. The Vitest suite covers the connection state machine

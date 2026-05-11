@@ -1,0 +1,56 @@
+# Keep the build context tight: only the engine sources the Dockerfile
+# actually COPYs into the builder stage need to ship. Everything else
+# is either unrelated to the engine (frontend, design mockups, docs)
+# or local state (build directories, IDE caches).
+
+# Local build artifacts.
+build/
+build-*/
+*.o
+*.obj
+*.a
+*.so
+*.dylib
+*.dSYM
+compile_commands.json
+
+# Frontend (Cloudflare Pages builds it separately).
+frontend/
+
+# Design and documentation surface.
+design-mockups/
+docs/
+README.md
+*.md
+
+# Bench artifacts.
+bench/baseline.json
+
+# Test directory: the engine build switches MERIDIAN_BUILD_TESTS off.
+tests/
+
+# Driver binaries the engine container does not ship.
+apps/bench/
+apps/replay/
+
+# Repository plumbing and editor state.
+.git/
+.github/
+.gitignore
+.gitattributes
+.gitmodules
+.vscode/
+.idea/
+.cache/
+.claude/
+.claude-plugins/
+
+# Python and tool caches.
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Local-only files (the global rules in ~/src/CLAUDE.md keep these
+# untracked, but the dockerignore should still drop them defensively).
+CLAUDE.md
+future-ideas.md

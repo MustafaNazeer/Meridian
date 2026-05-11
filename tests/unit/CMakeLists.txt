@@ -42,3 +42,8 @@ add_executable(test_ws_handshake test_ws_handshake.cpp)
 target_link_libraries(test_ws_handshake PRIVATE meridian GTest::gtest_main)
 target_compile_options(test_ws_handshake PRIVATE -Wall -Wextra -Wpedantic -Werror)
 gtest_discover_tests(test_ws_handshake)
+
+add_executable(test_ws_origin test_ws_origin.cpp)
+target_link_libraries(test_ws_origin PRIVATE meridian GTest::gtest_main Threads::Threads)
+target_compile_options(test_ws_origin PRIVATE -Wall -Wextra -Wpedantic -Werror)
+gtest_discover_tests(test_ws_origin)

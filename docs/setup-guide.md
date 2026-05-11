@@ -42,11 +42,100 @@ Will cover the PGO build target, how to run `meridian-bench` with the same confi
 
 ## 10. Deploying the frontend to Cloudflare Pages
 
-Will cover creating the Cloudflare Pages project, wiring the GitHub repo, setting the build command and output directory, configuring the `VITE_WS_URL` environment variable, and verifying the deploy at `meridian-demo.pages.dev`.
+The frontend deploys as a static Vite bundle to Cloudflare Pages. The Pages project name is `meridian-demo`; the default subdomain is `meridian-demo.pages.dev`. No custom domain in v1.
+
+There are two equivalent paths for the first deploy: the GitHub Actions workflow at `.github/workflows/deploy.yml` (recommended, reproducible) and the Cloudflare dashboard "Connect to Git" flow (fastest first-time setup, but less reproducible).
+
+### 10.1 Prerequisites
+
+1. A Cloudflare account. Free tier is sufficient.
+2. A Cloudflare API token with `Account · Cloudflare Pages · Edit` scope. Create one at `https://dash.cloudflare.com/profile/api-tokens` and save it; it is shown only once.
+3. The Cloudflare account ID. Visible at the right of any zone in `https://dash.cloudflare.com`.
+
+### 10.2 Create the Pages project
+
+Use the dashboard: `https://dash.cloudflare.com -> Workers and Pages -> Create -> Pages -> Direct Upload`. Name it `meridian-demo`. Do not configure a build command in the Pages UI; the GitHub Actions workflow builds the bundle and uploads `frontend/dist/` via `cloudflare/pages-action@v1`. The Pages project is just the publication target.
+
+### 10.3 Configure GitHub Actions secrets
+
+In `https://github.com/MustafaNazeer/Meridian/settings/secrets/actions` add:
+
+* `CLOUDFLARE_API_TOKEN`: the token from step 10.1.
+* `CLOUDFLARE_ACCOUNT_ID`: the account ID from step 10.1.
+
+### 10.4 Run the first deploy
+
+Go to `https://github.com/MustafaNazeer/Meridian/actions/workflows/deploy.yml`, click `Run workflow`, pick `frontend`, run. The job builds the Vite bundle with `VITE_MERIDIAN_WS=wss://meridian-engine.fly.dev/ws` (set in the workflow env) and uploads the dist directory to Cloudflare Pages.
+
+### 10.5 Verify
+
+`curl -I https://meridian-demo.pages.dev` should return `200 OK`. Open the URL in a browser; the dashboard renders the `connecting` state and the connection state machine drives `connecting -> live` once the engine is reachable.
 
 ## 11. Deploying meridian-server to Fly.io
 
-Will cover the multi stage Dockerfile, the `fly.toml` machine config (auto stop on idle, auto start on first request, healthcheck), the `fly launch` (or `fly deploy`) command, picking the app name and region (default `iad`), and verifying the WebSocket endpoint at `wss://<fly-app>.fly.dev/ws`.
+The engine runs on a single Fly machine that auto-stops when idle and auto-starts on the first WebSocket connection. The app name is `meridian-engine`; the primary region is `iad`. Machine class is `shared-cpu-1x` with 256 MB RAM, which is plenty for the synthetic event stream at 50,000 events per second (the headline 6M events per second is a benchmark target on a desktop reference machine, not a live-demo number).
+
+### 11.1 Prerequisites
+
+1. A Fly.io account. Free tier covers one machine of this size.
+2. `flyctl` installed locally: `curl -L https://fly.io/install.sh | sh`. (See `https://fly.io/docs/flyctl/install/` for alternates.)
+3. `flyctl auth login` once to authenticate the CLI.
+
+### 11.2 Claim the app name
+
+```bash
+cd /path/to/Meridian
+flyctl apps create meridian-engine
+```
+
+If the name is taken, edit `fly.toml`, `frontend/.env.production`, and `.github/workflows/deploy.yml` to a free alternative (for example `meridian-orderbook`), then rerun the create command.
+
+### 11.3 First deploy
+
+```bash
+flyctl deploy --remote-only
+```
+
+`--remote-only` ships the build context to Fly's remote builder so the local machine does not need Docker. The Dockerfile at the repo root builds a multi-stage image (debian:trixie-slim, gcc, ninja for the builder; minimal runtime with `libstdc++6` and a non-root user for the runtime). First build runs roughly 60 to 120 seconds end to end.
+
+### 11.4 Configure GitHub Actions secrets for subsequent deploys
+
+In `https://github.com/MustafaNazeer/Meridian/settings/secrets/actions` add:
+
+* `FLY_API_TOKEN`: generate via `flyctl auth token` and copy the output.
+
+### 11.5 Verify
+
+```bash
+curl https://meridian-engine.fly.dev/healthz
+# {"status":"ok"}
+
+curl https://meridian-engine.fly.dev/metrics
+# {"connections_total":0,...}
+```
+
+Open the deployed frontend in a browser. The connection state machine should walk `connecting -> live` within roughly 5 to 15 seconds (the cold-start window the hero copy already names). The engine's Origin allowlist (set via `MERIDIAN_ORIGINS` in `fly.toml`) restricts `/ws` upgrades to `https://meridian-demo.pages.dev` and `http://localhost:5173`; any other origin gets `HTTP 403`. Confirm the lockdown is in force with:
+
+```bash
+# Upgrade attempt from an unlisted origin should return 403:
+curl -s -i \
+  -H "Connection: Upgrade" \
+  -H "Upgrade: websocket" \
+  -H "Sec-WebSocket-Version: 13" \
+  -H "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==" \
+  -H "Origin: https://attacker.example.com" \
+  https://meridian-engine.fly.dev/ws | head -1
+# HTTP/2 403
+```
+
+### 11.6 Subsequent deploys
+
+After the first deploy and once `FLY_API_TOKEN` is configured, either:
+
+* Run the GitHub Actions workflow at `https://github.com/MustafaNazeer/Meridian/actions/workflows/deploy.yml` with target `engine` or `both`.
+* Run `flyctl deploy --remote-only` from a local checkout on `main`.
+
+When the deploy cadence stabilizes, flip the `on:` block in `.github/workflows/deploy.yml` from `workflow_dispatch` to `push: branches: [main]` so subsequent merges deploy automatically.
 
 ## 12. Wiring up GitHub Actions CI/CD
 

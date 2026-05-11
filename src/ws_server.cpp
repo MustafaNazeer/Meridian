@@ -146,6 +146,10 @@ void WsServer::set_snapshot(std::string_view payload) {
     current_snapshot_.assign(payload);
 }
 
+void WsServer::set_allowed_origins(std::vector<std::string> origins) {
+    allowed_origins_ = std::move(origins);
+}
+
 WsServer::Metrics WsServer::metrics() const noexcept {
     Metrics m;
     m.connections_total  = connections_total_.load(std::memory_order_relaxed);
@@ -153,6 +157,7 @@ WsServer::Metrics WsServer::metrics() const noexcept {
     m.broadcasts_total   = broadcasts_total_.load(std::memory_order_relaxed);
     m.bytes_sent_total   = bytes_sent_total_.load(std::memory_order_relaxed);
     m.handshake_failures = handshake_failures_.load(std::memory_order_relaxed);
+    m.origin_rejects     = origin_rejects_.load(std::memory_order_relaxed);
     return m;
 }
 
@@ -329,6 +334,7 @@ bool WsServer::handle_http_request(Client& c) {
     const std::string conn_hdr  = header_value(req, "Connection");
     const std::string ws_key    = header_value(req, "Sec-WebSocket-Key");
     const std::string ws_ver    = header_value(req, "Sec-WebSocket-Version");
+    const std::string origin    = header_value(req, "Origin");
     auto contains_ci = [](std::string_view hay, std::string_view needle) {
         std::string h(hay), n(needle);
         std::transform(h.begin(), h.end(), h.begin(),
@@ -347,6 +353,28 @@ bool WsServer::handle_http_request(Client& c) {
         c.out_buf.append(resp);
         flush_to_client(c);
         return false;
+    }
+
+    // Origin allowlist: when configured, reject upgrades whose Origin
+    // header is missing or not in the list. An empty allowlist (the
+    // dev/CLI default) accepts any Origin. The match is byte-for-byte
+    // per RFC 6454 origin semantics; callers register full origin
+    // strings (scheme + host + optional port).
+    if (!allowed_origins_.empty()) {
+        const bool allowed = !origin.empty() && std::any_of(
+            allowed_origins_.begin(), allowed_origins_.end(),
+            [&](const std::string& o) { return o == origin; });
+        if (!allowed) {
+            handshake_failures_.fetch_add(1, std::memory_order_relaxed);
+            origin_rejects_.fetch_add(1, std::memory_order_relaxed);
+            const std::string resp =
+                "HTTP/1.1 403 Forbidden\r\n"
+                "Content-Length: 0\r\n"
+                "Connection: close\r\n\r\n";
+            c.out_buf.append(resp);
+            flush_to_client(c);
+            return false;
+        }
     }
 
     const std::string accept = compute_accept(ws_key);
