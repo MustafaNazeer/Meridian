@@ -188,7 +188,7 @@ TEST(BookTest, EraseEmptyLevelOnAbsentPriceIsNoOp) {
     EXPECT_EQ(book.best_ask(), nullptr);
 }
 
-TEST(Book, PublishDepthCapturesUpToEightLevelsPerSide) {
+TEST(BookTest, PublishDepthCapturesUpToEightLevelsPerSide) {
     OrderPool pool(64);
     Book book(1);
     // 10 bid levels at 100, 99, ..., 91; 10 ask levels at 101, ..., 110.
@@ -225,7 +225,7 @@ TEST(Book, PublishDepthCapturesUpToEightLevelsPerSide) {
     }
 }
 
-TEST(Book, PublishDepthHandlesFewerThanEightLevels) {
+TEST(BookTest, PublishDepthHandlesFewerThanEightLevels) {
     OrderPool pool(8);
     Book book(1);
     Order* o = pool.acquire();
@@ -240,7 +240,7 @@ TEST(Book, PublishDepthHandlesFewerThanEightLevels) {
     EXPECT_EQ(d.bids[0].qty, 3);
 }
 
-TEST(Book, PublishTradeAdvancesRingSeqMonotonically) {
+TEST(BookTest, PublishTradeAdvancesRingSeqMonotonically) {
     Book book(1);
     book.publish_trade(TradePrint{.ts=1, .price=100, .qty=5,
                                   .aggressor=Side::Buy, .seq=0});

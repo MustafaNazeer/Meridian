@@ -14,6 +14,22 @@
 // consumer of TopOfBookSnapshot). Depth readers (the sampler thread
 // when emitting the v1.1 wire payload) pay the cost of the wider
 // payload only when they need it.
+//
+// Design note: where SeqlockSnapshot uses per-field std::atomic
+// members and relaxed stores (per ADR 0003), SeqlockDepth uses a raw
+// non-atomic struct copy data_ = s under the seqlock retry contract.
+// The DepthSnapshot payload is approximately 200 bytes (16 DepthLevel
+// entries plus headers), so per-field atomics would mean 48 plus
+// atomic stores per publish on a hot path the matching thread takes
+// after every accepted event. The raw struct copy is one mov-block.
+// The seqlock retry on the reader is the correctness guarantee:
+// readers retry on observed seq mismatch and never expose a torn
+// state to the caller. ThreadSanitizer will flag data_ as a data
+// race; the concurrency test at tests/concurrency/test_seqlock_depth_concurrent.cpp
+// (lands in Task 8) carries the appropriate suppression. This
+// trade-off is deliberate and is not a regression of ADR 0003 (which
+// addresses the 24-byte top-of-book payload where per-field atomics
+// are cheap).
 
 #include "meridian/types.hpp"
 
@@ -24,6 +40,10 @@
 namespace meridian {
 
 inline constexpr std::size_t kDepthLevels = 8;
+
+static_assert(kDepthLevels <= 255,
+              "DepthSnapshot::bid_levels and ask_levels are uint8_t; "
+              "raising kDepthLevels above 255 requires a wider field");
 
 struct DepthLevel {
     Price px = kInvalidPrice;
