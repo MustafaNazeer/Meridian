@@ -61,7 +61,7 @@ This is engine internals only; no networking, no untrusted input. Most security 
 
 ## WebSocket server and protocol
 
-* [ ] Origin header is checked against the allow list (`https://meridian-demo.pages.dev` plus `http://localhost:5173` for dev). Anything else closes the socket before upgrade completes.
+* [ ] Origin header is checked against the allow list (`https://meridian-orderbook.pages.dev` plus `http://localhost:5173` for dev). Anything else closes the socket before upgrade completes.
 * [ ] Max inbound payload size is set to 64 KB. Frames exceeding the cap close the socket.
 * [ ] Max client count is set, sized to the Fly machine memory budget. Excess connections rejected at handshake.
 * [ ] Per IP connection rate limit on handshake attempts (e.g., 10 per minute) is implemented in code, not only in documentation.
@@ -90,7 +90,7 @@ This is the master hardening list, captured up front so it does not have to be r
 ### TLS and headers
 
 * [ ] HTTPS via Fly's edge: Fly issues and renews the TLS certificate for `<app>.fly.dev` automatically. Confirm the WebSocket upgrade is over `wss://`, not `ws://`.
-* [ ] HSTS with `max-age` of at least 6 months on the Cloudflare Pages frontend. Confirmed via `curl -I https://meridian-demo.pages.dev` showing `strict-transport-security: max-age=15552000` or higher.
+* [ ] HSTS with `max-age` of at least 6 months on the Cloudflare Pages frontend. Confirmed via `curl -I https://meridian-orderbook.pages.dev` showing `strict-transport-security: max-age=15552000` or higher.
 * [ ] CSP on the frontend: `connect-src` allows the Fly app origin (`wss://<app>.fly.dev`) plus `'self'`; `script-src` is `'self'`; `style-src` is `'self'` plus `https://fonts.googleapis.com`; `default-src` is `'none'`. Plus X-Frame-Options DENY and X-Content-Type-Options nosniff.
 * [ ] Confirm the Cloudflare Pages `_headers` file actually applies the CSP and security headers to all routes, not only `/`. Verified via `curl -I` on `/` and on a deep route.
 
@@ -128,7 +128,7 @@ This is the master hardening list, captured up front so it does not have to be r
 
 ### Final live demo smoke test
 
-* [ ] Visit `https://meridian-demo.pages.dev` from a clean browser profile. Confirm the page loads, the WebSocket connects to the Fly origin, and no third party origins appear in DevTools' Network tab.
+* [ ] Visit `https://meridian-orderbook.pages.dev` from a clean browser profile. Confirm the page loads, the WebSocket connects to the Fly origin, and no third party origins appear in DevTools' Network tab.
 * [ ] Run an SSL Labs (or equivalent) check on the Fly origin and on the Pages origin; both report a clean TLS configuration. [citation needed for the specific tool used]
 * [ ] Confirm the cold start UX renders the "engine warming up" hero when the Fly machine has been idle.
 

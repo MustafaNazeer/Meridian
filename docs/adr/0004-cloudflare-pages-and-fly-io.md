@@ -20,7 +20,7 @@ There are several plausible combinations of frontend host plus engine host:
 
 1. **Cloudflare Pages (frontend) + Fly.io machine (engine)**. The frontend deploys as static assets to Cloudflare's edge; the engine runs in a Fly machine that auto-stops when idle and auto-starts on the first request.
 2. **Vercel (frontend) + Fly.io machine (engine)**. Vercel and Cloudflare Pages are roughly equivalent for a static SPA on the free tier. Vercel's free tier has a bandwidth cap that is lower than Cloudflare's, and Vercel pushes a Next.js framework lock-in that does not apply to a Vite SPA but adds friction to the deploy story.
-3. **GitHub Pages (frontend) + Fly.io machine (engine)**. Cheapest, but GitHub Pages does not support custom HTTP headers (notably Content-Security-Policy) on a per-deploy basis, and the deploy URL `mustafanazeer.github.io/Meridian` is less legible on a resume than `meridian-demo.pages.dev`.
+3. **GitHub Pages (frontend) + Fly.io machine (engine)**. Cheapest, but GitHub Pages does not support custom HTTP headers (notably Content-Security-Policy) on a per-deploy basis, and the deploy URL `mustafanazeer.github.io/Meridian` is less legible on a resume than `meridian-orderbook.pages.dev`.
 4. **One Fly.io machine that serves both the engine and the static SPA**. Simplest topology, but conflates two failure domains (a frontend deploy bug can knock the engine offline; an engine restart loses the static cache) and forfeits Cloudflare's edge for the frontend.
 5. **AWS or GCP managed services**. More legitimate-feeling for some audiences, but the free tier is meaner, the deploy story is heavier (IAM, VPC, load balancers), and the cost-per-hour of an always-on micro-VM is non-zero.
 
@@ -28,7 +28,7 @@ The matching loop is single threaded with a target throughput of 6M events per s
 
 ## Decision
 
-**Frontend**: Cloudflare Pages, project `meridian-demo`, default subdomain `meridian-demo.pages.dev`. No custom domain for v1. The deploy artifact is the Vite production bundle (`pnpm run build`'s `dist/` directory). The Cloudflare Pages action publishes on every push to `main` once the deploy workflow's trigger is flipped from `workflow_dispatch` to `push`.
+**Frontend**: Cloudflare Pages, project `meridian-orderbook`, default subdomain `meridian-orderbook.pages.dev`. No custom domain for v1. The deploy artifact is the Vite production bundle (`pnpm run build`'s `dist/` directory). The Cloudflare Pages action publishes on every push to `main` once the deploy workflow's trigger is flipped from `workflow_dispatch` to `push`.
 
 **Engine**: Fly.io, app `meridian-engine`, primary region `iad` (Ashburn, Virginia). The deploy artifact is the `Dockerfile` at the repo root, built remotely by Fly's builder via `flyctl deploy --remote-only`. Machine class is `shared-cpu-1x` with 256 MB RAM. `auto_stop_machines = "stop"` and `auto_start_machines = true` mean the machine sleeps when idle and wakes on the first request; `min_machines_running = 0` keeps the always-on cost at zero.
 

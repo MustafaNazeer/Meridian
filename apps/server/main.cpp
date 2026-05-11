@@ -66,7 +66,7 @@ void print_usage(const char* argv0) {
                  "             Empty (the default) accepts any Origin including a\n"
                  "             missing one; non-empty rejects upgrades whose Origin\n"
                  "             is missing or not in the list with HTTP 403. Example:\n"
-                 "             --origins https://meridian-demo.pages.dev,http://localhost:5173\n",
+                 "             --origins https://meridian-orderbook.pages.dev,http://localhost:5173\n",
                  argv0);
 }
 

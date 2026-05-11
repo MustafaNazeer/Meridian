@@ -63,7 +63,7 @@ Twilight was chosen on 2026-05-09 from a field of five candidate directions. The
 
 ## Live demo
 
-v1 will deploy the frontend to **`meridian-demo.pages.dev`** (Cloudflare Pages default subdomain; no custom domain for v1) and the engine to a Fly.io machine reachable at `wss://<fly-app>.fly.dev/ws`. The Fly app name and region are picked at deploy time. Neither URL is live yet; this section will link to a working demo once the deploy ships.
+v1 will deploy the frontend to **`meridian-orderbook.pages.dev`** (Cloudflare Pages default subdomain; no custom domain for v1) and the engine to a Fly.io machine reachable at `wss://<fly-app>.fly.dev/ws`. The Fly app name and region are picked at deploy time. Neither URL is live yet; this section will link to a working demo once the deploy ships.
 
 The Fly machine auto stops when idle and auto starts on the first request, so the first WebSocket connection after a quiet period takes roughly 5 to 15 seconds while Fly wakes the machine. The frontend renders an explicit "engine warming up" state during this window rather than appearing broken.
 
