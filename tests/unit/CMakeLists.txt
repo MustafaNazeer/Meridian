@@ -52,3 +52,8 @@ add_executable(test_latency_histogram test_latency_histogram.cpp)
 target_link_libraries(test_latency_histogram PRIVATE meridian GTest::gtest_main)
 target_compile_options(test_latency_histogram PRIVATE -Wall -Wextra -Wpedantic -Werror)
 gtest_discover_tests(test_latency_histogram)
+
+add_executable(test_depth_snapshot test_depth_snapshot.cpp)
+target_link_libraries(test_depth_snapshot PRIVATE meridian GTest::gtest_main)
+target_compile_options(test_depth_snapshot PRIVATE -Wall -Wextra -Wpedantic -Werror)
+gtest_discover_tests(test_depth_snapshot)
