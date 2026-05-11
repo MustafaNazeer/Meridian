@@ -87,7 +87,7 @@ function PerfLatency() {
 }
 
 function PerfBookState() {
-  const top = useDashboard((s) => s.top);
+  const top = useDashboard((s) => s.displayedTop);
   const ticks = useDashboard((s) => s.ticksSinceConnect);
   return (
     <div data-element="PerfBookState" className="mb-8">

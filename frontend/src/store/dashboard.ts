@@ -30,6 +30,12 @@ export type DashboardState = {
   connectionState: ConnectionState;
   selectedSymbol: Symbol;
   top: TopOfBook | null;
+  // `displayedTop` mirrors `top` at a throttled cadence (see
+  // hooks/useDisplayThrottle). The editorial cells (Hero stats, Ladder,
+  // Tape) read this so their numerals refresh at a human-legible rate;
+  // the wire counters and depth-chart inputs continue to read `top` so
+  // the perf panel and chart stay accurate.
+  displayedTop: TopOfBook | null;
   prevLast: LastTick | null;
   lastTickColor: 'up' | 'down' | 'flat';
   ticksSinceConnect: number;
@@ -45,6 +51,7 @@ export type DashboardState = {
   applyDelta: (t: TopOfBook, bytes: number) => void;
   notePerfTick: (perSec: { deltas: number; bytes: number }) => void;
   setReconnect: (attempt: number, inMs: number) => void;
+  flushDisplayed: () => void;
   reset: () => void;
 };
 
@@ -61,6 +68,7 @@ export const useDashboard = create<DashboardState>((set) => ({
   connectionState: 'connecting',
   selectedSymbol: 'AAPL',
   top: null,
+  displayedTop: null,
   prevLast: null,
   lastTickColor: 'flat',
   ticksSinceConnect: 0,
@@ -75,6 +83,7 @@ export const useDashboard = create<DashboardState>((set) => ({
     set({
       selectedSymbol: s,
       top: null,
+      displayedTop: null,
       prevLast: null,
       lastTickColor: 'flat',
       ticksSinceConnect: 0,
@@ -88,6 +97,10 @@ export const useDashboard = create<DashboardState>((set) => ({
       const history = lastMid !== null ? [{ px: lastMid, ts: t.ts }] : [];
       return {
         top: t,
+        // A snapshot is the start of a stream: mirror immediately to
+        // displayedTop so the editorial cells leave the connecting
+        // skeleton without waiting for the next throttle tick.
+        displayedTop: t,
         // A snapshot is the start of a stream; reset prior-tick state.
         prevLast: null,
         lastTickColor: 'flat',
@@ -155,10 +168,18 @@ export const useDashboard = create<DashboardState>((set) => ({
       connectionState: 'disconnected',
     }),
 
+  // Mirror the latest `top` into `displayedTop`. Called from a 4 Hz
+  // interval in App.tsx (via useDisplayThrottle), this throttles
+  // rendering of the editorial cells without throttling the underlying
+  // wire stream.
+  flushDisplayed: () =>
+    set((prev) => (prev.top === prev.displayedTop ? {} : { displayedTop: prev.top })),
+
   reset: () =>
     set({
       connectionState: 'connecting',
       top: null,
+      displayedTop: null,
       prevLast: null,
       lastTickColor: 'flat',
       ticksSinceConnect: 0,

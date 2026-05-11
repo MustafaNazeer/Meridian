@@ -6,11 +6,13 @@ import { Hero } from './components/Hero';
 import { Ladder } from './components/Ladder';
 import { PerfPanel } from './components/PerfPanel';
 import { Tape } from './components/Tape';
+import { useDisplayThrottle } from './hooks/useDisplayThrottle';
 import { useMeridianStream } from './hooks/useMeridianStream';
 import { useDashboard } from './store/dashboard';
 
 function App() {
   useMeridianStream();
+  useDisplayThrottle();
   const state = useDashboard((s) => s.connectionState);
   const fadedNumerics = state === 'stalled' || state === 'disconnected';
   return (

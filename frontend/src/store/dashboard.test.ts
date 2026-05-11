@@ -87,4 +87,34 @@ describe('useDashboard', () => {
     expect(s.reconnectAttempt).toBe(3);
     expect(s.reconnectInMs).toBe(2_000);
   });
+
+  it('a snapshot eagerly populates displayedTop so the dashboard leaves the connecting skeleton immediately', () => {
+    useDashboard.getState().applySnapshot(tob(10000, 10001, 1), 0);
+    const s = useDashboard.getState();
+    expect(s.displayedTop).not.toBeNull();
+    expect(s.displayedTop?.bidPx).toBe(10000);
+    expect(s.displayedTop?.askPx).toBe(10001);
+  });
+
+  it('deltas update top but leave displayedTop alone until flushDisplayed is called', () => {
+    useDashboard.getState().applySnapshot(tob(10000, 10001, 1), 0);
+    const initial = useDashboard.getState().displayedTop;
+    useDashboard.getState().applyDelta(tob(10001, 10002, 2), 0);
+    useDashboard.getState().applyDelta(tob(10002, 10003, 3), 0);
+    const afterDeltas = useDashboard.getState();
+    expect(afterDeltas.top?.ts).toBe(3);
+    // displayedTop still references the snapshot, not the latest delta:
+    expect(afterDeltas.displayedTop).toBe(initial);
+
+    useDashboard.getState().flushDisplayed();
+    const afterFlush = useDashboard.getState();
+    expect(afterFlush.displayedTop?.ts).toBe(3);
+  });
+
+  it('flushDisplayed is a no-op when top has not changed since the last flush', () => {
+    useDashboard.getState().applySnapshot(tob(10000, 10001, 1), 0);
+    const ref = useDashboard.getState().displayedTop;
+    useDashboard.getState().flushDisplayed();
+    expect(useDashboard.getState().displayedTop).toBe(ref);
+  });
 });

@@ -204,29 +204,31 @@ int main(int argc, char** argv) {
 
     // Engine thread: synthetic limit / market / cancel mix.
     //
-    // The price model tracks a slowly drifting reference mid: every event
-    // nudges it by at most one tick with a strong pull toward the anchor
-    // (kAnchor = 100), so the displayed top of book moves like a real
-    // instrument rather than skipping uniformly across a wide range. New
-    // limit orders cluster near the current reference (one to four ticks
-    // off depending on side), so a tight visible spread builds and
-    // moves a tick at a time. The event mix favors limit orders so the
-    // book accumulates depth between cancels and market sweeps.
+    // The price model tracks a slowly drifting reference mid in cents
+    // (kAnchor = 10000 = $100.00), so the displayed top of book moves
+    // like a real instrument with realistic 1-to-3-cent spreads. New
+    // limit orders cluster near the current reference within 30 cents
+    // on either side, so a tight visible spread builds and moves at
+    // cent granularity. The event mix favors limit and cancel orders
+    // so the book reaches a steady state in the low hundreds of
+    // resting quantity rather than accumulating indefinitely.
     std::thread engine_thr([&]() {
         std::mt19937_64 rng(cfg.seed);
-        constexpr int kAnchor = 100;
-        constexpr int kPriceFloor = 92;
-        constexpr int kPriceCeiling = 108;
+        constexpr int kAnchor = 10000;       // $100.00 expressed in cents
+        constexpr int kPriceFloor = 9000;    // $90.00
+        constexpr int kPriceCeiling = 11000; // $110.00
         int reference = kAnchor;
 
-        std::uniform_int_distribution<int> offset_dist(0, 3);   // ticks off the mid
-        std::uniform_int_distribution<int> drift_dist(-1, 1);   // small random walk
-        // Small order sizes keep the per-level resting depth in a
-        // visually legible range (top size lands around 100 to 300
-        // qty in steady state, not 1000+). The bench binary still
-        // exercises the engine at much higher per-event quantities;
-        // the live demo runs in a range a viewer can read.
-        std::uniform_int_distribution<int> qty_dist(1, 6);
+        // Orders cluster within a 5-cent band of the reference so the
+        // visible top of book carries real depth rather than scattering
+        // thin across many levels.
+        std::uniform_int_distribution<int> offset_dist(0, 5);   // cents off the mid
+        std::uniform_int_distribution<int> drift_dist(-2, 2);   // cents per event
+        // Per-order quantities are in the 5 to 40 range so each event
+        // measurably shifts the visible numerals but the per-level
+        // size stays in the readable hundreds-to-low-thousands range
+        // at steady state.
+        std::uniform_int_distribution<int> qty_dist(5, 40);
         std::uniform_int_distribution<int> bucket(0, 99);
         std::bernoulli_distribution side_dist(0.5);
 
@@ -246,21 +248,21 @@ int main(int argc, char** argv) {
             ev.ts = ++ts;
             ev.side = side_dist(rng) ? meridian::Side::Buy : meridian::Side::Sell;
 
-            // Mean-reverting random walk: each event nudges the
-            // reference at most one tick. At the anchor the step is a
-            // free uniform draw over {-1, 0, +1}; away from the anchor
-            // the away-direction step is suppressed so the reference
-            // drifts back toward the anchor over time. This keeps the
-            // displayed top of book within a few ticks of kAnchor.
+            // Mean-reverting random walk in cents. At the anchor the
+            // step is a free uniform draw over the drift_dist range;
+            // away from the anchor the away-from-anchor step is
+            // suppressed so the reference drifts back over time.
+            // Toward-anchor steps of any magnitude are allowed (so the
+            // walk can correct quickly if it has drifted multiple
+            // cents off the anchor).
             const int raw_step = drift_dist(rng);
             const int pull = reference > kAnchor ? -1 : (reference < kAnchor ? 1 : 0);
             int step;
-            if (pull == 0) {
-                step = raw_step;
-            } else if (raw_step == 0 || raw_step == pull) {
+            if (pull == 0 || raw_step == 0) {
                 step = raw_step;
             } else {
-                step = 0;
+                const bool toward_anchor = (raw_step * pull) > 0;
+                step = toward_anchor ? raw_step : 0;
             }
             reference += step;
             if (reference < kPriceFloor) reference = kPriceFloor;
