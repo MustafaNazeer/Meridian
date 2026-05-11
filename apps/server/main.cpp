@@ -26,13 +26,17 @@
 
 #include "meridian/book.hpp"
 #include "meridian/book_registry.hpp"
+#include "meridian/depth_snapshot.hpp"
+#include "meridian/latency_histogram.hpp"
 #include "meridian/matching.hpp"
 #include "meridian/order_index.hpp"
 #include "meridian/order_pool.hpp"
 #include "meridian/seqlock_snapshot.hpp"
+#include "meridian/trade_print.hpp"
 #include "meridian/types.hpp"
 #include "meridian/ws_server.hpp"
 
+#include <array>
 #include <atomic>
 #include <cerrno>
 #include <chrono>
@@ -156,16 +160,70 @@ void on_signal(int) noexcept {
     if (g_server != nullptr) g_server->request_stop();
 }
 
-std::string format_snapshot(const meridian::TopOfBookSnapshot& s,
+void append_side(std::ostringstream& ss, meridian::Side s) {
+    ss << (s == meridian::Side::Buy ? "\"B\"" : "\"S\"");
+}
+
+std::string format_envelope(const meridian::TopOfBookSnapshot& tob,
+                            const meridian::DepthSnapshot& depth,
+                            const std::array<meridian::TradePrint,
+                                             meridian::kTradeRing>& trades,
+                            std::size_t trade_count,
+                            const meridian::LatencyHistogram::Snapshot& lat,
                             const char* kind) {
     std::ostringstream ss;
-    ss << "{\"kind\":\"" << kind << "\","
-       << "\"bid_px\":"  << (s.has_bid() ? s.best_bid_px : -1) << ","
-       << "\"bid_qty\":" << s.best_bid_qty << ","
-       << "\"ask_px\":"  << (s.has_ask() ? s.best_ask_px : -1) << ","
-       << "\"ask_qty\":" << s.best_ask_qty << ","
-       << "\"ts\":"      << s.ts
-       << "}";
+    ss << "{\"kind\":\"" << kind << "\",";
+    ss << "\"ts\":" << tob.ts << ",";
+
+    // tob
+    ss << "\"tob\":{"
+       << "\"bid_px\":" << (tob.has_bid() ? tob.best_bid_px : -1) << ","
+       << "\"bid_qty\":" << tob.best_bid_qty << ","
+       << "\"ask_px\":" << (tob.has_ask() ? tob.best_ask_px : -1) << ","
+       << "\"ask_qty\":" << tob.best_ask_qty
+       << "},";
+
+    // depth
+    ss << "\"depth\":{\"bids\":[";
+    for (std::size_t i = 0; i < depth.bid_levels; ++i) {
+        if (i != 0) ss << ',';
+        ss << '[' << depth.bids[i].px << ',' << depth.bids[i].qty << ']';
+    }
+    ss << "],\"asks\":[";
+    for (std::size_t i = 0; i < depth.ask_levels; ++i) {
+        if (i != 0) ss << ',';
+        ss << '[' << depth.asks[i].px << ',' << depth.asks[i].qty << ']';
+    }
+    ss << "]},";
+
+    // trades
+    ss << "\"trades\":[";
+    for (std::size_t i = 0; i < trade_count; ++i) {
+        if (i != 0) ss << ',';
+        ss << "{\"ts\":" << trades[i].ts
+           << ",\"px\":" << trades[i].price
+           << ",\"qty\":" << trades[i].qty
+           << ",\"aggressor\":";
+        append_side(ss, trades[i].aggressor);
+        ss << '}';
+    }
+    ss << "],";
+
+    // latency
+    ss << "\"latency\":{"
+       << "\"p50_ns\":"  << lat.p50_ns  << ','
+       << "\"p99_ns\":"  << lat.p99_ns  << ','
+       << "\"p999_ns\":" << lat.p999_ns << ','
+       << "\"max_ns\":"  << lat.max_ns  << ','
+       << "\"samples\":" << lat.samples << ','
+       << "\"hist\":[";
+    for (std::size_t i = 0; i < lat.counts.size(); ++i) {
+        if (i != 0) ss << ',';
+        ss << lat.counts[i];
+    }
+    ss << "]}";
+
+    ss << '}';
     return ss.str();
 }
 
@@ -329,11 +387,19 @@ int main(int argc, char** argv) {
         const auto period = std::chrono::milliseconds(33);
         auto next_tick = std::chrono::steady_clock::now();
         bool first = true;
+        std::array<meridian::TradePrint, meridian::kTradeRing> trades_buf{};
         while (!g_stop.load(std::memory_order_relaxed)) {
-            const meridian::TopOfBookSnapshot snap = book->top_of_book();
-            const std::string payload = format_snapshot(
-                snap, first ? "snapshot" : "delta");
-            server.set_snapshot(format_snapshot(snap, "snapshot"));
+            const meridian::TopOfBookSnapshot tob = book->top_of_book();
+            const meridian::DepthSnapshot depth = book->depth();
+            std::size_t trade_count = 0;
+            book->trades(trades_buf, trade_count);
+            const meridian::LatencyHistogram::Snapshot lat =
+                engine.latency().snapshot();
+            const std::string payload = format_envelope(
+                tob, depth, trades_buf, trade_count, lat,
+                first ? "snapshot" : "delta");
+            server.set_snapshot(format_envelope(
+                tob, depth, trades_buf, trade_count, lat, "snapshot"));
             server.broadcast(payload);
             first = false;
             next_tick += period;
