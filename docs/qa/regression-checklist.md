@@ -215,10 +215,23 @@ relevant section above with the concrete commands.
   replay, L10 depth, recent trades, perf metrics in the snapshot,
   CSP / allowed origins / max client count) lands alongside the
   ITCH-tape input and TOML config follow-ups.
-* **Frontend audit**: `pnpm --filter frontend test` is green; Vitest
-  covers every component on at least the happy path; a WCAG AA pass
-  signs off; the frontend build size and Lighthouse scores meet the
-  targets in `docs/perf/budget.md`.
+* **Frontend audit** (in force, top of book subset): `cd frontend &&
+  pnpm install --frozen-lockfile && pnpm test && pnpm run build` is
+  green. The Vitest suite covers the connection state machine
+  transitions (connecting -> live on first message, live -> stalled
+  after 1 s of silence, stalled -> live on next message, exponential
+  backoff 500 ms doubling capped at 8 s, no reconnect after stop) and
+  the Zustand store reducers (snapshot resets state and seeds history,
+  delta colors up or down on mid change, equal mid keeps prior color,
+  empty side decodes to null mid and does not append history, symbol
+  change resets, wire byte / delta totals accumulate, disconnect drops
+  state). Production build size is roughly 220 KB JS / 11 KB CSS
+  pre-gzip. An end-to-end smoke harness at `frontend/scripts/smoke.mjs`
+  drives the real `MeridianWsClient` against a running `meridian-server`
+  outside CI. Wider frontend audits (WCAG AA, Lighthouse, every
+  component on the happy path, L8 ladder and tape and engine latency
+  panels against real data) land alongside the extended snapshot
+  payload follow-up.
 
 ---
 
