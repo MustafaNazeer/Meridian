@@ -38,8 +38,9 @@ TEST(LatencyHistogramConcurrent, TotalSamplesEqualWritersSum) {
             }
         });
     }
-    // Reader takes mid-flight snapshots; values should never exceed
-    // the running write total at the moment of the load.
+    // Reader takes mid-flight snapshots; samples should never
+    // decrease between consecutive snapshots (each snapshot total is
+    // greater than or equal to the previous one).
     std::atomic<bool> stop{false};
     std::thread reader([&]() {
         std::uint64_t prev = 0;
