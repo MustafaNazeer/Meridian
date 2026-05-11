@@ -549,5 +549,30 @@ TEST(MatchingEngine, RejectedFokEmitsNoTradePrints) {
     EXPECT_EQ(count, 0u);
 }
 
+TEST(MatchingEngine, CancelSuccessPublishesDepth) {
+    OrderPool pool(8);
+    BookRegistry registry{1};
+    OrderIndex index;
+    MatchingEngine engine(pool, registry, index);
+
+    // Add a limit; book has one bid level.
+    EngineEvent add{}; add.kind=EventKind::NewOrder; add.symbol=1;
+    add.ts=1; add.side=Side::Buy; add.type=OrderType::Limit;
+    add.price=100; add.qty=10; add.order_id=1;
+    engine.apply(add);
+    Book* b = registry.book(1);
+    ASSERT_NE(b, nullptr);
+    ASSERT_EQ(b->depth().bid_levels, 1u);
+
+    // Cancel; book is empty; depth must reflect that.
+    EngineEvent cancel{}; cancel.kind=EventKind::Cancel; cancel.symbol=1;
+    cancel.ts=2; cancel.order_id=1;
+    engine.apply(cancel);
+
+    const auto d = b->depth();
+    EXPECT_EQ(d.bid_levels, 0u);
+    EXPECT_EQ(d.ts, 2);
+}
+
 }  // namespace
 }  // namespace meridian

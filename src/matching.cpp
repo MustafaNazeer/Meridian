@@ -93,19 +93,9 @@ void MatchingEngine::apply(const EngineEvent& event,
         }
     } else {
         apply_cancel(event, out);
-        // apply_cancel publishes top_of_book on the success path
-        // (src/matching.cpp inside apply_cancel). Mirror the depth
-        // publish there so cancels also keep the depth seqlock current.
-        // We look up the book here to avoid double-publishing on the
-        // NotFound reject path, which apply_cancel does not publish.
-        const std::size_t end = out.size();
-        if (end > reports_before) {
-            const ExecutionReport& last = out[end - 1];
-            if (last.kind == ReportKind::Cancel) {
-                Book* cb = registry_.book(event.symbol);
-                if (cb != nullptr) cb->publish_depth(event.ts);
-            }
-        }
+        // apply_cancel publishes both top_of_book and depth on the
+        // success path. The NotFound reject path publishes neither,
+        // which is correct because the book state did not change.
     }
 
     latency_.record(std::chrono::steady_clock::now() - t_start);
@@ -374,11 +364,12 @@ void MatchingEngine::apply_cancel(const EngineEvent& event,
         .ts = event.ts,
         .reject_reason = RejectReason::None,
     });
-    // Publish post-cancel top of book. A NotFound cancel returns
-    // earlier without touching any book, so no publish is needed on
-    // that branch (the snapshot reflects the most recent accepted
-    // event, which is the right reading).
+    // Publish post-cancel top of book and depth. A NotFound cancel
+    // returns earlier without touching any book, so no publish is
+    // needed on that branch (the snapshot reflects the most recent
+    // accepted event, which is the right reading).
     book->publish_top_of_book(event.ts);
+    book->publish_depth(event.ts);
 }
 
 }  // namespace meridian
