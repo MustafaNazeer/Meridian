@@ -221,7 +221,12 @@ int main(int argc, char** argv) {
 
         std::uniform_int_distribution<int> offset_dist(0, 3);   // ticks off the mid
         std::uniform_int_distribution<int> drift_dist(-1, 1);   // small random walk
-        std::uniform_int_distribution<int> qty_dist(1, 25);
+        // Small order sizes keep the per-level resting depth in a
+        // visually legible range (top size lands around 100 to 300
+        // qty in steady state, not 1000+). The bench binary still
+        // exercises the engine at much higher per-event quantities;
+        // the live demo runs in a range a viewer can read.
+        std::uniform_int_distribution<int> qty_dist(1, 6);
         std::uniform_int_distribution<int> bucket(0, 99);
         std::bernoulli_distribution side_dist(0.5);
 
@@ -262,7 +267,7 @@ int main(int argc, char** argv) {
             if (reference > kPriceCeiling) reference = kPriceCeiling;
 
             const int b = bucket(rng);
-            if (b < 80 || max_id == 0) {
+            if (b < 72 || max_id == 0) {
                 // Limit order placed near the reference, with a small
                 // offset so the resting book builds depth across a
                 // handful of ticks rather than at one price.
@@ -275,7 +280,7 @@ int main(int argc, char** argv) {
                     : reference + offset;
                 ev.qty = qty_dist(rng);
                 max_id = ev.order_id;
-            } else if (b < 88) {
+            } else if (b < 80) {
                 // Occasional market sweep that lifts the resting book.
                 ev.kind = meridian::EventKind::NewOrder;
                 ev.type = meridian::OrderType::Market;
@@ -284,11 +289,18 @@ int main(int argc, char** argv) {
                 ev.qty = qty_dist(rng) / 4 + 1;
                 max_id = ev.order_id;
             } else {
-                // Cancellation of an existing order. Real exchanges
-                // cancel far more orders than they fill; the 12 percent
-                // share here is a deliberate undercount to keep the
-                // visible book lively rather than empty.
-                std::uniform_int_distribution<meridian::OrderId> cancel_dist(1, max_id);
+                // Cancellation of an existing order. Sample the target
+                // ID from a sliding window of the most recent
+                // kCancelWindow orders, so the cancel is likely to hit
+                // a resting order rather than one already filled or
+                // cancelled (which would be a no-op). The cancel share
+                // (20 percent) is tuned so the book reaches a steady
+                // state of a few hundred resting size rather than
+                // accumulating indefinitely.
+                constexpr meridian::OrderId kCancelWindow = 800;
+                const meridian::OrderId lo = (max_id > kCancelWindow)
+                    ? (max_id - kCancelWindow) : 1;
+                std::uniform_int_distribution<meridian::OrderId> cancel_dist(lo, max_id);
                 ev.kind = meridian::EventKind::Cancel;
                 ev.order_id = cancel_dist(rng);
             }
