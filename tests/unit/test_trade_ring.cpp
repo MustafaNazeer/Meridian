@@ -39,8 +39,12 @@ TEST(TradeRing, OrderedByInsertionUpToCapacity) {
     ring.read(out, count);
     ASSERT_EQ(count, 5u);
     for (std::size_t i = 0; i < count; ++i) {
-        EXPECT_EQ(out[i].seq, i + 1u);
-        EXPECT_EQ(out[i].price, static_cast<Price>(100 + i + 1));
+        const auto exp_seq = static_cast<std::uint64_t>(i + 1);
+        EXPECT_EQ(out[i].seq,       exp_seq)                              << "slot " << i;
+        EXPECT_EQ(out[i].price,     static_cast<Price>(100 + i + 1))      << "slot " << i;
+        EXPECT_EQ(out[i].ts,        static_cast<Timestamp>((i + 1) * 10)) << "slot " << i;
+        EXPECT_EQ(out[i].qty,       static_cast<Quantity>(i + 1))         << "slot " << i;
+        EXPECT_EQ(out[i].aggressor, (i % 2 == 0) ? Side::Buy : Side::Sell) << "slot " << i;
     }
 }
 
@@ -76,6 +80,36 @@ TEST(TradeRing, AggressorSideRoundTrips) {
     ASSERT_EQ(count, 2u);
     EXPECT_EQ(out[0].aggressor, Side::Buy);
     EXPECT_EQ(out[1].aggressor, Side::Sell);
+}
+
+TEST(TradeRing, EachPushAdvancesSeqByTwo) {
+    TradeRing ring;
+    EXPECT_EQ(ring.seq(), 0u);
+    ring.push(TradePrint{.ts=1, .price=100, .qty=1, .aggressor=Side::Buy, .seq=1});
+    EXPECT_EQ(ring.seq(), 2u);
+    ring.push(TradePrint{.ts=2, .price=100, .qty=1, .aggressor=Side::Buy, .seq=2});
+    EXPECT_EQ(ring.seq(), 4u);
+}
+
+TEST(TradeRing, AtCapacityMinusOneUsesStraightIndexing) {
+    TradeRing ring;
+    for (std::uint64_t i = 1; i < kTradeRing; ++i) {  // 15 pushes
+        ring.push(TradePrint{
+            .ts = static_cast<Timestamp>(i),
+            .price = static_cast<Price>(200 + i),
+            .qty = 1,
+            .aggressor = Side::Buy,
+            .seq = i,
+        });
+    }
+    std::array<TradePrint, kTradeRing> out{};
+    std::size_t count = 0;
+    ring.read(out, count);
+    ASSERT_EQ(count, kTradeRing - 1);
+    for (std::size_t i = 0; i < count; ++i) {
+        EXPECT_EQ(out[i].seq,   static_cast<std::uint64_t>(i + 1));
+        EXPECT_EQ(out[i].price, static_cast<Price>(200 + i + 1));
+    }
 }
 
 }  // namespace

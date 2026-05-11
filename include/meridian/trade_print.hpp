@@ -31,6 +31,10 @@ struct TradePrint {
     std::uint64_t seq = 0;       // monotonic per Book
 };
 
+static_assert(sizeof(TradePrint) == 32,
+              "TradePrint size affects TradeRing cache footprint; "
+              "review carefully before changing");
+
 class TradeRing {
 public:
     TradeRing() noexcept = default;
