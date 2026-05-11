@@ -51,11 +51,31 @@ class FakeSocket implements SocketLike {
 }
 
 function snapshot(ts = 1): ServerMessage {
-  return { kind: 'snapshot', bid_px: 100, bid_qty: 5, ask_px: 101, ask_qty: 4, ts };
+  return {
+    kind: 'snapshot',
+    ts,
+    tob: { bid_px: 100, bid_qty: 5, ask_px: 101, ask_qty: 4 },
+    depth: { bids: [[100, 5]], asks: [[101, 4]] },
+    trades: [],
+    latency: {
+      p50_ns: 100, p99_ns: 500, p999_ns: 1200, max_ns: 5000,
+      samples: 0, hist: Array(33).fill(0),
+    },
+  };
 }
 
 function delta(ts: number): ServerMessage {
-  return { kind: 'delta', bid_px: 100, bid_qty: 6, ask_px: 101, ask_qty: 4, ts };
+  return {
+    kind: 'delta',
+    ts,
+    tob: { bid_px: 100, bid_qty: 6, ask_px: 101, ask_qty: 4 },
+    depth: { bids: [[100, 6]], asks: [[101, 4]] },
+    trades: [],
+    latency: {
+      p50_ns: 100, p99_ns: 500, p999_ns: 1200, max_ns: 5000,
+      samples: 1, hist: Array(33).fill(0),
+    },
+  };
 }
 
 describe('MeridianWsClient', () => {
