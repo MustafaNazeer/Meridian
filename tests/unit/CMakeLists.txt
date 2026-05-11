@@ -47,3 +47,8 @@ add_executable(test_ws_origin test_ws_origin.cpp)
 target_link_libraries(test_ws_origin PRIVATE meridian GTest::gtest_main Threads::Threads)
 target_compile_options(test_ws_origin PRIVATE -Wall -Wextra -Wpedantic -Werror)
 gtest_discover_tests(test_ws_origin)
+
+add_executable(test_latency_histogram test_latency_histogram.cpp)
+target_link_libraries(test_latency_histogram PRIVATE meridian GTest::gtest_main)
+target_compile_options(test_latency_histogram PRIVATE -Wall -Wextra -Wpedantic -Werror)
+gtest_discover_tests(test_latency_histogram)
