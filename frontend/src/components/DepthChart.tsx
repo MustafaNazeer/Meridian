@@ -7,7 +7,7 @@ import { SectionHead } from './SectionHead';
 // section aux makes it clear this is the v1 view until the extended
 // snapshot payload lands.
 export function DepthChart() {
-  const top = useDashboard((s) => s.top);
+  const top = useDashboard((s) => s.displayedTop);
   const state = useDashboard((s) => s.connectionState);
   const ready = state !== 'connecting' && top !== null;
 

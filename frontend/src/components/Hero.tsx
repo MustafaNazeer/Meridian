@@ -13,7 +13,7 @@ function Skeleton({ w = 80, h = 32 }: { w?: number; h?: number }) {
 }
 
 function StatLast() {
-  const top = useDashboard((s) => s.top);
+  const top = useDashboard((s) => s.displayedTop);
   const color = useDashboard((s) => s.lastTickColor);
   const ready = useDashboard((s) => s.connectionState !== 'connecting');
   const bidPx = top?.bidPx ?? null;
@@ -55,7 +55,7 @@ function StatLast() {
 }
 
 function StatSpread() {
-  const top = useDashboard((s) => s.top);
+  const top = useDashboard((s) => s.displayedTop);
   const ready = useDashboard((s) => s.connectionState !== 'connecting');
   const s = formatSpread(top?.bidPx ?? null, top?.askPx ?? null);
   return (
@@ -85,7 +85,7 @@ function StatSpread() {
 }
 
 function StatBookSize() {
-  const top = useDashboard((s) => s.top);
+  const top = useDashboard((s) => s.displayedTop);
   const ticks = useDashboard((s) => s.ticksSinceConnect);
   const ready = useDashboard((s) => s.connectionState !== 'connecting');
   const totalQty = (top?.bidQty ?? 0) + (top?.askQty ?? 0);
@@ -123,7 +123,7 @@ function HeroIdentity() {
   const state = useDashboard((s) => s.connectionState);
   const symbol = useDashboard((s) => s.selectedSymbol);
   const ticks = useDashboard((s) => s.ticksSinceConnect);
-  const top = useDashboard((s) => s.top);
+  const top = useDashboard((s) => s.displayedTop);
   const meta = symbolMeta(symbol);
 
   if (state === 'connecting') {

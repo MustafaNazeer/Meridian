@@ -87,7 +87,7 @@ function SpreadRow({ bidPx, askPx }: { bidPx: number | null; askPx: number | nul
 }
 
 export function Ladder() {
-  const top = useDashboard((s) => s.top);
+  const top = useDashboard((s) => s.displayedTop);
   const state = useDashboard((s) => s.connectionState);
   const ready = state !== 'connecting';
 

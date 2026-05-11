@@ -1,13 +1,13 @@
 // Display formatting helpers. Numbers from the wire arrive as integer
-// engine ticks; the synthetic event generator in apps/server emits
-// prices in the small 95..105 range, so the dashboard renders raw
-// ticks as-is rather than pretending they are dollars. When the
-// extended snapshot payload (real ITCH prices, currency-scaled) lands,
-// this module is the single place to widen the conversion.
+// engine ticks where one tick equals one cent (so $100.00 corresponds
+// to 10000 ticks). The helpers below divide by 100 to display as
+// currency with two decimal places.
+
+const CENTS_PER_DOLLAR = 100;
 
 export function formatPrice(px: number | null): string {
   if (px === null) return '—';
-  return px.toFixed(2);
+  return (px / CENTS_PER_DOLLAR).toFixed(2);
 }
 
 export function formatQty(qty: number): string {
@@ -22,12 +22,12 @@ export function formatSpread(bidPx: number | null, askPx: number | null): {
   if (bidPx === null || askPx === null) {
     return { abs: '—', bps: '—', band: 'normal' };
   }
-  const spread = askPx - bidPx;
+  const spreadCents = askPx - bidPx;
   const mid = (askPx + bidPx) / 2;
-  const bps = mid > 0 ? (spread / mid) * 10_000 : 0;
+  const bps = mid > 0 ? (spreadCents / mid) * 10_000 : 0;
   const band = bps < 4 ? 'tight' : bps > 12 ? 'wide' : 'normal';
   return {
-    abs: spread.toFixed(2),
+    abs: (spreadCents / CENTS_PER_DOLLAR).toFixed(2),
     bps: bps.toFixed(1),
     band,
   };
