@@ -3,8 +3,10 @@
 #include "meridian/book.hpp"
 #include "meridian/book_registry.hpp"
 #include "meridian/execution_report.hpp"
+#include "meridian/latency_histogram.hpp"
 #include "meridian/order_index.hpp"
 #include "meridian/order_pool.hpp"
+#include "meridian/trade_print.hpp"
 #include "meridian/types.hpp"
 
 #include <atomic>
@@ -50,6 +52,12 @@ public:
         return out;
     }
 
+    // Reader-side accessor for the engine's cumulative latency
+    // histogram. Safe to call from any thread.
+    [[nodiscard]] const LatencyHistogram& latency() const noexcept {
+        return latency_;
+    }
+
 private:
     void apply_limit(const EngineEvent& event, Book& book,
                      std::vector<ExecutionReport>& out);
@@ -71,6 +79,7 @@ private:
     OrderPool& pool_;
     BookRegistry& registry_;
     OrderIndex& index_;
+    LatencyHistogram latency_;
 };
 
 }  // namespace meridian
