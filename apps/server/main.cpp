@@ -53,15 +53,35 @@ struct Cfg {
     int port = 0;
     std::uint64_t rate_eps = 50000;  // engine events per second
     std::uint64_t seed = 42;
+    std::vector<std::string> origins;  // empty = accept any (dev default)
 };
 
 void print_usage(const char* argv0) {
     std::fprintf(stderr,
-                 "Usage: %s [--port N] [--rate N] [--seed N]\n"
-                 "  --port  listen port (0 = OS-assigned, default 0)\n"
-                 "  --rate  synthetic engine event rate, events/sec (default 50000)\n"
-                 "  --seed  RNG seed for the synthetic event stream (default 42)\n",
+                 "Usage: %s [--port N] [--rate N] [--seed N] [--origins LIST]\n"
+                 "  --port     listen port (0 = OS-assigned, default 0)\n"
+                 "  --rate     synthetic engine event rate, events/sec (default 50000)\n"
+                 "  --seed     RNG seed for the synthetic event stream (default 42)\n"
+                 "  --origins  comma-separated Origin allowlist for /ws upgrades.\n"
+                 "             Empty (the default) accepts any Origin including a\n"
+                 "             missing one; non-empty rejects upgrades whose Origin\n"
+                 "             is missing or not in the list with HTTP 403. Example:\n"
+                 "             --origins https://meridian-demo.pages.dev,http://localhost:5173\n",
                  argv0);
+}
+
+std::vector<std::string> split_csv(const char* s) {
+    std::vector<std::string> out;
+    std::string cur;
+    for (const char* p = s; *p != '\0'; ++p) {
+        if (*p == ',') {
+            if (!cur.empty()) { out.push_back(cur); cur.clear(); }
+        } else {
+            cur.push_back(*p);
+        }
+    }
+    if (!cur.empty()) out.push_back(cur);
+    return out;
 }
 
 bool parse_uint(const char* s, std::uint64_t& out) {
@@ -104,6 +124,13 @@ bool parse_args(int argc, char** argv, Cfg& cfg) {
                 std::fprintf(stderr, "error: --seed must be a non-negative integer\n");
                 return false;
             }
+        } else if (std::strcmp(a, "--origins") == 0) {
+            const char* v = need_value("--origins");
+            if (v == nullptr) {
+                std::fprintf(stderr, "error: --origins must be a comma-separated list\n");
+                return false;
+            }
+            cfg.origins = split_csv(v);
         } else if (std::strcmp(a, "--help") == 0 || std::strcmp(a, "-h") == 0) {
             print_usage(argv[0]);
             std::exit(0);
@@ -163,6 +190,7 @@ int main(int argc, char** argv) {
         std::fprintf(stderr, "error: WsServer failed to bind\n");
         return 1;
     }
+    server.set_allowed_origins(cfg.origins);
     g_server = &server;
     // Stdout port announce: machine-parseable first line so the smoke
     // test can read it without parsing flag output.

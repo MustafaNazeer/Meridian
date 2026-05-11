@@ -65,7 +65,11 @@ frontend/.env
 frontend/.env.local
 frontend/.env.*.local
 frontend/.env.development
-frontend/.env.production
+# frontend/.env.production is intentionally tracked: it holds the
+# public deploy WS URL and version metadata that the production bundle
+# bakes in. There are no secrets in it (the deploy URL is public and
+# the version string is the only other field). Local overrides go in
+# .env.local instead.
 
 # IDE
 .vscode/

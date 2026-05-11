@@ -70,8 +70,22 @@ public:
         std::uint64_t broadcasts_total     = 0;
         std::uint64_t bytes_sent_total     = 0;
         std::uint64_t handshake_failures   = 0;
+        std::uint64_t origin_rejects       = 0;
     };
     [[nodiscard]] Metrics metrics() const noexcept;
+
+    // Origin header allowlist. An empty allowlist (the default) accepts
+    // any Origin, including a missing one; this is the dev-friendly
+    // default used by tests and by local `meridian-server` runs without
+    // the --origins flag. A non-empty allowlist rejects upgrades whose
+    // Origin header is missing or not in the list with HTTP 403 and
+    // bumps `handshake_failures` plus `origin_rejects`. The list is
+    // matched byte-for-byte (case-sensitive, no scheme or trailing
+    // slash normalisation); callers pass the full origin string per
+    // RFC 6454 (e.g. "https://meridian-demo.pages.dev"). Call before
+    // serve_forever(); thread-safe with respect to subsequent reads
+    // because serve_forever() runs single-threaded.
+    void set_allowed_origins(std::vector<std::string> origins);
 
 private:
     struct Client {
@@ -99,12 +113,15 @@ private:
     std::deque<std::string> broadcast_queue_;
     std::string current_snapshot_;
 
+    std::vector<std::string> allowed_origins_;
+
     // Counters; updated only on the main thread, read with relaxed
     // atomics from any thread.
     std::atomic<std::uint64_t> connections_total_{0};
     std::atomic<std::uint64_t> broadcasts_total_{0};
     std::atomic<std::uint64_t> bytes_sent_total_{0};
     std::atomic<std::uint64_t> handshake_failures_{0};
+    std::atomic<std::uint64_t> origin_rejects_{0};
 };
 
 }  // namespace meridian::ws

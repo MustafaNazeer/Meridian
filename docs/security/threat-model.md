@@ -69,7 +69,7 @@ The endpoint is publicly reachable from any client. On connect, the client recei
 
 Specific WebSocket server hardening requirements (these become checklist items, see `checklist.md`):
 
-* Origin header check against an allow list containing the Cloudflare Pages production origin (`https://meridian-demo.pages.dev`) and `http://localhost:5173` for dev. Anything else closes the socket before the upgrade completes.
+* Origin header check against an allow list containing the Cloudflare Pages production origin (`https://meridian-demo.pages.dev`) and `http://localhost:5173` for dev. Anything else closes the socket before the upgrade completes. **In force** as of the deploy milestone: `WsServer::set_allowed_origins()` plus the `meridian-server --origins` flag implement the check; `MERIDIAN_ORIGINS` in `fly.toml` configures the production list; rejects return HTTP 403, bump `handshake_failures`, and bump a dedicated `origin_rejects` counter; six tests in `tests/unit/test_ws_origin.cpp` cover the matrix (empty allowlist accepts any Origin including missing; non-empty rejects missing and mismatched; non-empty accepts listed; multiple listed origins each accepted).
 * Max payload size of 64 KB on inbound frames. The protocol's largest expected inbound message is a subscribe naming one of five symbols, well under 100 bytes.
 * Max client count sized to the Fly machine memory budget. Hundreds, not thousands. Excess connections are rejected at handshake.
 * Per IP connection rate limit on handshake attempts (e.g., 10 per minute), implemented in uWebSockets accept callback or via a small token bucket in `apps/server/`.
