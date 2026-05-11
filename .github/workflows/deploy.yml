@@ -4,10 +4,12 @@ name: deploy
 # deploys the meridian-server Docker image to Fly.io. Both require repo
 # secrets to be configured first; see docs/setup-guide.md.
 #
-# Trigger model: `workflow_dispatch` only for v1, so merging the deploy
-# artifacts PR does not fail loudly before the secrets are in place. Once
-# the first manual deploy succeeds, flip the trigger to `push: branches:
-# [main]` (a one-line follow-up) so subsequent merges deploy automatically.
+# Trigger model: fires on push to `main` (every merged PR auto-deploys
+# both halves) and on manual `workflow_dispatch` (so a targeted redeploy
+# of just one side is still one click). A `paths` filter on the push
+# trigger keeps unrelated edits (docs-only PRs that do not touch the
+# frontend, the engine binary, or the Dockerfile) from spinning a
+# deploy.
 #
 # Every value flowing in from a GitHub-controlled context (commit SHA,
 # branch name, the workflow_dispatch input enum) is bound through `env:`
@@ -16,6 +18,17 @@ name: deploy
 # field an attacker could populate.
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - "frontend/**"
+      - "src/**"
+      - "include/**"
+      - "apps/**"
+      - "CMakeLists.txt"
+      - "Dockerfile"
+      - "fly.toml"
+      - ".github/workflows/deploy.yml"
   workflow_dispatch:
     inputs:
       target:
@@ -34,7 +47,7 @@ concurrency:
 
 jobs:
   frontend:
-    if: ${{ inputs.target == 'both' || inputs.target == 'frontend' }}
+    if: ${{ github.event_name == 'push' || inputs.target == 'both' || inputs.target == 'frontend' }}
     name: frontend (Cloudflare Pages)
     runs-on: ubuntu-24.04
     defaults:
@@ -87,7 +100,7 @@ jobs:
           gitHubToken: ${{ secrets.GITHUB_TOKEN }}
 
   engine:
-    if: ${{ inputs.target == 'both' || inputs.target == 'engine' }}
+    if: ${{ github.event_name == 'push' || inputs.target == 'both' || inputs.target == 'engine' }}
     name: engine (Fly.io)
     runs-on: ubuntu-24.04
     permissions:
