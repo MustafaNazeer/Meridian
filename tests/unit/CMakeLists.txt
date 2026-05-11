@@ -57,3 +57,8 @@ add_executable(test_depth_snapshot test_depth_snapshot.cpp)
 target_link_libraries(test_depth_snapshot PRIVATE meridian GTest::gtest_main)
 target_compile_options(test_depth_snapshot PRIVATE -Wall -Wextra -Wpedantic -Werror)
 gtest_discover_tests(test_depth_snapshot)
+
+add_executable(test_trade_ring test_trade_ring.cpp)
+target_link_libraries(test_trade_ring PRIVATE meridian GTest::gtest_main)
+target_compile_options(test_trade_ring PRIVATE -Wall -Wextra -Wpedantic -Werror)
+gtest_discover_tests(test_trade_ring)
