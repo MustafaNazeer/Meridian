@@ -58,16 +58,20 @@ Order* Book::remove_by_id(OrderId id) {
     if (side == Side::Buy) {
         auto level_it = bids_.find(price);
         if (level_it != bids_.end()) {
+            Level* level_ptr = level_it->second.get();
             level_it->second->remove(order);
             if (level_it->second->empty()) {
+                erase_cache_bid(level_ptr);
                 bids_.erase(level_it);
             }
         }
     } else {
         auto level_it = asks_.find(price);
         if (level_it != asks_.end()) {
+            Level* level_ptr = level_it->second.get();
             level_it->second->remove(order);
             if (level_it->second->empty()) {
+                erase_cache_ask(level_ptr);
                 asks_.erase(level_it);
             }
         }
@@ -81,11 +85,15 @@ void Book::erase_empty_level(Side side, Price price) {
     if (side == Side::Buy) {
         auto it = bids_.find(price);
         if (it != bids_.end() && it->second->empty()) {
+            Level* level_ptr = it->second.get();
+            erase_cache_bid(level_ptr);
             bids_.erase(it);
         }
     } else {
         auto it = asks_.find(price);
         if (it != asks_.end() && it->second->empty()) {
+            Level* level_ptr = it->second.get();
+            erase_cache_ask(level_ptr);
             asks_.erase(it);
         }
     }
@@ -165,12 +173,62 @@ void Book::insert_cache_ask(Level* level) noexcept {
     if (ask_cache_count_ < kDepthLevels) ++ask_cache_count_;
 }
 
-void Book::erase_cache_bid(Level*) noexcept {
-    // Implemented in Task 3.
+void Book::erase_cache_bid(Level* level) noexcept {
+    std::size_t p = 0;
+    while (p < bid_cache_count_ && cached_bids_[p] != level) ++p;
+    if (p == bid_cache_count_) return;
+    for (std::size_t i = p + 1; i < bid_cache_count_; ++i) {
+        cached_bids_[i - 1] = cached_bids_[i];
+    }
+    --bid_cache_count_;
+    cached_bids_[bid_cache_count_] = nullptr;
+    // Refill the freed slot if the post-erase map will still have more
+    // levels than the cache. bids_.size() still counts the level being
+    // erased (call site invokes us before bids_.erase), so compare
+    // against bid_cache_count_ + 1 to discount it. The find+advance can
+    // also land on the level being erased when we just shifted out the
+    // last cached entry; skip past it.
+    if (bid_cache_count_ < kDepthLevels &&
+        bids_.size() > static_cast<std::size_t>(bid_cache_count_) + 1) {
+        auto it = bids_.end();
+        if (bid_cache_count_ == 0) {
+            it = bids_.begin();
+        } else {
+            it = bids_.find(cached_bids_[bid_cache_count_ - 1]->price());
+            if (it != bids_.end()) ++it;
+        }
+        if (it != bids_.end() && it->second.get() == level) ++it;
+        if (it != bids_.end()) {
+            cached_bids_[bid_cache_count_] = it->second.get();
+            ++bid_cache_count_;
+        }
+    }
 }
 
-void Book::erase_cache_ask(Level*) noexcept {
-    // Implemented in Task 3.
+void Book::erase_cache_ask(Level* level) noexcept {
+    std::size_t p = 0;
+    while (p < ask_cache_count_ && cached_asks_[p] != level) ++p;
+    if (p == ask_cache_count_) return;
+    for (std::size_t i = p + 1; i < ask_cache_count_; ++i) {
+        cached_asks_[i - 1] = cached_asks_[i];
+    }
+    --ask_cache_count_;
+    cached_asks_[ask_cache_count_] = nullptr;
+    if (ask_cache_count_ < kDepthLevels &&
+        asks_.size() > static_cast<std::size_t>(ask_cache_count_) + 1) {
+        auto it = asks_.end();
+        if (ask_cache_count_ == 0) {
+            it = asks_.begin();
+        } else {
+            it = asks_.find(cached_asks_[ask_cache_count_ - 1]->price());
+            if (it != asks_.end()) ++it;
+        }
+        if (it != asks_.end() && it->second.get() == level) ++it;
+        if (it != asks_.end()) {
+            cached_asks_[ask_cache_count_] = it->second.get();
+            ++ask_cache_count_;
+        }
+    }
 }
 
 bool Book::audit_depth_cache_for_test() const noexcept {
