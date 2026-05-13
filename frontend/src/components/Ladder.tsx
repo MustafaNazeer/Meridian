@@ -2,13 +2,12 @@ import { formatPrice, formatQty } from '../lib/format';
 import { useDashboard } from '../store/dashboard';
 import { SectionHead } from './SectionHead';
 
-// 8 rows per side per wireframes; today only the row closest to the
-// spread carries real data because the wire payload is TOB-only.
 const ROWS_PER_SIDE = 8;
 
 type Row = {
   px: number | null;
   qty: number;
+  cum: number;
   isReal: boolean;
 };
 
@@ -46,7 +45,9 @@ function LadderRow({
             style={{ width: `${Math.max(2, cumPct)}%`, zIndex: 0 }}
           />
         )}
-        <span className="relative z-[1]">{row.isReal ? formatQty(row.qty) : '—'}</span>
+        <span className="relative z-[1]">
+          {row.isReal ? formatQty(row.qty) : '—'}
+        </span>
       </td>
       <td
         data-element="RowOrders"
@@ -58,7 +59,7 @@ function LadderRow({
         data-element="RowCum"
         className="num text-ink-2 px-8 py-1.5 text-right"
       >
-        {row.isReal ? formatQty(row.qty) : '—'}
+        {row.isReal ? formatQty(row.cum) : '—'}
       </td>
     </tr>
   );
@@ -77,7 +78,7 @@ function SpreadRow({ bidPx, askPx }: { bidPx: number | null; askPx: number | nul
         <span className="num not-italic text-gold mx-2 font-medium">
           {hasSpread ? (askPx - bidPx).toFixed(2) : '—'}
         </span>{' '}
-        · mid{' '}
+        {'·'} mid{' '}
         <span className="num not-italic text-gold mx-2 font-medium">
           {hasSpread ? ((askPx + bidPx) / 2).toFixed(2) : '—'}
         </span>
@@ -86,30 +87,70 @@ function SpreadRow({ bidPx, askPx }: { bidPx: number | null; askPx: number | nul
   );
 }
 
+function buildAskRows(depth: { px: number; qty: number }[] | undefined): Row[] {
+  // Asks in the store come closest-to-spread first. We render them
+  // top-down in the table with the deepest level at the top and the
+  // level closest to the spread at the bottom (just above the spread
+  // row). Cumulative qty is computed from the closest level outward,
+  // so index 0 in the store has the smallest cumulative value.
+  const cums: number[] = [];
+  let cum = 0;
+  for (const level of depth ?? []) {
+    cum += level.qty;
+    cums.push(cum);
+  }
+  return Array.from({ length: ROWS_PER_SIDE }, (_, displayIdx) => {
+    // displayIdx 0 is the top row (deepest ask); displayIdx ROWS_PER_SIDE-1
+    // is the row closest to the spread.
+    const storeIdx = ROWS_PER_SIDE - 1 - displayIdx;
+    const level = depth?.[storeIdx];
+    if (!level) return { px: null, qty: 0, cum: 0, isReal: false };
+    return {
+      px: level.px,
+      qty: level.qty,
+      cum: cums[storeIdx],
+      isReal: true,
+    };
+  });
+}
+
+function buildBidRows(depth: { px: number; qty: number }[] | undefined): Row[] {
+  // Bids in the store come closest-to-spread first (index 0 = best bid).
+  // We render them top-down with the best bid at the top (just below the
+  // spread row) and the deepest level at the bottom.
+  const cums: number[] = [];
+  let cum = 0;
+  for (const level of depth ?? []) {
+    cum += level.qty;
+    cums.push(cum);
+  }
+  return Array.from({ length: ROWS_PER_SIDE }, (_, i) => {
+    const level = depth?.[i];
+    if (!level) return { px: null, qty: 0, cum: 0, isReal: false };
+    return {
+      px: level.px,
+      qty: level.qty,
+      cum: cums[i],
+      isReal: true,
+    };
+  });
+}
+
 export function Ladder() {
+  const depth = useDashboard((s) => s.displayedDepth);
   const top = useDashboard((s) => s.displayedTop);
   const state = useDashboard((s) => s.connectionState);
   const ready = state !== 'connecting';
 
-  // Build 8 ask rows (highest first, lowest at the spread) and 8 bid
-  // rows (highest at the spread, lowest at the bottom). The row
-  // closest to the spread on each side is the real TOB entry; the
-  // others are placeholders pending the L8 depth payload.
-  const askRows: Row[] = Array.from({ length: ROWS_PER_SIDE }, (_, i) => {
-    const isLast = i === ROWS_PER_SIDE - 1;
-    return ready && isLast && top !== null && top.askPx !== null
-      ? { px: top.askPx, qty: top.askQty, isReal: true }
-      : { px: null, qty: 0, isReal: false };
-  });
-  const bidRows: Row[] = Array.from({ length: ROWS_PER_SIDE }, (_, i) => {
-    return ready && i === 0 && top !== null && top.bidPx !== null
-      ? { px: top.bidPx, qty: top.bidQty, isReal: true }
-      : { px: null, qty: 0, isReal: false };
-  });
+  const askRows = ready ? buildAskRows(depth?.asks) : buildAskRows(undefined);
+  const bidRows = ready ? buildBidRows(depth?.bids) : buildBidRows(undefined);
+
+  const maxCumAsk = askRows.reduce((m, r) => Math.max(m, r.cum), 0) || 1;
+  const maxCumBid = bidRows.reduce((m, r) => Math.max(m, r.cum), 0) || 1;
 
   return (
     <section data-component="Ladder" className="px-8 py-9">
-      <SectionHead title="the book" aux="L1 today · L8 with extended snapshot" />
+      <SectionHead title="the book" aux="L8" />
       <table className="w-full font-mono text-ladder" style={{ borderCollapse: 'collapse' }}>
         <thead data-element="LadderHead">
           <tr>
@@ -133,7 +174,7 @@ export function Ladder() {
               key={`ask-${i}`}
               row={r}
               side="ask"
-              cumPct={r.isReal ? 100 : 0}
+              cumPct={r.isReal ? (r.cum / maxCumAsk) * 100 : 0}
             />
           ))}
         </tbody>
@@ -146,7 +187,7 @@ export function Ladder() {
               key={`bid-${i}`}
               row={r}
               side="bid"
-              cumPct={r.isReal ? 100 : 0}
+              cumPct={r.isReal ? (r.cum / maxCumBid) * 100 : 0}
             />
           ))}
         </tbody>

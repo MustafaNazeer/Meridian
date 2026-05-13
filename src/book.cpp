@@ -103,4 +103,32 @@ void Book::publish_top_of_book(Timestamp ts) noexcept {
     snapshot_.write(snap);
 }
 
+void Book::publish_depth(Timestamp ts) noexcept {
+    DepthSnapshot snap{};
+    snap.ts = ts;
+    std::size_t i = 0;
+    for (auto it = bids_.begin(); it != bids_.end() && i < kDepthLevels; ++it, ++i) {
+        const Level& level = *it->second;
+        snap.bids[i].px          = level.price();
+        snap.bids[i].qty         = level.total_qty();
+        snap.bids[i].order_count = static_cast<std::uint32_t>(level.order_count());
+    }
+    snap.bid_levels = static_cast<std::uint8_t>(i);
+    i = 0;
+    for (auto it = asks_.begin(); it != asks_.end() && i < kDepthLevels; ++it, ++i) {
+        const Level& level = *it->second;
+        snap.asks[i].px          = level.price();
+        snap.asks[i].qty         = level.total_qty();
+        snap.asks[i].order_count = static_cast<std::uint32_t>(level.order_count());
+    }
+    snap.ask_levels = static_cast<std::uint8_t>(i);
+    depth_.write(snap);
+}
+
+void Book::publish_trade(const TradePrint& p) noexcept {
+    TradePrint out = p;
+    out.seq = ++next_trade_seq_;
+    trades_.push(out);
+}
+
 }  // namespace meridian

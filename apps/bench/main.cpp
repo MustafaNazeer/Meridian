@@ -292,7 +292,10 @@ int main(int argc, char** argv) {
     meridian::OrderPool pool(pool_capacity);
     meridian::BookRegistry registry{1};
     meridian::OrderIndex index;
-    meridian::MatchingEngine engine(pool, registry, index);
+    // Bench mode: disable the v1.1 observability (depth/trade publish,
+    // latency histogram) so the measurement reflects pure matching
+    // throughput rather than the live-demo data path.
+    meridian::MatchingEngine engine(pool, registry, index, /*observability=*/false);
 
     std::vector<meridian::EngineEvent> events;
     generate_events(events, total_events, cfg.seed);

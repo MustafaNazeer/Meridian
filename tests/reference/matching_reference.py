@@ -238,9 +238,10 @@ class _Level:
     orders: "OrderedDict[int, _RestingOrder]" = field(default_factory=OrderedDict)
 
     def total_qty(self) -> int:
-        """Sum of remaining quantities at this level. O(n) but only
-        used by ``top_of_book`` for the demo binary; not on the diff
-        path."""
+        """O(n) sum over remaining quantities at this level.
+        Called by ``top_of_book`` and ``l8_depth``; must faithfully
+        reflect the current order queue contents because both callers
+        are diffed byte-for-byte against the C++ engine."""
 
         return sum(o.qty_remaining for o in self.orders.values())
 
@@ -535,6 +536,28 @@ class _SingleSymbolBook:
         ]
 
     # -- introspection --------------------------------------------------------
+
+    def l8_depth(self) -> dict:
+        """L8 depth picture matching the C++ Book::depth() shape.
+
+        Returns a dict with two keys, ``bids`` and ``asks``, each a list
+        of up to 8 ``[price, total_qty, order_count]`` triples ordered
+        closest-to-spread first (bids descending, asks ascending). Empty
+        side returns an empty list. The differential test in
+        tests/property/test_differential.cpp diffs the output of this
+        method against C++ Book::depth() byte-for-byte.
+        """
+
+        bids_sorted = sorted(self._bids.items(), key=lambda kv: kv[0], reverse=True)
+        asks_sorted = sorted(self._asks.items(), key=lambda kv: kv[0])
+
+        def pack(items):
+            out = []
+            for px, level in items[:8]:
+                out.append([px, level.total_qty(), len(level.orders)])
+            return out
+
+        return {"bids": pack(bids_sorted), "asks": pack(asks_sorted)}
 
     def top_of_book(self) -> tuple[Optional[int], int, Optional[int], int]:
         """Return ``(best_bid_px, best_bid_qty, best_ask_px, best_ask_qty)``.
@@ -937,6 +960,24 @@ class MatchingReference:
 
         sym = self._resolve_symbol(symbol)
         return self._books[sym].top_of_book()
+
+    def l8_depth(self, symbol: Optional[int] = None) -> dict:
+        """L8 depth picture for ``symbol``.
+
+        Returns a dict with keys ``bids`` and ``asks``, each a list of
+        up to 8 ``[price, total_qty, order_count]`` triples ordered
+        closest-to-spread first. Returns empty depth if the symbol is
+        not registered.
+
+        Single-symbol callers can omit ``symbol``; multi-symbol callers
+        must pass it explicitly.
+        """
+
+        sym = self._resolve_symbol(symbol)
+        book = self._books.get(sym)
+        if book is None:
+            return {"bids": [], "asks": []}
+        return book.l8_depth()
 
     def book(self, symbol: int) -> _SingleSymbolBook:
         """Return the per-symbol book for ``symbol``. Raises

@@ -10,6 +10,7 @@
 
 #include "meridian/ws_handshake.hpp"
 
+#include <algorithm>
 #include <arpa/inet.h>
 #include <cerrno>
 #include <chrono>
@@ -238,10 +239,27 @@ TEST_F(WsSmokeTest, UpgradeAndReceiveSnapshotThenDelta) {
     std::string snap_payload;
     ASSERT_TRUE(read_text_frame(fd, carry, snap_payload, 1000))
         << "did not receive a valid first frame";
-    EXPECT_NE(snap_payload.find("\"kind\":\"snapshot\""), std::string::npos)
-        << "expected snapshot frame, got: " << snap_payload;
 
-    // Wait up to 200 ms for at least one delta frame.
+    // Verify snapshot frame has all four nested sections.
+    ASSERT_NE(snap_payload.find("\"kind\":\"snapshot\""), std::string::npos)
+        << "expected snapshot frame, got: " << snap_payload;
+    ASSERT_NE(snap_payload.find("\"tob\":{"),      std::string::npos);
+    ASSERT_NE(snap_payload.find("\"depth\":{"),    std::string::npos);
+    ASSERT_NE(snap_payload.find("\"trades\":["),   std::string::npos);
+    ASSERT_NE(snap_payload.find("\"latency\":{"),  std::string::npos);
+    ASSERT_NE(snap_payload.find("\"hist\":["),     std::string::npos);
+
+    // 33 buckets in latency.hist: 32 commas between 33 numbers.
+    {
+        const auto hist_pos = snap_payload.find("\"hist\":[");
+        ASSERT_NE(hist_pos, std::string::npos);
+        const auto hist_end = snap_payload.find(']', hist_pos);
+        ASSERT_NE(hist_end, std::string::npos);
+        const auto hist_slice = snap_payload.substr(hist_pos, hist_end - hist_pos);
+        EXPECT_EQ(std::count(hist_slice.begin(), hist_slice.end(), ','), 32);
+    }
+
+    // Wait up to 500 ms for at least one delta frame.
     bool got_delta = false;
     const auto deadline = std::chrono::steady_clock::now() +
                           std::chrono::milliseconds(500);
@@ -250,11 +268,20 @@ TEST_F(WsSmokeTest, UpgradeAndReceiveSnapshotThenDelta) {
         if (!read_text_frame(fd, carry, payload, 200)) break;
         if (payload.find("\"kind\":\"delta\"") != std::string::npos) {
             got_delta = true;
-            // Sanity: the delta should carry the four book fields.
-            EXPECT_NE(payload.find("\"bid_px\""),  std::string::npos);
-            EXPECT_NE(payload.find("\"bid_qty\""), std::string::npos);
-            EXPECT_NE(payload.find("\"ask_px\""),  std::string::npos);
-            EXPECT_NE(payload.find("\"ask_qty\""), std::string::npos);
+            // Verify delta frame has the same four nested sections.
+            EXPECT_NE(payload.find("\"tob\":{"),     std::string::npos);
+            EXPECT_NE(payload.find("\"depth\":{"),   std::string::npos);
+            EXPECT_NE(payload.find("\"trades\":["),  std::string::npos);
+            EXPECT_NE(payload.find("\"latency\":{"), std::string::npos);
+            EXPECT_NE(payload.find("\"hist\":["),    std::string::npos);
+
+            // 33 buckets in latency.hist: 32 commas between 33 numbers.
+            const auto hist_pos = payload.find("\"hist\":[");
+            ASSERT_NE(hist_pos, std::string::npos);
+            const auto hist_end = payload.find(']', hist_pos);
+            ASSERT_NE(hist_end, std::string::npos);
+            const auto hist_slice = payload.substr(hist_pos, hist_end - hist_pos);
+            EXPECT_EQ(std::count(hist_slice.begin(), hist_slice.end(), ','), 32);
         }
     }
     EXPECT_TRUE(got_delta) << "no delta frame within 500 ms";

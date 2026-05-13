@@ -479,5 +479,100 @@ TEST_F(MatchingTest, SweepLoopMakesNoHeapAllocation) {
     EXPECT_EQ(reports.size(), 7u);  // 1 ack + 2 fills per match * 3 matches
 }
 
+TEST(MatchingEngine, ApplyRecordsExactlyOneLatencySample) {
+    OrderPool pool(8);
+    BookRegistry registry{1};
+    OrderIndex index;
+    MatchingEngine engine(pool, registry, index);
+    EngineEvent ev{};
+    ev.kind = EventKind::NewOrder; ev.symbol = 1; ev.ts = 1;
+    ev.side = Side::Buy; ev.type = OrderType::Limit;
+    ev.price = 100; ev.qty = 10; ev.order_id = 1;
+    engine.apply(ev);
+    const auto snap = engine.latency().snapshot();
+    EXPECT_EQ(snap.samples, 1u);
+}
+
+TEST(MatchingEngine, MatchEmitsOneTradePrintPerMakerLeg) {
+    OrderPool pool(8);
+    BookRegistry registry{1};
+    OrderIndex index;
+    MatchingEngine engine(pool, registry, index);
+
+    // Two resting bid levels (100 x 5 and 99 x 7). One incoming sell
+    // for qty 8 matches first against 100 (5), then 99 (3). That is
+    // two maker legs, so two trade prints.
+    EngineEvent buy1{}; buy1.kind=EventKind::NewOrder; buy1.symbol=1;
+    buy1.ts=1; buy1.side=Side::Buy; buy1.type=OrderType::Limit;
+    buy1.price=100; buy1.qty=5; buy1.order_id=1; engine.apply(buy1);
+    EngineEvent buy2 = buy1; buy2.ts=2; buy2.price=99; buy2.qty=7; buy2.order_id=2;
+    engine.apply(buy2);
+
+    EngineEvent sell{}; sell.kind=EventKind::NewOrder; sell.symbol=1;
+    sell.ts=3; sell.side=Side::Sell; sell.type=OrderType::Limit;
+    sell.price=99; sell.qty=8; sell.order_id=3;
+    engine.apply(sell);
+
+    Book* b = registry.book(1);
+    std::array<TradePrint, kTradeRing> out{};
+    std::size_t count = 0;
+    b->trades(out, count);
+    ASSERT_EQ(count, 2u);
+    // First print: maker at 100, qty 5, aggressor sell.
+    EXPECT_EQ(out[0].price, 100);
+    EXPECT_EQ(out[0].qty, 5);
+    EXPECT_EQ(out[0].aggressor, Side::Sell);
+    // Second print: maker at 99, qty 3, aggressor sell.
+    EXPECT_EQ(out[1].price, 99);
+    EXPECT_EQ(out[1].qty, 3);
+    EXPECT_EQ(out[1].aggressor, Side::Sell);
+}
+
+TEST(MatchingEngine, RejectedFokEmitsNoTradePrints) {
+    OrderPool pool(8);
+    BookRegistry registry{1};
+    OrderIndex index;
+    MatchingEngine engine(pool, registry, index);
+    EngineEvent buy{}; buy.kind=EventKind::NewOrder; buy.symbol=1;
+    buy.ts=1; buy.side=Side::Buy; buy.type=OrderType::Limit;
+    buy.price=100; buy.qty=3; buy.order_id=1; engine.apply(buy);
+
+    EngineEvent fok{}; fok.kind=EventKind::NewOrder; fok.symbol=1;
+    fok.ts=2; fok.side=Side::Sell; fok.type=OrderType::FOK;
+    fok.price=100; fok.qty=10; fok.order_id=2;  // unfillable
+    engine.apply(fok);
+
+    Book* b = registry.book(1);
+    std::array<TradePrint, kTradeRing> out{};
+    std::size_t count = 0;
+    b->trades(out, count);
+    EXPECT_EQ(count, 0u);
+}
+
+TEST(MatchingEngine, CancelSuccessPublishesDepth) {
+    OrderPool pool(8);
+    BookRegistry registry{1};
+    OrderIndex index;
+    MatchingEngine engine(pool, registry, index);
+
+    // Add a limit; book has one bid level.
+    EngineEvent add{}; add.kind=EventKind::NewOrder; add.symbol=1;
+    add.ts=1; add.side=Side::Buy; add.type=OrderType::Limit;
+    add.price=100; add.qty=10; add.order_id=1;
+    engine.apply(add);
+    Book* b = registry.book(1);
+    ASSERT_NE(b, nullptr);
+    ASSERT_EQ(b->depth().bid_levels, 1u);
+
+    // Cancel; book is empty; depth must reflect that.
+    EngineEvent cancel{}; cancel.kind=EventKind::Cancel; cancel.symbol=1;
+    cancel.ts=2; cancel.order_id=1;
+    engine.apply(cancel);
+
+    const auto d = b->depth();
+    EXPECT_EQ(d.bid_levels, 0u);
+    EXPECT_EQ(d.ts, 2);
+}
+
 }  // namespace
 }  // namespace meridian

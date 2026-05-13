@@ -136,6 +136,20 @@ def main() -> int:
             out.write(json.dumps(report.to_dict(), sort_keys=True,
                                  separators=(",", ":")))
             out.write("\n")
+    # After all events are processed, emit one depth_snapshot line per
+    # registered symbol. The C++ differential test splits the Python
+    # output on the ``kind`` field and diffs these lines against
+    # Book::depth() for each symbol.
+    for sym in _DEFAULT_SYMBOLS:
+        d = engine.l8_depth(sym)
+        rec = {
+            "asks": d["asks"],
+            "bids": d["bids"],
+            "kind": "depth_snapshot",
+            "symbol": sym,
+        }
+        out.write(json.dumps(rec, sort_keys=True, separators=(",", ":")))
+        out.write("\n")
     return 0
 
 

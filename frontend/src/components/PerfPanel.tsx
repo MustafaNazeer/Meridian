@@ -45,42 +45,57 @@ function PerfThroughput() {
   );
 }
 
-function PerfHistogramSkeleton() {
-  // 27 vertical placeholder bars matching the canonical anatomy. The
-  // engine latency histogram is not on the wire today; the bars render
-  // at uniform low height so the panel keeps its shape without faking
-  // a distribution.
+function PerfHistogram({ hist }: { hist: number[] }) {
+  const maxCount = hist.reduce((m, c) => Math.max(m, c), 0) || 1;
   return (
     <div
       data-element="PerfHistogram"
       className="flex items-end gap-px"
       style={{ height: '48px' }}
     >
-      {Array.from({ length: 27 }, (_, i) => (
-        <div
-          key={i}
-          data-element="HistogramBar"
-          className="flex-1 bg-rule rounded-bar"
-          style={{ height: '6px' }}
-        />
-      ))}
+      {hist.map((c, i) => {
+        const pct = (c / maxCount) * 100;
+        const heightPx = Math.max(2, (pct / 100) * 48);
+        return (
+          <div
+            key={i}
+            data-element="HistogramBar"
+            className="flex-1 bg-gold rounded-bar"
+            style={{ height: `${heightPx}px`, opacity: c > 0 ? 0.85 : 0.15 }}
+          />
+        );
+      })}
     </div>
   );
 }
 
+function formatNs(ns: number): string {
+  if (ns === 0) return '—';
+  if (ns >= 1_000_000) return `${(ns / 1_000_000).toFixed(2)} ms`;
+  if (ns >= 1_000) return `${(ns / 1_000).toFixed(2)} µs`;
+  return `${ns} ns`;
+}
+
 function PerfLatency() {
+  const latency = useDashboard((s) => s.displayedLatency);
+  const hist = latency?.hist ?? Array(33).fill(0);
+  const samples = latency?.samples ?? 0;
+  const p50 = latency?.p50Ns ?? 0;
+  const p99 = latency?.p99Ns ?? 0;
+  const p999 = samples >= 1000 ? (latency?.p999Ns ?? 0) : 0;
+  const max = latency?.maxNs ?? 0;
   return (
     <div data-element="PerfLatency" className="mb-8">
       <PerfLabel text="engine latency" />
-      <PerfHistogramSkeleton />
+      <PerfHistogram hist={hist} />
       <div className="font-display italic text-meta text-ink-soft mt-2 mb-3.5">
-        distribution lands with extended snapshot
+        {samples > 0 ? `${samples.toLocaleString()} samples since start` : 'no samples yet'}
       </div>
       <div className="grid grid-cols-perf gap-x-5.5 gap-y-3.5">
-        <PerfCell label="p50" value="—" />
-        <PerfCell label="p99" value="—" />
-        <PerfCell label="p99.9" value="—" />
-        <PerfCell label="max" value="—" />
+        <PerfCell label="p50"   value={formatNs(p50)} />
+        <PerfCell label="p99"   value={formatNs(p99)} />
+        <PerfCell label="p99.9" value={formatNs(p999)} />
+        <PerfCell label="max"   value={formatNs(max)} />
       </div>
     </div>
   );
@@ -126,7 +141,7 @@ function PerfReplay() {
           mix · <strong className="text-ink font-medium">limit / market / cancel</strong>
         </div>
         <div>
-          tape input · <strong className="text-ink font-medium">extended snapshot follow-up</strong>
+          tape input {'·'} <strong className="text-ink font-medium">live trade ring</strong>
         </div>
       </div>
       <div

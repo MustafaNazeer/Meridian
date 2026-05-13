@@ -1,34 +1,74 @@
 // Wire-level message shapes broadcast by `meridian-server` over /ws.
 //
-// The server emits two message kinds today: `snapshot` (the most recent
-// top of book picture; replayed to every newly connected client) and
-// `delta` (the same shape, broadcast at 30 Hz). Both kinds carry only
-// best bid / best ask price and quantity plus an engine timestamp.
-// `bid_px === -1` (or `ask_px === -1`) is the wire encoding for an
-// empty side; readers must treat that as "no top of book on this side"
-// rather than as a real price.
+// v1.1: the envelope grew from a flat TOB-only shape to a nested
+// envelope with four sections (tob, depth, trades, latency). Both
+// `snapshot` and `delta` kinds share this shape; `snapshot` is just
+// the first frame a newly connected client receives. The wire
+// encodings keep the v1 conventions where they applied: `bid_px === -1`
+// (or `ask_px === -1`) signals an empty side; trade aggressor is
+// `"B"` or `"S"` matching the C++ Side enum.
 
-export type TopOfBookMessage = {
-  kind: 'snapshot' | 'delta';
+export type WireTob = {
   bid_px: number;
   bid_qty: number;
   ask_px: number;
   ask_qty: number;
+};
+
+export type WireDepth = {
+  bids: [number, number][];
+  asks: [number, number][];
+};
+
+export type WireTrade = {
+  ts: number;
+  px: number;
+  qty: number;
+  aggressor: 'B' | 'S';
+};
+
+export type WireLatency = {
+  p50_ns: number;
+  p99_ns: number;
+  p999_ns: number;
+  max_ns: number;
+  samples: number;
+  hist: number[];
+};
+
+export type ServerMessage = {
+  kind: 'snapshot' | 'delta';
+  ts: number;
+  tob: WireTob;
+  depth: WireDepth;
+  trades: WireTrade[];
+  latency: WireLatency;
+};
+
+// Post-decode shapes. The frontend works in these forms after
+// sentinel handling and field renaming.
+export type TopOfBook = {
+  bidPx: number | null;
+  bidQty: number;
+  askPx: number | null;
+  askQty: number;
   ts: number;
 };
 
-export type ServerMessage = TopOfBookMessage;
+export type DepthLevel = { px: number; qty: number };
+export type Depth = { bids: DepthLevel[]; asks: DepthLevel[] };
+export type Trade = { ts: number; px: number; qty: number; aggressor: 'B' | 'S' };
+export type Latency = {
+  p50Ns: number;
+  p99Ns: number;
+  p999Ns: number;
+  maxNs: number;
+  samples: number;
+  hist: number[];
+};
 
-// Four-state connection state machine. The header dot, the hero, and
-// the connection banner read this state to render their per-state
-// surfaces. See docs/design/wireframes.md "Connection state surface
-// integration".
-//
-// `connecting` is the initial state and the state entered on a fresh
-// socket; it flips to `live` on the first `snapshot` message. `live`
-// flips to `stalled` if no message arrives in 1 second; the next
-// message returns it to `live`. Any socket close or error path lands
-// in `disconnected`, which schedules an exponential backoff reconnect.
+// Four-state connection state machine (unchanged from v1; see
+// docs/design/wireframes.md "Connection state surface integration").
 export type ConnectionState =
   | 'connecting'
   | 'live'
@@ -45,23 +85,40 @@ export const SYMBOLS: readonly Symbol[] = [
   'GOOG',
 ];
 
-// A `snapshot`/`delta` pair from the wire after decoding the empty-side
-// sentinel. Both sides are nullable in the post-decode form so the rest
-// of the app does not have to repeatedly check for `-1`.
-export type TopOfBook = {
-  bidPx: number | null;
-  bidQty: number;
-  askPx: number | null;
-  askQty: number;
-  ts: number;
-};
-
-export function decodeTopOfBook(msg: TopOfBookMessage): TopOfBook {
+export function decodeTopOfBook(msg: ServerMessage): TopOfBook {
+  const t = msg.tob;
   return {
-    bidPx: msg.bid_px === -1 ? null : msg.bid_px,
-    bidQty: msg.bid_qty,
-    askPx: msg.ask_px === -1 ? null : msg.ask_px,
-    askQty: msg.ask_qty,
+    bidPx: t.bid_px === -1 ? null : t.bid_px,
+    bidQty: t.bid_qty,
+    askPx: t.ask_px === -1 ? null : t.ask_px,
+    askQty: t.ask_qty,
     ts: msg.ts,
+  };
+}
+
+export function decodeDepth(msg: ServerMessage): Depth {
+  return {
+    bids: msg.depth.bids.map(([px, qty]) => ({ px, qty })),
+    asks: msg.depth.asks.map(([px, qty]) => ({ px, qty })),
+  };
+}
+
+export function decodeTrades(msg: ServerMessage): Trade[] {
+  return msg.trades.map((t) => ({
+    ts: t.ts,
+    px: t.px,
+    qty: t.qty,
+    aggressor: t.aggressor,
+  }));
+}
+
+export function decodeLatency(msg: ServerMessage): Latency {
+  return {
+    p50Ns: msg.latency.p50_ns,
+    p99Ns: msg.latency.p99_ns,
+    p999Ns: msg.latency.p999_ns,
+    maxNs: msg.latency.max_ns,
+    samples: msg.latency.samples,
+    hist: msg.latency.hist,
   };
 }

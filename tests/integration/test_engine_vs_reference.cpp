@@ -29,6 +29,7 @@
 #include "meridian/order_pool.hpp"
 #include "meridian/types.hpp"
 
+#include <algorithm>
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
@@ -181,12 +182,21 @@ TEST_P(EngineVsReferenceTest, ProducesIdenticalReports) {
     char workdir[] = "/tmp/meridian_diff_XXXXXX";
     ASSERT_NE(mkdtemp(workdir), nullptr);
     auto cpp_lines = run_cpp(GetParam().events);
-    auto py_lines = run_python(GetParam().events, workdir);
+    auto all_py_lines = run_python(GetParam().events, workdir);
     // Tear down the per-scenario tempdir to avoid leaking 60+ /tmp/meridian_diff_*/
     // directories per ctest run. Best effort; if the test asserts past this
     // point the rmdir does not run, but the tempdir contents are tiny.
     std::string rm_cmd = "rm -rf " + std::string(workdir);
     [[maybe_unused]] int rm_rc = std::system(rm_cmd.c_str());
+    // Filter out depth_snapshot lines emitted by run_reference.py at the
+    // end of each run; this test only diffs execution reports.
+    std::vector<std::string> py_lines;
+    py_lines.reserve(all_py_lines.size());
+    for (const auto& line : all_py_lines) {
+        if (line.find("\"kind\":\"depth_snapshot\"") == std::string::npos) {
+            py_lines.push_back(line);
+        }
+    }
     ASSERT_EQ(cpp_lines.size(), py_lines.size())
         << "scenario " << GetParam().name
         << ": C++ produced " << cpp_lines.size()

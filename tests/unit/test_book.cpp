@@ -1,5 +1,7 @@
 #include "meridian/book.hpp"
+#include "meridian/depth_snapshot.hpp"
 #include "meridian/order_pool.hpp"
+#include "meridian/trade_print.hpp"
 #include "meridian/types.hpp"
 
 #include <gtest/gtest.h>
@@ -184,6 +186,74 @@ TEST(BookTest, EraseEmptyLevelOnAbsentPriceIsNoOp) {
     book.erase_empty_level(Side::Sell, 100);
     EXPECT_EQ(book.best_bid(), nullptr);
     EXPECT_EQ(book.best_ask(), nullptr);
+}
+
+TEST(BookTest, PublishDepthCapturesUpToEightLevelsPerSide) {
+    OrderPool pool(64);
+    Book book(1);
+    // 10 bid levels at 100, 99, ..., 91; 10 ask levels at 101, ..., 110.
+    for (int p = 100; p >= 91; --p) {
+        Order* o = pool.acquire();
+        o->id = static_cast<OrderId>(100 - p + 1);
+        o->symbol = 1; o->side = Side::Buy; o->type = OrderType::Limit;
+        o->price = p; o->qty_remaining = 10; o->ts_arrival = 0;
+        book.add(o);
+    }
+    for (int p = 101; p <= 110; ++p) {
+        Order* o = pool.acquire();
+        o->id = static_cast<OrderId>(100 + p);
+        o->symbol = 1; o->side = Side::Sell; o->type = OrderType::Limit;
+        o->price = p; o->qty_remaining = 7; o->ts_arrival = 0;
+        book.add(o);
+    }
+    book.publish_depth(42);
+    const auto d = book.depth();
+    EXPECT_EQ(d.ts, 42);
+    EXPECT_EQ(d.bid_levels, kDepthLevels);
+    EXPECT_EQ(d.ask_levels, kDepthLevels);
+    // Bids descending starting at 100.
+    for (std::size_t i = 0; i < kDepthLevels; ++i) {
+        EXPECT_EQ(d.bids[i].px, 100 - static_cast<int>(i)) << "bid " << i;
+        EXPECT_EQ(d.bids[i].qty, 10);
+        EXPECT_EQ(d.bids[i].order_count, 1u);
+    }
+    // Asks ascending starting at 101.
+    for (std::size_t i = 0; i < kDepthLevels; ++i) {
+        EXPECT_EQ(d.asks[i].px, 101 + static_cast<int>(i)) << "ask " << i;
+        EXPECT_EQ(d.asks[i].qty, 7);
+        EXPECT_EQ(d.asks[i].order_count, 1u);
+    }
+}
+
+TEST(BookTest, PublishDepthHandlesFewerThanEightLevels) {
+    OrderPool pool(8);
+    Book book(1);
+    Order* o = pool.acquire();
+    o->id = 1; o->symbol = 1; o->side = Side::Buy; o->type = OrderType::Limit;
+    o->price = 50; o->qty_remaining = 3; o->ts_arrival = 0;
+    book.add(o);
+    book.publish_depth(7);
+    const auto d = book.depth();
+    EXPECT_EQ(d.bid_levels, 1u);
+    EXPECT_EQ(d.ask_levels, 0u);
+    EXPECT_EQ(d.bids[0].px, 50);
+    EXPECT_EQ(d.bids[0].qty, 3);
+}
+
+TEST(BookTest, PublishTradeAdvancesRingSeqMonotonically) {
+    Book book(1);
+    book.publish_trade(TradePrint{.ts=1, .price=100, .qty=5,
+                                  .aggressor=Side::Buy, .seq=0});
+    book.publish_trade(TradePrint{.ts=2, .price=101, .qty=3,
+                                  .aggressor=Side::Sell, .seq=0});
+    std::array<TradePrint, kTradeRing> out{};
+    std::size_t count = 0;
+    book.trades(out, count);
+    ASSERT_EQ(count, 2u);
+    EXPECT_EQ(out[0].seq, 1u);
+    EXPECT_EQ(out[1].seq, 2u);
+    EXPECT_EQ(out[0].price, 100);
+    EXPECT_EQ(out[1].price, 101);
 }
 
 }  // namespace
