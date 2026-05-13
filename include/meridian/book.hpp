@@ -79,6 +79,14 @@ public:
         return snapshot_;
     }
 
+    // Diagnostic accessor (tests only). Walks the bid/ask price maps and
+    // verifies that the cached top-of-book level pointers in the depth
+    // cache match the first kDepthLevels entries of each side, in order.
+    // Returns true when the cache is in sync; false on any mismatch.
+    // Stub-implemented before the cache exists; will return true while
+    // the cache is not yet maintained.
+    [[nodiscard]] bool audit_depth_cache_for_test() const noexcept;
+
 private:
     using BidLevelMap = std::map<Price, std::unique_ptr<Level>, std::greater<>>;
     using AskLevelMap = std::map<Price, std::unique_ptr<Level>>;

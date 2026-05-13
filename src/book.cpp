@@ -131,4 +131,8 @@ void Book::publish_trade(const TradePrint& p) noexcept {
     trades_.push(out);
 }
 
+bool Book::audit_depth_cache_for_test() const noexcept {
+    return true;  // Replaced in Task 2 with the real audit.
+}
+
 }  // namespace meridian
