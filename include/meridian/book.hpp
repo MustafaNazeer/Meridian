@@ -15,7 +15,15 @@ namespace meridian {
 
 class Book {
 public:
-    explicit Book(Symbol symbol);
+    // observability: when true (default), Book::add and Book::remove_by_id
+    // keep an internal top-kDepthLevels Level* cache in sync, which
+    // Book::publish_depth then reads in O(kDepthLevels) instead of
+    // walking the bid/ask price maps. When false, the cache is not
+    // maintained and Book::publish_depth must not be called (the bench
+    // path takes this branch since MatchingEngine with observability=false
+    // never calls publish_depth). The flag isolates the cache maintenance
+    // cost from the headline bench number.
+    explicit Book(Symbol symbol, bool observability = true);
 
     Book(const Book&) = delete;
     Book& operator=(const Book&) = delete;
@@ -94,6 +102,7 @@ private:
     friend class MatchingEngine;
 
     Symbol symbol_;
+    bool observability_;
     BidLevelMap bids_;
     AskLevelMap asks_;
     std::unordered_map<OrderId, Order*> id_index_;

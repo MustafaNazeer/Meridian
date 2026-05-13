@@ -12,7 +12,8 @@ namespace meridian {
 class BookRegistry {
 public:
     BookRegistry();
-    explicit BookRegistry(std::initializer_list<Symbol> symbols);
+    explicit BookRegistry(std::initializer_list<Symbol> symbols,
+                          bool observability = true);
 
     BookRegistry(const BookRegistry&) = delete;
     BookRegistry& operator=(const BookRegistry&) = delete;

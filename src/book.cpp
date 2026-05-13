@@ -4,7 +4,8 @@
 
 namespace meridian {
 
-Book::Book(Symbol symbol) : symbol_(symbol) {}
+Book::Book(Symbol symbol, bool observability)
+    : symbol_(symbol), observability_(observability) {}
 
 Level* Book::best_bid() const noexcept {
     return bids_.empty() ? nullptr : bids_.begin()->second.get();
@@ -142,6 +143,7 @@ void Book::publish_trade(const TradePrint& p) noexcept {
 }
 
 void Book::insert_cache_bid(Level* level) noexcept {
+    if (!observability_) return;
     const Price p = level->price();
     std::size_t r = 0;
     while (r < bid_cache_count_ && cached_bids_[r]->price() > p) ++r;
@@ -157,6 +159,7 @@ void Book::insert_cache_bid(Level* level) noexcept {
 }
 
 void Book::insert_cache_ask(Level* level) noexcept {
+    if (!observability_) return;
     const Price p = level->price();
     std::size_t r = 0;
     while (r < ask_cache_count_ && cached_asks_[r]->price() < p) ++r;
@@ -172,6 +175,7 @@ void Book::insert_cache_ask(Level* level) noexcept {
 }
 
 void Book::erase_cache_bid(Level* level) noexcept {
+    if (!observability_) return;
     std::size_t p = 0;
     while (p < bid_cache_count_ && cached_bids_[p] != level) ++p;
     if (p == bid_cache_count_) return;
@@ -204,6 +208,7 @@ void Book::erase_cache_bid(Level* level) noexcept {
 }
 
 void Book::erase_cache_ask(Level* level) noexcept {
+    if (!observability_) return;
     std::size_t p = 0;
     while (p < ask_cache_count_ && cached_asks_[p] != level) ++p;
     if (p == ask_cache_count_) return;
@@ -230,6 +235,7 @@ void Book::erase_cache_ask(Level* level) noexcept {
 }
 
 bool Book::audit_depth_cache_for_test() const noexcept {
+    if (!observability_) return true;  // cache intentionally not maintained
     const std::size_t expected_bid_count =
         std::min(bids_.size(), kDepthLevels);
     if (bid_cache_count_ != expected_bid_count) return false;
