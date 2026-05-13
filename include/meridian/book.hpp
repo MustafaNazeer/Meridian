@@ -101,6 +101,20 @@ private:
     SeqlockDepth depth_;
     TradeRing    trades_;
     std::uint64_t next_trade_seq_ = 0;  // single-writer monotonic counter
+
+    // Top-kDepthLevels cache of Level* per side, kept in sync with bids_
+    // and asks_ by the add/remove helpers below. cached_bids_[0] is the
+    // best bid; cached_asks_[0] is the best ask. Pointers are stable as
+    // long as the underlying Level is still in the corresponding map.
+    std::array<Level*, kDepthLevels> cached_bids_{};
+    std::array<Level*, kDepthLevels> cached_asks_{};
+    std::uint8_t bid_cache_count_ = 0;
+    std::uint8_t ask_cache_count_ = 0;
+
+    void insert_cache_bid(Level* level) noexcept;
+    void insert_cache_ask(Level* level) noexcept;
+    void erase_cache_bid(Level* level) noexcept;
+    void erase_cache_ask(Level* level) noexcept;
 };
 
 }  // namespace meridian

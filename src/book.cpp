@@ -1,5 +1,7 @@
 #include "meridian/book.hpp"
 
+#include <algorithm>
+
 namespace meridian {
 
 Book::Book(Symbol symbol) : symbol_(symbol) {}
@@ -20,6 +22,7 @@ void Book::add(Order* order) {
             auto inserted = bids_.emplace(order->price,
                                           std::make_unique<Level>(order->price));
             level = inserted.first->second.get();
+            insert_cache_bid(level);
         } else {
             level = it->second.get();
         }
@@ -29,6 +32,7 @@ void Book::add(Order* order) {
             auto inserted = asks_.emplace(order->price,
                                           std::make_unique<Level>(order->price));
             level = inserted.first->second.get();
+            insert_cache_ask(level);
         } else {
             level = it->second.get();
         }
@@ -131,8 +135,66 @@ void Book::publish_trade(const TradePrint& p) noexcept {
     trades_.push(out);
 }
 
+void Book::insert_cache_bid(Level* level) noexcept {
+    const Price p = level->price();
+    std::size_t r = 0;
+    while (r < bid_cache_count_ && cached_bids_[r]->price() > p) ++r;
+    if (r >= kDepthLevels) return;
+    const std::size_t shift_end =
+        (bid_cache_count_ < kDepthLevels) ? bid_cache_count_
+                                          : (kDepthLevels - 1);
+    for (std::size_t i = shift_end; i > r; --i) {
+        cached_bids_[i] = cached_bids_[i - 1];
+    }
+    cached_bids_[r] = level;
+    if (bid_cache_count_ < kDepthLevels) ++bid_cache_count_;
+}
+
+void Book::insert_cache_ask(Level* level) noexcept {
+    const Price p = level->price();
+    std::size_t r = 0;
+    while (r < ask_cache_count_ && cached_asks_[r]->price() < p) ++r;
+    if (r >= kDepthLevels) return;
+    const std::size_t shift_end =
+        (ask_cache_count_ < kDepthLevels) ? ask_cache_count_
+                                          : (kDepthLevels - 1);
+    for (std::size_t i = shift_end; i > r; --i) {
+        cached_asks_[i] = cached_asks_[i - 1];
+    }
+    cached_asks_[r] = level;
+    if (ask_cache_count_ < kDepthLevels) ++ask_cache_count_;
+}
+
+void Book::erase_cache_bid(Level*) noexcept {
+    // Implemented in Task 3.
+}
+
+void Book::erase_cache_ask(Level*) noexcept {
+    // Implemented in Task 3.
+}
+
 bool Book::audit_depth_cache_for_test() const noexcept {
-    return true;  // Replaced in Task 2 with the real audit.
+    const std::size_t expected_bid_count =
+        std::min(bids_.size(), kDepthLevels);
+    if (bid_cache_count_ != expected_bid_count) return false;
+    {
+        std::size_t i = 0;
+        for (auto it = bids_.begin();
+             it != bids_.end() && i < expected_bid_count; ++it, ++i) {
+            if (cached_bids_[i] != it->second.get()) return false;
+        }
+    }
+    const std::size_t expected_ask_count =
+        std::min(asks_.size(), kDepthLevels);
+    if (ask_cache_count_ != expected_ask_count) return false;
+    {
+        std::size_t i = 0;
+        for (auto it = asks_.begin();
+             it != asks_.end() && i < expected_ask_count; ++it, ++i) {
+            if (cached_asks_[i] != it->second.get()) return false;
+        }
+    }
+    return true;
 }
 
 }  // namespace meridian
