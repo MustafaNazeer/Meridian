@@ -13,6 +13,11 @@ target_link_libraries(test_book PRIVATE meridian GTest::gtest_main)
 target_compile_options(test_book PRIVATE -Wall -Wextra -Wpedantic -Werror)
 gtest_discover_tests(test_book)
 
+add_executable(test_book_depth_cache test_book_depth_cache.cpp)
+target_link_libraries(test_book_depth_cache PRIVATE meridian GTest::gtest_main)
+target_compile_options(test_book_depth_cache PRIVATE -Wall -Wextra -Wpedantic -Werror)
+gtest_discover_tests(test_book_depth_cache)
+
 add_executable(test_matching test_matching.cpp)
 target_link_libraries(test_matching PRIVATE meridian GTest::gtest_main)
 target_compile_options(test_matching PRIVATE -Wall -Wextra -Wpedantic -Werror)

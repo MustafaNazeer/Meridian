@@ -6,12 +6,13 @@ namespace meridian {
 
 BookRegistry::BookRegistry() = default;
 
-BookRegistry::BookRegistry(std::initializer_list<Symbol> symbols) {
+BookRegistry::BookRegistry(std::initializer_list<Symbol> symbols,
+                           bool observability) {
     books_.reserve(symbols.size());
     for (Symbol s : symbols) {
         books_.emplace(std::piecewise_construct,
                        std::forward_as_tuple(s),
-                       std::forward_as_tuple(s));
+                       std::forward_as_tuple(s, observability));
     }
 }
 

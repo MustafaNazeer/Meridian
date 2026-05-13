@@ -15,7 +15,15 @@ namespace meridian {
 
 class Book {
 public:
-    explicit Book(Symbol symbol);
+    // observability: when true (default), Book::add and Book::remove_by_id
+    // keep an internal top-kDepthLevels Level* cache in sync, which
+    // Book::publish_depth then reads in O(kDepthLevels) instead of
+    // walking the bid/ask price maps. When false, the cache is not
+    // maintained and Book::publish_depth must not be called (the bench
+    // path takes this branch since MatchingEngine with observability=false
+    // never calls publish_depth). The flag isolates the cache maintenance
+    // cost from the headline bench number.
+    explicit Book(Symbol symbol, bool observability = true);
 
     Book(const Book&) = delete;
     Book& operator=(const Book&) = delete;
@@ -79,6 +87,14 @@ public:
         return snapshot_;
     }
 
+    // Diagnostic accessor (tests only). Walks the bid/ask price maps and
+    // verifies that the cached top-of-book level pointers in the depth
+    // cache match the first kDepthLevels entries of each side, in order.
+    // Returns true when the cache is in sync; false on any mismatch.
+    // Stub-implemented before the cache exists; will return true while
+    // the cache is not yet maintained.
+    [[nodiscard]] bool audit_depth_cache_for_test() const noexcept;
+
 private:
     using BidLevelMap = std::map<Price, std::unique_ptr<Level>, std::greater<>>;
     using AskLevelMap = std::map<Price, std::unique_ptr<Level>>;
@@ -86,6 +102,7 @@ private:
     friend class MatchingEngine;
 
     Symbol symbol_;
+    bool observability_;
     BidLevelMap bids_;
     AskLevelMap asks_;
     std::unordered_map<OrderId, Order*> id_index_;
@@ -93,6 +110,20 @@ private:
     SeqlockDepth depth_;
     TradeRing    trades_;
     std::uint64_t next_trade_seq_ = 0;  // single-writer monotonic counter
+
+    // Top-kDepthLevels cache of Level* per side, kept in sync with bids_
+    // and asks_ by the add/remove helpers below. cached_bids_[0] is the
+    // best bid; cached_asks_[0] is the best ask. Pointers are stable as
+    // long as the underlying Level is still in the corresponding map.
+    std::array<Level*, kDepthLevels> cached_bids_{};
+    std::array<Level*, kDepthLevels> cached_asks_{};
+    std::uint8_t bid_cache_count_ = 0;
+    std::uint8_t ask_cache_count_ = 0;
+
+    void insert_cache_bid(Level* level) noexcept;
+    void insert_cache_ask(Level* level) noexcept;
+    void erase_cache_bid(Level* level) noexcept;
+    void erase_cache_ask(Level* level) noexcept;
 };
 
 }  // namespace meridian

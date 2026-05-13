@@ -290,11 +290,13 @@ int main(int argc, char** argv) {
     // limit that rests forever.
     const std::size_t pool_capacity = static_cast<std::size_t>(total_events) + 1024;
     meridian::OrderPool pool(pool_capacity);
-    meridian::BookRegistry registry{1};
+    // Bench mode: disable observability on both Book (depth cache
+    // maintenance on add/remove paths) and MatchingEngine (depth/trade
+    // publish, latency histogram, per-event timing) so the measurement
+    // reflects pure matching throughput rather than the live-demo data
+    // path.
+    meridian::BookRegistry registry({1}, /*observability=*/false);
     meridian::OrderIndex index;
-    // Bench mode: disable the v1.1 observability (depth/trade publish,
-    // latency histogram) so the measurement reflects pure matching
-    // throughput rather than the live-demo data path.
     meridian::MatchingEngine engine(pool, registry, index, /*observability=*/false);
 
     std::vector<meridian::EngineEvent> events;
