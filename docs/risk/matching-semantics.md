@@ -1130,6 +1130,26 @@ Walk through CXL-2 (section 8.2):
 
 The property test for invariant 2 generates an arbitrary event sequence, replays it through both the C++ engine and the Python reference, and at every intermediate step asserts the conservation law for every `OrderId` that has been submitted so far.
 
+### 9.2 L8 depth invariants
+
+The published depth array (`Book::depth()`) is the post-event picture walked from the top of each side's price map for at most `kDepthLevels` levels. Two invariants hold across any event sequence:
+
+* **P11. Sorted, deduped.** For each side, the populated entries of the depth array are strictly ordered by price (bids descending, asks ascending) with no duplicates.
+* **P12. Bounded by resting qty.** The sum of per-level `qty` across the populated entries on a side is at most the total resting qty on that side. The depth array can underreport when more than 8 distinct price levels exist; it never overreports.
+
+Both invariants are exercised by `MatchingInvariants.DepthOrderedAndDeduped` and `MatchingInvariants.DepthQuantityBoundedByResting` over 1000 cases per CI run. The same depth array is also diffed byte-for-byte against the Python reference's `l8_depth()` method inside `Differential.RandomSequencesAgreeWithReference` (one depth snapshot per demo symbol per random sequence).
+
+### 9.3 Trade print aggregation
+
+The trade ring (`Book::trades()`) carries the most-recent 16 prints. The aggregator rule (see `MatchingEngine::apply`):
+
+* A print is emitted once per match leg: each `(maker Fill, taker Fill)` pair produces exactly one print.
+* The print's `price` is the maker's price (the execution price); the `qty` is the maker's filled quantity (which equals the taker's filled quantity for that leg); the `aggressor` side is the taker's side; the `ts` is the event ts; the `seq` is monotonic per `Book`.
+* Rejected orders (`EmptyBook`, `InsufficientLiquidity` on FOK, etc.) emit zero prints because they emit no Fill reports.
+* `Acknowledge` with no fills emits zero prints.
+
+The integration corpus's worked-example audit cases (LIMIT-*, MKT-*, IOC-*, POSTONLY-*, FOK-*) cover the aggregator end-to-end against the trade ring; see `tests/integration/test_trade_aggregation.cpp`.
+
 ---
 
 ## 10. Convention choices

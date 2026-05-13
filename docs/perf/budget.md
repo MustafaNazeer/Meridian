@@ -93,6 +93,21 @@ The following items are flagged for the next fact-check pass:
 1. The 50 ns top-of-book read p50 figure is a defensible budget given x86_64 seqlock reader cost, but no specific external benchmark anchors it. Confirm whether the figure should remain as a stated budget or be deferred until the seqlock lands and can be measured. `[citation needed]` for an external published seqlock reader benchmark.
 2. The < 1 ms sampler tick build figure is inferred from the 30 Hz cadence. Confirm the inference is sound (a tick that consumes under 3% of its 33.3 ms slot is a reasonable budget) or push back if a tighter or looser bound is more appropriate.
 
+## v1.1: engine observability overhead
+
+The v1.1 `MatchingEngine` constructor takes an `observability` flag (default `true`). When set, `apply` brackets each event with two `std::chrono::steady_clock::now()` reads, records the delta into a 33-bucket log-spaced histogram via one relaxed atomic increment, walks the top of each side's price map to publish an L8 depth snapshot under the depth seqlock, and pushes a print into the trade ring for each match leg. When set to `false`, all four side effects are skipped and the matching path collapses back to its v1 shape; the top-of-book publish is unconditional in both modes since it is part of the core engine contract.
+
+Paired measurements on the desktop reference, same seed (42), same 1M measured events, same 100k warmup:
+
+| Mode | Throughput | p50 | p99 | p99.9 |
+|---|---|---|---|---|
+| `observability=false` (matching only) | 4.79 M evt/s | 149 ns | 618 ns | 1332 ns |
+| `observability=true` (matching + depth + trades + histogram) | 2.79 M evt/s | 288 ns | 903 ns | 2128 ns |
+
+The instrumented path costs roughly 40 percent of the bench-mode throughput at full unbounded rate. That cost is acceptable for the live demo, which runs the server at 400 events per second (four orders of magnitude below the instrumented ceiling), so the PerfPanel histogram and the Tape tile both have real data to render with multi-thousand-x headroom. It is not acceptable for the headline benchmark.
+
+The bench binary (`apps/bench/main.cpp`) is therefore built with `observability=false`. The headline throughput is the v1 matching path; `bench/baseline.json` continues to track the matching loop in isolation. Future work that wants to defend an instrumented-path budget should publish a second baseline with `observability=true` rather than blending the two.
+
 ## Revision log
 
 | Date | Change |
@@ -100,3 +115,4 @@ The following items are flagged for the next fact-check pass:
 | 2026-05-09 | Initial publication. Matching event, top-of-book, sampler tick budgets set. Initial baseline subsection placeholder added; populated by bench scaffold. |
 | 2026-05-09 | Initial baseline subsection populated from `meridian-bench --events 1000000 --seed 42`. Throughput 5.7 M evt/s; latency p50/p90/p99/p99.9/max = 125 / 231 / 444 / 1108 / 4308991 ns. Numbers labeled informational, not targets. The bench skeleton (`apps/bench/main.cpp`) and the HDRHistogram-c FetchContent wiring (root `CMakeLists.txt`, pinned to v0.11.8) ship with this revision. |
 | 2026-05-10 | Bench-push milestone closes. `MatchingEngine::apply` gains an out-param overload that eliminates the per-call `std::vector<ExecutionReport>` allocation; the returning overload is preserved as a convenience. Bench rewritten to reuse a single report buffer across the timed window, add a 100k-event warmup phase, and emit a `schema_version: 2` JSON sidecar. `bench/check_regression.py` lands; `bench/baseline.json` lands with numbers captured on the GitHub Actions ubuntu-24.04 runner. CI (`.github/workflows/ci.yml`) runs the bench plus the regression check on every PR (clang job only). 5 percent throughput tolerance, 10 percent per-percentile latency tolerance. |
+| 2026-05-11 | v1.1 extended snapshot lands. `MatchingEngine` gains a live latency histogram (33 log-spaced buckets, lock-free atomic increments), an L8 depth publisher under a second seqlock, and a per-event trade aggregator that pushes prints into `Book::trades()`. An opt-in `observability` constructor flag (default true) lets the bench skip all four paths; the bench is built with `observability=false`, so its measured throughput reflects the matching loop without the v1.1 instrumentation. Paired-run measurement of the instrumented path published above ("v1.1: engine observability overhead"). |
