@@ -118,22 +118,20 @@ void Book::publish_top_of_book(Timestamp ts) noexcept {
 void Book::publish_depth(Timestamp ts) noexcept {
     DepthSnapshot snap{};
     snap.ts = ts;
-    std::size_t i = 0;
-    for (auto it = bids_.begin(); it != bids_.end() && i < kDepthLevels; ++it, ++i) {
-        const Level& level = *it->second;
+    for (std::size_t i = 0; i < bid_cache_count_; ++i) {
+        const Level& level = *cached_bids_[i];
         snap.bids[i].px          = level.price();
         snap.bids[i].qty         = level.total_qty();
         snap.bids[i].order_count = static_cast<std::uint32_t>(level.order_count());
     }
-    snap.bid_levels = static_cast<std::uint8_t>(i);
-    i = 0;
-    for (auto it = asks_.begin(); it != asks_.end() && i < kDepthLevels; ++it, ++i) {
-        const Level& level = *it->second;
+    snap.bid_levels = bid_cache_count_;
+    for (std::size_t i = 0; i < ask_cache_count_; ++i) {
+        const Level& level = *cached_asks_[i];
         snap.asks[i].px          = level.price();
         snap.asks[i].qty         = level.total_qty();
         snap.asks[i].order_count = static_cast<std::uint32_t>(level.order_count());
     }
-    snap.ask_levels = static_cast<std::uint8_t>(i);
+    snap.ask_levels = ask_cache_count_;
     depth_.write(snap);
 }
 
